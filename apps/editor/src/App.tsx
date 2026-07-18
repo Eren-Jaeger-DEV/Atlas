@@ -6,6 +6,7 @@ import { ImpactPanel } from "./components/ImpactPanel.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { DiffViewer } from "./components/DiffViewer.js";
 import { CommandPalette, CommandItem } from "./components/CommandPalette.js";
+import { SettingsPanel, EditorSettings, DEFAULT_SETTINGS } from "./components/SettingsPanel.js";
 import logoImg from "./assets/logo.png";
 
 interface EditorTab {
@@ -15,7 +16,7 @@ interface EditorTab {
   isDirty: boolean;
 }
 
-type SidebarView = "explorer" | "git" | "impact" | "ai";
+type SidebarView = "explorer" | "git" | "impact" | "ai" | "settings";
 type BottomTab = "terminal" | "output" | "ai";
 
 function ExplorerNavIcon() {
@@ -62,12 +63,22 @@ function AgentNavIcon() {
   );
 }
 
+function SettingsNavIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 export function App() {
   const [repoPath, setRepoPath] = useState<string | undefined>();
   const [activeSidebar, setActiveSidebar] = useState<SidebarView>("explorer");
   const [bottomTab, setBottomTab] = useState<BottomTab>("terminal");
   const [showBottomPanel, setShowBottomPanel] = useState(true);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [settings, setSettings] = useState<EditorSettings>(DEFAULT_SETTINGS);
 
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
@@ -183,6 +194,12 @@ export function App() {
 
   const commands: CommandItem[] = [
     {
+      id: "open-settings",
+      label: "Open Settings",
+      shortcut: "Ctrl+,",
+      action: () => setActiveSidebar("settings"),
+    },
+    {
       id: "open-folder",
       label: "Open Workspace Folder",
       shortcut: "Ctrl+O",
@@ -225,6 +242,9 @@ export function App() {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setShowCommandPalette((prev) => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        setActiveSidebar("settings");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -267,34 +287,46 @@ export function App() {
       <div style={styles.mainLayout}>
         {/* Left Activity Bar */}
         <nav style={styles.activityBar}>
-          <button
-            style={{ ...styles.activityButton, ...(activeSidebar === "explorer" ? styles.activityButtonActive : {}) }}
-            onClick={() => setActiveSidebar("explorer")}
-            title="Explorer"
-          >
-            <ExplorerNavIcon />
-          </button>
-          <button
-            style={{ ...styles.activityButton, ...(activeSidebar === "git" ? styles.activityButtonActive : {}) }}
-            onClick={() => setActiveSidebar("git")}
-            title="Source Control"
-          >
-            <GitNavIcon />
-          </button>
-          <button
-            style={{ ...styles.activityButton, ...(activeSidebar === "impact" ? styles.activityButtonActive : {}) }}
-            onClick={() => setActiveSidebar("impact")}
-            title="Dependency Impact Graph"
-          >
-            <ImpactNavIcon />
-          </button>
-          <button
-            style={{ ...styles.activityButton, ...(activeSidebar === "ai" ? styles.activityButtonActive : {}) }}
-            onClick={() => setActiveSidebar("ai")}
-            title="Atlas AI Agent"
-          >
-            <AgentNavIcon />
-          </button>
+          <div style={styles.activityTopGroup}>
+            <button
+              style={{ ...styles.activityButton, ...(activeSidebar === "explorer" ? styles.activityButtonActive : {}) }}
+              onClick={() => setActiveSidebar("explorer")}
+              title="Explorer (Ctrl+Shift+E)"
+            >
+              <ExplorerNavIcon />
+            </button>
+            <button
+              style={{ ...styles.activityButton, ...(activeSidebar === "git" ? styles.activityButtonActive : {}) }}
+              onClick={() => setActiveSidebar("git")}
+              title="Source Control (Ctrl+Shift+G)"
+            >
+              <GitNavIcon />
+            </button>
+            <button
+              style={{ ...styles.activityButton, ...(activeSidebar === "impact" ? styles.activityButtonActive : {}) }}
+              onClick={() => setActiveSidebar("impact")}
+              title="Dependency Impact Graph (Ctrl+Shift+I)"
+            >
+              <ImpactNavIcon />
+            </button>
+            <button
+              style={{ ...styles.activityButton, ...(activeSidebar === "ai" ? styles.activityButtonActive : {}) }}
+              onClick={() => setActiveSidebar("ai")}
+              title="Atlas AI Agent (Ctrl+Shift+A)"
+            >
+              <AgentNavIcon />
+            </button>
+          </div>
+
+          <div style={styles.activityBottomGroup}>
+            <button
+              style={{ ...styles.activityButton, ...(activeSidebar === "settings" ? styles.activityButtonActive : {}) }}
+              onClick={() => setActiveSidebar("settings")}
+              title="Settings (Ctrl+,)"
+            >
+              <SettingsNavIcon />
+            </button>
+          </div>
         </nav>
 
         {/* Sidebar Panel */}
@@ -323,6 +355,9 @@ export function App() {
                 </button>
               </div>
             </div>
+          )}
+          {activeSidebar === "settings" && (
+            <SettingsPanel settings={settings} onUpdateSettings={setSettings} />
           )}
         </aside>
 
@@ -373,6 +408,9 @@ export function App() {
                   <div style={styles.welcomeActions}>
                     <button style={styles.welcomeButton} onClick={handleSelectRepo}>
                       Open Workspace Folder
+                    </button>
+                    <button style={styles.settingsWelcomeBtn} onClick={() => setActiveSidebar("settings")}>
+                      Open Settings (Ctrl+,)
                     </button>
                   </div>
                 </div>
@@ -540,9 +578,21 @@ const styles: Record<string, React.CSSProperties> = {
     borderRight: "1px solid #27272a",
     display: "flex",
     flexDirection: "column",
+    justifyContent: "space-between",
     alignItems: "center",
     paddingTop: "8px",
+    paddingBottom: "8px",
+  },
+  activityTopGroup: {
+    display: "flex",
+    flexDirection: "column",
     gap: "10px",
+    alignItems: "center",
+  },
+  activityBottomGroup: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
   activityButton: {
     width: "36px",
@@ -655,6 +705,16 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#fafafa",
     color: "#09090b",
     border: "none",
+    padding: "10px 20px",
+    borderRadius: "6px",
+    fontWeight: 600,
+    fontSize: "13px",
+    cursor: "pointer",
+  },
+  settingsWelcomeBtn: {
+    backgroundColor: "#18181b",
+    border: "1px solid #27272a",
+    color: "#fafafa",
     padding: "10px 20px",
     borderRadius: "6px",
     fontWeight: 600,
