@@ -5,6 +5,7 @@ import { FileExplorer } from "./components/FileExplorer.js";
 import { GitPanel } from "./components/GitPanel.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { DiffViewer } from "./components/DiffViewer.js";
+import { CommandPalette, CommandItem } from "./components/CommandPalette.js";
 
 interface EditorTab {
   filePath: string;
@@ -98,6 +99,60 @@ export function App() {
     }
   };
 
+  // Command palette commands
+  const commands: CommandItem[] = [
+    {
+      id: "open-workspace",
+      label: "Open Workspace Folder",
+      category: "File",
+      action: handleSelectRepo,
+    },
+    {
+      id: "save-file",
+      label: "Save Current File",
+      category: "File",
+      shortcut: "Ctrl+S",
+      action: () => handleSaveTab(activeTabIndex),
+    },
+    {
+      id: "toggle-terminal",
+      label: "Toggle Integrated Terminal Panel",
+      category: "View",
+      shortcut: "Ctrl+`",
+      action: () => {
+        setShowBottomPanel(!showBottomPanel);
+        setBottomTab("terminal");
+      },
+    },
+    {
+      id: "show-explorer",
+      label: "Show File Explorer Sidebar",
+      category: "View",
+      action: () => setActiveSidebar("explorer"),
+    },
+    {
+      id: "show-git",
+      label: "Show Source Control (Git) Sidebar",
+      category: "View",
+      action: () => setActiveSidebar("git"),
+    },
+    {
+      id: "show-impact",
+      label: "Show Live Impact Panel",
+      category: "View",
+      action: () => setActiveSidebar("impact"),
+    },
+    {
+      id: "run-agent",
+      label: "Run Atlas AI Agent",
+      category: "Agent",
+      action: () => {
+        setActiveSidebar("ai");
+        handleRunAi();
+      },
+    },
+  ];
+
   // Debounced symbol detection on cursor move
   const symbolTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const handleCursorChange = useCallback((_line: number, _col: number) => {
@@ -107,10 +162,13 @@ export function App() {
     }, 300);
   }, []);
 
-  // Keyboard shortcut listener (Ctrl+S to save)
+  // Keyboard shortcut listener (Ctrl+S to save, Ctrl+Shift+P for Command Palette)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "P" || e.key === "p")) {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         if (activeTab) {
           handleSaveTab(activeTabIndex);
@@ -163,6 +221,13 @@ export function App() {
         </div>
         <div style={styles.topControls}>
           <button
+            style={styles.dockToggle}
+            onClick={() => setShowCommandPalette(true)}
+            title="Command Palette (Ctrl+Shift+P)"
+          >
+            ⌘ Command Palette
+          </button>
+          <button
             style={{ ...styles.dockToggle, ...(showBottomPanel ? styles.dockToggleActive : {}) }}
             onClick={() => setShowBottomPanel(!showBottomPanel)}
             title="Toggle Bottom Terminal Panel"
@@ -171,6 +236,12 @@ export function App() {
           </button>
         </div>
       </header>
+
+      <CommandPalette
+        commands={commands}
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+      />
 
       {/* Main Workspace Layout */}
       <div style={styles.mainLayout}>
