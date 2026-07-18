@@ -56,3 +56,6 @@ out/
 
 # AI Agent Rules
 .agents/
+
+# Electron app builds
+dist-app/

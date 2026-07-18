@@ -153,10 +153,10 @@ Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell ar
 - **Dynamic package resolution** — automatically indexes monorepos via package.json scanning
 - **Call-graph indexing** — AST-level function-to-function call connection resolution
 - **Unit & Integration Test Suite** — 10 test suites (18 tests total) verifying full agent state transitions, tool execution, and Orchestrator retries
+- **Standalone Electron packaging** — NSIS Windows installer builder pipeline configured
 - Editor shell — CodeMirror 6, live impact panel
 
 **Coming in Phase 2:**
-- Electron compilation packaging (standalone installers)
 - In-editor AI coding (inline completions + agent-driven edits)
 - Multi-file diff review UI
 - Git integration (commit, blame, history in-graph)
