@@ -13,10 +13,12 @@ import { AiSidebar } from "./components/AiSidebar.js";
 import { DependencyGraph } from "./components/DependencyGraph.js";
 import { ProjectHealth } from "./components/ProjectHealth.js";
 import { ExtensionGallery } from "./components/ExtensionGallery.js";
+import { GitHistoryPanel } from "./components/GitHistoryPanel.js";
+import { MergeConflictEditor } from "./components/MergeConflictEditor.js";
 import logoImg from "./assets/logo.png";
 
 interface EditorTab { filePath: string; content: string; language: string; isDirty: boolean; }
-type SidebarView = "explorer" | "git" | "impact" | "graph" | "health" | "extensions" | "ai" | "settings";
+type SidebarView = "explorer" | "git" | "history" | "impact" | "graph" | "health" | "extensions" | "ai" | "settings";
 type BottomTab = "terminal" | "output" | "ai";
 
 interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; }
@@ -35,6 +37,7 @@ export function App() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [isSplit, setIsSplit]                       = useState(false);
   const [splitTabIndex, setSplitTabIndex]           = useState(0);
+  const [showMergeConflict, setShowMergeConflict]   = useState(false);
 
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
   const [tabs, setTabs]               = useState<EditorTab[]>([]);
@@ -171,6 +174,8 @@ export function App() {
       { label:"separator", separator:true },
       { label:"Explorer",            shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
       { label:"Source Control",      shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
+      { label:"Git History",         shortcut:"",             action:()=>setActiveSidebar("history") },
+      { label:"3-Way Merge Resolver",shortcut:"",             action:()=>setShowMergeConflict(p=>!p) },
       { label:"Dependency Graph",    shortcut:"",             action:()=>setActiveSidebar("graph") },
       { label:"Project Health",      shortcut:"",             action:()=>setActiveSidebar("health") },
       { label:"Extensions Gallery",  shortcut:"Ctrl+Shift+X", action:()=>setActiveSidebar("extensions") },
@@ -190,6 +195,8 @@ export function App() {
     { id:"open-settings",   label:"Open Settings",         shortcut:"Ctrl+,",       action:()=>setActiveSidebar("settings") },
     { id:"open-folder",     label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
     { id:"split-editor",    label:"Toggle Split Editor",   shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
+    { id:"show-history",    label:"Git History & Graph",   shortcut:"",             action:()=>setActiveSidebar("history") },
+    { id:"merge-resolver",  label:"3-Way Merge Conflict Resolver",shortcut:"",     action:()=>setShowMergeConflict(p=>!p) },
     { id:"show-graph",      label:"Dependency Graph",      shortcut:"",             action:()=>setActiveSidebar("graph") },
     { id:"show-health",     label:"Project Health",        shortcut:"",             action:()=>setActiveSidebar("health") },
     { id:"show-extensions", label:"Extensions Marketplace",shortcut:"Ctrl+Shift+X", action:()=>setActiveSidebar("extensions") },
@@ -280,13 +287,14 @@ export function App() {
         <nav style={s.actBar}>
           <div style={s.actTop}>
             {([
-              {id:"explorer",lbl:"Explorer",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>},
-              {id:"git",     lbl:"Git",     icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>},
-              {id:"impact",  lbl:"Impact",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
-              {id:"graph",   lbl:"Graph",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>},
-              {id:"health",  lbl:"Health",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>},
-              {id:"extensions",lbl:"Extensions",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
-              {id:"ai",      lbl:"Agent",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
+              {id:"explorer",  lbl:"Explorer",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>},
+              {id:"git",       lbl:"Git",     icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>},
+              {id:"history",   lbl:"History", icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>},
+              {id:"impact",    lbl:"Impact",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
+              {id:"graph",     lbl:"Graph",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>},
+              {id:"health",    lbl:"Health",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>},
+              {id:"extensions",lbl:"Market",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
+              {id:"ai",        lbl:"Agent",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
             ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
               <button key={id} style={{...s.actBtn,...(activeSidebar===id?s.actOn:{})}} onClick={()=>setActiveSidebar(id)} title={lbl}>
                 {icon}<span style={s.actLbl}>{lbl}</span>
@@ -304,6 +312,7 @@ export function App() {
         <aside style={s.sidebar}>
           {activeSidebar==="explorer"   && <FileExplorer repoPath={repoPath} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo}/>}
           {activeSidebar==="git"        && <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff}/>}
+          {activeSidebar==="history"    && <GitHistoryPanel repoPath={repoPath}/>}
           {activeSidebar==="impact"     && <ImpactPanel filePath={activeTab?.filePath} symbolName={cursorSymbol}/>}
           {activeSidebar==="graph"      && <DependencyGraph repoPath={repoPath}/>}
           {activeSidebar==="health"     && <ProjectHealth repoPath={repoPath}/>}
@@ -339,7 +348,9 @@ export function App() {
           {activeTab && <Breadcrumb filePath={activeTab.filePath} repoPath={repoPath}/>}
 
           <div style={s.editorArea}>
-            {activeDiff ? (
+            {showMergeConflict ? (
+              <MergeConflictEditor filePath={activeTab?.filePath || "src/index.ts"} onComplete={()=>setShowMergeConflict(false)}/>
+            ) : activeDiff ? (
               <DiffViewer filePath={activeDiff.filePath} diffText={activeDiff.diffText} onClose={()=>setActiveDiff(null)}/>
             ) : tabs.length > 0 ? (
               <div style={{ display: "flex", width: "100%", height: "100%" }}>

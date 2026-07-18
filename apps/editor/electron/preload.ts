@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Electron Preload Script
  *
  * Exposes a safe, typed API to the renderer process via contextBridge.
@@ -73,6 +73,30 @@ contextBridge.exposeInMainWorld("atlasAPI", {
 
   gitDiff: (repoPath: string, filePath: string, staged: boolean): Promise<string> =>
     ipcRenderer.invoke("atlas:git-diff", repoPath, filePath, staged),
+
+  gitInit: (repoPath: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:git-init", repoPath),
+
+  gitClone: (url: string, targetPath: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:git-clone", url, targetPath),
+
+  gitStashSave: (repoPath: string, message?: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:git-stash-save", repoPath, message),
+
+  gitStashPop: (repoPath: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:git-stash-pop", repoPath),
+
+  gitCreateBranch: (repoPath: string, branchName: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:git-create-branch", repoPath, branchName),
+
+  gitDeleteBranch: (repoPath: string, branchName: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:git-delete-branch", repoPath, branchName),
+
+  gitLog: (repoPath: string, limit?: number): Promise<Array<{ hash: string; author: string; date: string; message: string }>> =>
+    ipcRenderer.invoke("atlas:git-log", repoPath, limit),
+
+  gitBlame: (repoPath: string, filePath: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:git-blame", repoPath, filePath),
 
   // Agent run
   run: (goal: string): Promise<RunRecord> =>

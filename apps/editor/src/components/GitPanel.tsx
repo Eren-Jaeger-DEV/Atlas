@@ -109,6 +109,18 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
         <div style={styles.syncGroup}>
           <button style={styles.syncBtn} title="Pull latest changes" onClick={handlePull}>Pull</button>
           <button style={styles.syncBtn} title="Push commits to remote" onClick={handlePush}>Push</button>
+          <button
+            style={{ ...styles.syncBtn, color: "#38bdf8" }}
+            onClick={() => {
+              const notes = "# Release Notes Draft\n\n## Features\n- Implemented Chapter 11 Phase 6 Source Control\n- Integrated 3-way Merge Conflict Resolver";
+              navigator.clipboard.writeText(notes);
+              setSyncStatus("Release notes copied!");
+              setTimeout(() => setSyncStatus(null), 2000);
+            }}
+            title="Generate Draft Release Notes"
+          >
+            Release Notes
+          </button>
           <button style={styles.refreshButton} onClick={refreshStatus} title="Refresh Status">↻</button>
         </div>
       </div>

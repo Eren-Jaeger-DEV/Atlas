@@ -382,6 +382,65 @@ ipcMain.handle("atlas:git-diff", async (_event, repoPath: string, filePath: stri
   }
 });
 
+ipcMain.handle("atlas:git-init", async (_event, repoPath: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  await execFileAsync("git", ["init"], { cwd });
+  return true;
+});
+
+ipcMain.handle("atlas:git-clone", async (_event, url: string, targetPath: string) => {
+  await execFileAsync("git", ["clone", url, targetPath], { cwd: path.dirname(targetPath) });
+  return true;
+});
+
+ipcMain.handle("atlas:git-stash-save", async (_event, repoPath: string, message?: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  const args = message ? ["stash", "push", "-m", message] : ["stash"];
+  await execFileAsync("git", args, { cwd });
+  return true;
+});
+
+ipcMain.handle("atlas:git-stash-pop", async (_event, repoPath: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  await execFileAsync("git", ["stash", "pop"], { cwd });
+  return true;
+});
+
+ipcMain.handle("atlas:git-create-branch", async (_event, repoPath: string, branchName: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  await execFileAsync("git", ["checkout", "-b", branchName], { cwd });
+  return true;
+});
+
+ipcMain.handle("atlas:git-delete-branch", async (_event, repoPath: string, branchName: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  await execFileAsync("git", ["branch", "-D", branchName], { cwd });
+  return true;
+});
+
+ipcMain.handle("atlas:git-log", async (_event, repoPath: string, limit = 20) => {
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    const { stdout } = await execFileAsync("git", ["log", `-n${limit}`, "--pretty=format:%h|%an|%ar|%s"], { cwd });
+    return stdout.split("\n").filter(Boolean).map(line => {
+      const [hash, author, date, message] = line.split("|");
+      return { hash, author, date, message };
+    });
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("atlas:git-blame", async (_event, repoPath: string, filePath: string) => {
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    const { stdout } = await execFileAsync("git", ["blame", "-s", filePath], { cwd });
+    return stdout;
+  } catch {
+    return "";
+  }
+});
+
 // Open repo (sets the active repo root)
 ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
   global.__atlasRepoRoot = repoPath;
