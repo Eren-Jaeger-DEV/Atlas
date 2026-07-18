@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Atlas Editor â€” Electron Main Process
  *
  * Architectural rule enforced here:
@@ -46,7 +46,7 @@ function createWindow(): void {
     },
     frame: false,
     show: false,
-    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
   });
 
   mainWindow.once('ready-to-show', () => {
