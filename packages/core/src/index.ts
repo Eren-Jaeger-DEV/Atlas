@@ -58,3 +58,10 @@ export { SettingsService, DEFAULT_SETTINGS_SCHEMA, type SettingsSchema } from ".
 export { ExtensionHost, type ExtensionContext, type ExtensionModule } from "./services/ExtensionHost.js";
 export { PermissionEngine, type PermissionRequest } from "./security/PermissionEngine.js";
 export { ExtensionManager, type InstalledExtension, type AtlasExtensionModule } from "./extensions/ExtensionManager.js";
+
+// Cloud Sync & Accounts
+export { AccountService, type UserProfile } from "./cloud/AccountService.js";
+export { SecurityStore } from "./cloud/SecurityStore.js";
+export { ProfileManager, type WorkspaceProfile } from "./cloud/ProfileManager.js";
+export { CloudSyncEngine, type SyncPayload } from "./cloud/CloudSyncEngine.js";
+export { CollaborationService, type TeamMember, type ActivityItem } from "./cloud/CollaborationService.js";

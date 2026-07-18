@@ -17,10 +17,11 @@ import { GitHistoryPanel } from "./components/GitHistoryPanel.js";
 import { MergeConflictEditor } from "./components/MergeConflictEditor.js";
 import { AiSafetyModal } from "./components/AiSafetyModal.js";
 import { InlineAiTool } from "./components/InlineAiTool.js";
+import { AccountPanel } from "./components/AccountPanel.js";
 import logoImg from "./assets/logo.png";
 
 interface EditorTab { filePath: string; content: string; language: string; isDirty: boolean; }
-type SidebarView = "explorer" | "git" | "history" | "impact" | "graph" | "health" | "extensions" | "ai" | "settings";
+type SidebarView = "explorer" | "git" | "history" | "impact" | "graph" | "health" | "extensions" | "account" | "ai" | "settings";
 type BottomTab = "terminal" | "output" | "ai";
 
 interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; }
@@ -184,6 +185,7 @@ export function App() {
       { label:"3-Way Merge Resolver",shortcut:"",             action:()=>setShowMergeConflict(p=>!p) },
       { label:"Dependency Graph",    shortcut:"",             action:()=>setActiveSidebar("graph") },
       { label:"Project Health",      shortcut:"",             action:()=>setActiveSidebar("health") },
+      { label:"Account & Cloud Sync",shortcut:"",             action:()=>setActiveSidebar("account") },
       { label:"Extensions Gallery",  shortcut:"Ctrl+Shift+X", action:()=>setActiveSidebar("extensions") },
       { label:"Toggle AI Sidebar",   shortcut:"Ctrl+L",       action:()=>setShowRightAiSidebar(p=>!p) },
       { label:"Toggle Panel",        shortcut:"Ctrl+`",       action:()=>setShowBottomPanel(p=>!p) },
@@ -201,6 +203,7 @@ export function App() {
     { id:"open-settings",   label:"Open Settings",         shortcut:"Ctrl+,",       action:()=>setActiveSidebar("settings") },
     { id:"open-folder",     label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
     { id:"split-editor",    label:"Toggle Split Editor",   shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
+    { id:"show-account",    label:"Account & Cloud Sync",  shortcut:"",             action:()=>setActiveSidebar("account") },
     { id:"inline-ai",       label:"Inline AI Assistant",   shortcut:"Ctrl+I",       action:()=>setShowInlineAi(p=>!p) },
     { id:"ai-safety",       label:"AI Proposed Edit Preview",shortcut:"",           action:()=>setShowAiSafety(true) },
     { id:"show-history",    label:"Git History & Graph",   shortcut:"",             action:()=>setActiveSidebar("history") },
@@ -301,6 +304,7 @@ export function App() {
               {id:"impact",    lbl:"Impact",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
               {id:"graph",     lbl:"Graph",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>},
               {id:"health",    lbl:"Health",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>},
+              {id:"account",   lbl:"Account", icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>},
               {id:"extensions",lbl:"Market",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
               {id:"ai",        lbl:"Agent",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
             ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
@@ -324,6 +328,7 @@ export function App() {
           {activeSidebar==="impact"     && <ImpactPanel filePath={activeTab?.filePath} symbolName={cursorSymbol}/>}
           {activeSidebar==="graph"      && <DependencyGraph repoPath={repoPath}/>}
           {activeSidebar==="health"     && <ProjectHealth repoPath={repoPath}/>}
+          {activeSidebar==="account"    && <AccountPanel />}
           {activeSidebar==="extensions" && <ExtensionGallery />}
           {activeSidebar==="ai"         && (
             <div style={s.agentPane}>
@@ -515,7 +520,7 @@ const s: Record<string,React.CSSProperties> = {
   welcomeH2:{ margin:"0 0 4px",fontSize:"18px",fontWeight:800,color:"#fafafa" },
   welcomeP:{ margin:"0 0 20px",fontSize:"12px",color:"#71717a" },
   welcomeRow:{ display:"flex",gap:"10px",width:"100%",justifyContent:"center" },
-  wBtn:{ backgroundColor:"#fafafa",color:"#09090b",border:"none",padding:"8px 18px",borderRadius:"6px",fontWeight:700,fontSize:"12px",cursor:"pointer" },
+  wBtn:{ backgroundColor:"fafafa",color:"#09090b",border:"none",padding:"8px 18px",borderRadius:"6px",fontWeight:700,fontSize:"12px",cursor:"pointer" },
   wBtnO:{ backgroundColor:"transparent",color:"#e4e4e7",border:"1px solid #3f3f46",padding:"8px 18px",borderRadius:"6px",fontWeight:600,fontSize:"13px",cursor:"pointer" },
   recentBox:{ marginTop:"24px",width:"100%",display:"flex",flexDirection:"column",gap:"6px" },
   recentHdr:{ fontSize:"10px",fontWeight:700,letterSpacing:"0.8px",color:"#71717a",margin:"0 0 4px" },
