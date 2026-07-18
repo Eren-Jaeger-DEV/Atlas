@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { FileIcon } from "./FileIcons.js";
 
 export interface FileItem {
   name: string;
@@ -12,27 +13,6 @@ interface FileExplorerProps {
   repoPath?: string;
   onOpenFile: (filePath: string) => void;
   onSelectRepo: () => void;
-}
-
-function FolderIcon({ isOpen }: { isOpen?: boolean }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {isOpen ? (
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-      ) : (
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-      )}
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-      <polyline points="13 2 13 9 20 9" />
-    </svg>
-  );
 }
 
 export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplorerProps) {
@@ -116,7 +96,7 @@ export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplore
         <div
           style={{
             ...styles.treeItem,
-            paddingLeft: `${level * 12 + 10}px`,
+            paddingLeft: `${level * 14 + 10}px`,
             ...(selectedPath === node.path ? styles.selectedItem : {}),
           }}
           onClick={() => {
@@ -128,9 +108,7 @@ export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplore
             }
           }}
         >
-          <span style={styles.icon}>
-            {node.isDirectory ? <FolderIcon isOpen={node.isOpen} /> : <FileIcon />}
-          </span>
+          <FileIcon fileName={node.name} isDirectory={node.isDirectory} isOpen={node.isOpen} />
           <span style={styles.label}>{node.name}</span>
           <button
             style={styles.deleteButton}
@@ -224,20 +202,15 @@ const styles: Record<string, React.CSSProperties> = {
   treeItem: {
     display: "flex",
     alignItems: "center",
-    padding: "5px 10px",
+    padding: "4px 8px",
     cursor: "pointer",
     borderRadius: "4px",
     margin: "1px 6px",
+    height: "26px",
   },
   selectedItem: {
     backgroundColor: "#18181b",
     color: "#fafafa",
-    borderLeft: "2px solid #fafafa",
-  },
-  icon: {
-    marginRight: "8px",
-    display: "flex",
-    alignItems: "center",
   },
   label: {
     flex: 1,
@@ -245,6 +218,8 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     color: "#e4e4e7",
+    fontSize: "12px",
+    fontFamily: "'Inter', sans-serif",
   },
   deleteButton: {
     background: "none",
@@ -252,7 +227,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#71717a",
     cursor: "pointer",
     fontSize: "12px",
-    opacity: 0.7,
+    opacity: 0,
     padding: "0 4px",
   },
   empty: {

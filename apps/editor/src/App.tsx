@@ -7,6 +7,9 @@ import { TerminalPanel } from "./components/TerminalPanel.js";
 import { DiffViewer } from "./components/DiffViewer.js";
 import { CommandPalette, CommandItem } from "./components/CommandPalette.js";
 import { SettingsPanel, EditorSettings, DEFAULT_SETTINGS } from "./components/SettingsPanel.js";
+import { Breadcrumb } from "./components/Breadcrumb.js";
+import { StatusBar } from "./components/StatusBar.js";
+import { AiSidebar } from "./components/AiSidebar.js";
 import logoImg from "./assets/logo.png";
 
 interface EditorTab {
@@ -77,6 +80,7 @@ export function App() {
   const [activeSidebar, setActiveSidebar] = useState<SidebarView>("explorer");
   const [bottomTab, setBottomTab] = useState<BottomTab>("terminal");
   const [showBottomPanel, setShowBottomPanel] = useState(true);
+  const [showRightAiSidebar, setShowRightAiSidebar] = useState(true);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [settings, setSettings] = useState<EditorSettings>(DEFAULT_SETTINGS);
 
@@ -194,6 +198,12 @@ export function App() {
 
   const commands: CommandItem[] = [
     {
+      id: "toggle-ai-sidebar",
+      label: "Toggle Atlas AI Chat Panel",
+      shortcut: "Ctrl+L",
+      action: () => setShowRightAiSidebar((prev) => !prev),
+    },
+    {
       id: "open-settings",
       label: "Open Settings",
       shortcut: "Ctrl+,",
@@ -229,12 +239,6 @@ export function App() {
       shortcut: "Ctrl+Shift+I",
       action: () => setActiveSidebar("impact"),
     },
-    {
-      id: "show-ai",
-      label: "Show Atlas AI Agent",
-      shortcut: "Ctrl+Shift+A",
-      action: () => setActiveSidebar("ai"),
-    },
   ];
 
   useEffect(() => {
@@ -245,6 +249,9 @@ export function App() {
       } else if ((e.ctrlKey || e.metaKey) && e.key === ",") {
         e.preventDefault();
         setActiveSidebar("settings");
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+        setShowRightAiSidebar((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -266,6 +273,13 @@ export function App() {
           </button>
         </div>
         <div style={styles.topControls}>
+          <button
+            style={{ ...styles.dockToggle, ...(showRightAiSidebar ? styles.dockToggleActive : {}) }}
+            onClick={() => setShowRightAiSidebar((prev) => !prev)}
+            title="Toggle Atlas AI Chat Panel (Ctrl+L)"
+          >
+            Atlas AI
+          </button>
           <button
             style={styles.commandPaletteBtn}
             onClick={() => setShowCommandPalette(true)}
@@ -383,6 +397,9 @@ export function App() {
             ))}
           </div>
 
+          {/* Path Breadcrumb */}
+          {activeTab && <Breadcrumb filePath={activeTab.filePath} repoPath={repoPath} />}
+
           {/* Active View: Diff or Code Mirror */}
           <div style={styles.editorViewContainer}>
             {activeDiff ? (
@@ -468,7 +485,15 @@ export function App() {
             </div>
           )}
         </div>
+
+        {/* Right AI Sidebar Chat Panel */}
+        {showRightAiSidebar && (
+          <AiSidebar repoPath={repoPath} activeFilePath={activeTab?.filePath} />
+        )}
       </div>
+
+      {/* Bottom Status Bar */}
+      <StatusBar repoPath={repoPath} activeLanguage={activeTab?.language} cursorSymbol={cursorSymbol} />
 
       {/* Command Palette Overlay */}
       <CommandPalette
