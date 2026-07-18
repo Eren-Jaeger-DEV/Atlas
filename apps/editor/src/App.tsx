@@ -19,6 +19,7 @@ import { AiSafetyModal } from "./components/AiSafetyModal.js";
 import { InlineAiTool } from "./components/InlineAiTool.js";
 import { AccountPanel } from "./components/AccountPanel.js";
 import { ReleaseManagerPanel } from "./components/ReleaseManagerPanel.js";
+import { AboutAtlasModal } from "./components/AboutAtlasModal.js";
 import logoImg from "./assets/logo.png";
 
 interface EditorTab { filePath: string; content: string; language: string; isDirty: boolean; }
@@ -44,6 +45,7 @@ export function App() {
   const [showMergeConflict, setShowMergeConflict]   = useState(false);
   const [showAiSafety, setShowAiSafety]             = useState(false);
   const [showInlineAi, setShowInlineAi]             = useState(false);
+  const [showAboutModal, setShowAboutModal]         = useState(false);
 
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
   const [tabs, setTabs]               = useState<EditorTab[]>([]);
@@ -136,7 +138,7 @@ export function App() {
       else if (ctrl && e.key.toLowerCase()==="s")          { e.preventDefault(); handleSave(); }
       else if (ctrl && e.key.toLowerCase()==="\\")         { e.preventDefault(); setIsSplit(p=>!p); }
       else if (ctrl && e.key.toLowerCase()==="i")          { e.preventDefault(); setShowInlineAi(p=>!p); }
-      else if (e.key==="Escape")                           { setOpenMenu(null); setShowCommandPalette(false); setShowInlineAi(false); }
+      else if (e.key==="Escape")                           { setOpenMenu(null); setShowCommandPalette(false); setShowInlineAi(false); setShowAboutModal(false); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -197,11 +199,13 @@ export function App() {
       { label:"Toggle Terminal", shortcut:"Ctrl+Shift+`", action:()=>setShowBottomPanel(p=>!p) },
     ],
     Help: [
-      { label:"Command Palette",     shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
+      { label:"About Atlas Studio", shortcut:"",             action:()=>setShowAboutModal(true) },
+      { label:"Command Palette",   shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
     ],
   };
 
   const commands: CommandItem[] = [
+    { id:"about-atlas",     label:"About Atlas Studio v1.0", shortcut:"",             action:()=>setShowAboutModal(true) },
     { id:"open-settings",   label:"Open Settings",         shortcut:"Ctrl+,",       action:()=>setActiveSidebar("settings") },
     { id:"open-folder",     label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
     { id:"split-editor",    label:"Toggle Split Editor",   shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
@@ -465,6 +469,8 @@ export function App() {
 
         {showRightAiSidebar && <AiSidebar repoPath={repoPath} activeFilePath={activeTab?.filePath}/>}
       </div>
+
+      {showAboutModal && <AboutAtlasModal onClose={()=>setShowAboutModal(false)} />}
 
       {showAiSafety && (
         <AiSafetyModal

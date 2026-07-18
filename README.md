@@ -1,184 +1,86 @@
-﻿# Atlas Studio
+# Atlas Studio (v1.0.0 General Availability)
 
-**The IDE that actually understands your codebase.**
+**Developer-First Independent IDE Platform**
 
-You shouldn't have to explain your own code to your editor. Atlas Studio knows your entire codebase — every function, every dependency, every architectural decision — before you type a single character. That knowledge powers everything: the AI that writes code, the sidebar that shows you what breaks before you change it, the agent that plans, implements, tests, and reviews in one shot.
-
----
-
-## Why Atlas Studio
-
-| | VS Code + Copilot | Cursor | **Atlas Studio** |
-|---|---|---|---|
-| AI edits code | ✅ | ✅ | ✅ |
-| Knows your whole codebase | ❌ | Partial | ✅ Full graph |
-| Shows blast radius before you edit | ❌ | ❌ | ✅ Live, < 500ms |
-| Runs full agent loop (plan → code → test → review) | ❌ | ❌ | ✅ |
-| Works with OpenAI, Anthropic, Gemini | ❌ | Partial | ✅ |
-| Queryable memory across sessions | ❌ | ❌ | ✅ Persistent graph |
-| Remembers every architectural decision | ❌ | ❌ | ✅ Decision log |
+Atlas Studio is a modern, high-performance desktop IDE designed around local-first engineering, deterministic project intelligence, sandboxed extension SDKs, unprivileged AI assistance, and professional developer tools.
 
 ---
 
-## Core Features
+## 🌟 Product Pillars
 
-### Live Blast-Radius Analysis
-Change a function — Atlas instantly shows you every file, test, and API endpoint that will break. Before you write a single line. No AI needed, no network call, purely your codebase's own graph.
-
-```bash
-atlas impact src/auth/login.ts:validateToken
-# → 12 files affected, 3 test files, 1 API endpoint — HIGH RISK
-# Computed in 8ms
-```
-
-### AI Agent Loop
-Tell Atlas what you want. It plans the work, reads the relevant files, writes the code, runs your tests, and reviews its own changes for risk — autonomously.
-
-```bash
-atlas run "add rate limiting to all public API endpoints"
-# Planner   → reads codebase, decomposes into steps
-# Coder     → edits files, follows your patterns
-# Tester    → runs your test suite, retries on failure
-# Reviewer  → scores risk, flags breaking changes
-```
-
-Works with **OpenAI, Anthropic, or Gemini** — set whichever API key you have.
-
-### Memory Graph
-Every function, class, import, and decision is indexed into a persistent knowledge graph. The AI agents query it before touching your code. You can query it too:
-
-```bash
-atlas ask "where is authentication handled?"
-atlas ask "what calls the payment service?"
-```
-
-### AI Timeline
-Every agent run is stored. You can replay what the AI did, why it made each decision, and what the test results were — across sessions.
+1. **Professional IDE Experience**: High-speed code editing, tabs, split panes, interactive SVG dependency graphs, 3-way merge conflict editor, and integrated terminal.
+2. **Deterministic Project Intelligence**: Fast AST symbol indexing, cycle detection, project health dashboard, and definition peek popovers.
+3. **Sandboxed Extension SDK (`@atlas/sdk`)**: Secure plugin framework with granular permission gates (`workspace.read`, `workspace.write`, `terminal.execute`, `network.fetch`).
+4. **Unprivileged AI Runtime**: Multi-provider LLM router (Google Gemini, OpenAI, Anthropic, Ollama), token-bounded ContextEngine, and human approval edit preview modal.
+5. **Local-First Architecture**: 100% offline-ready core with optional account synchronization, workspace profiles (Personal, Work, Open Source, Research), and release quality assurance.
 
 ---
 
-## Getting Started
+## 🏗️ Monorepo Architecture
 
-### Requirements
-- Node.js ≥ 20
-- pnpm ≥ 9
+```
+Atlas Studio Platform
+├── apps/
+│   ├── editor/          # Electron + React + Vite desktop IDE app
+│   └── cli/             # Headless CLI & diagnostic tools (`atlas doctor`)
+└── packages/
+    ├── core/            # ServiceContainer, EventBus, Settings, Cloud Sync, Release Services
+    ├── sdk/             # Public Extension SDK & TypeScript Types
+    ├── graph/           # AST Symbol Indexer, SQLite Knowledge Graph & Health Metrics
+    ├── parser/          # AST Code Parser for TS/JS/Python/HTML/CSS
+    └── agents/          # Agent Orchestrator, ProviderRouter & ContextEngine
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- **Node.js**: `v20.x` or higher
+- **pnpm**: `v9.x` or higher
+
+### Installation & Execution
 
 ```bash
+# Clone the repository
+git clone https://github.com/Eren-Jaeger-DEV/Atlas.git
+cd Atlas
+
+# Install dependencies across monorepo
 pnpm install
+
+# Build all monorepo packages
 pnpm build
-```
 
-### Index your repo
-```bash
-atlas init .
-# Indexed 1,247 files → 8,432 nodes, 14,891 edges in 3.1s
-```
+# Run unit and integration test suites
+pnpm test
 
-### Check what breaks before you change it
-```bash
-atlas impact src/payments/charge.ts
-atlas impact src/payments/charge.ts:processCard   # symbol-level
-```
-
-### Run the AI on a real goal
-```bash
-# Set one of these in .env
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GEMINI_API_KEY=AI...
-
-atlas run "refactor the user service to use repository pattern"
-```
-
-### Open the editor
-```bash
+# Launch Atlas Studio locally
 pnpm --filter @atlas/editor dev
 ```
 
 ---
 
-## Architecture
+## 📖 Architecture & RFC Documentation
 
-```
-apps/
-  cli/        — 5-command CLI (init, impact, run, ask, doctor)
-  editor/     — Electron + React + CodeMirror 6
+Engineering decisions and architectural evolutions are formally documented as RFCs under [`docs/architecture/`](file:///f:/projects/Atlas/docs/architecture/):
 
-packages/
-  core/       — Shared types, plugin API
-  parser/     — tree-sitter indexer (TypeScript, JavaScript, Python)
-  graph/      — SQLite memory graph + impact engine
-  agents/     — Multi-agent runtime (Planner, Coder, Tester, Reviewer)
-```
-
-### The 4-Agent Orchestrator
-
-```
-PLANNING → CODING → TESTING → REVIEWING → DONE
-                  ↑__________|
-                (auto-retry on test failure)
-```
-
-A debuggable state machine — not a black box.
-
-### The Memory Graph
-
-Persistent SQLite knowledge graph, built from your actual source code. Every agent reads from it before acting. Every decision the AI makes gets written back to it. It gets smarter the more you use it.
+- [`RFC-001-editor-core.md`](file:///f:/projects/Atlas/docs/architecture/RFC-001-editor-core.md): Editor Core & Monaco Integration
+- [`RFC-002-plugin-system.md`](file:///f:/projects/Atlas/docs/architecture/RFC-002-plugin-system.md): Plugin System Architecture
+- [`RFC-003-command-palette.md`](file:///f:/projects/Atlas/docs/architecture/RFC-003-command-palette.md): Command Palette & Keybindings
+- [`RFC-004-git-panel.md`](file:///f:/projects/Atlas/docs/architecture/RFC-004-git-panel.md): Source Control Integration
+- [`RFC-005-memory-engine.md`](file:///f:/projects/Atlas/docs/architecture/RFC-005-memory-engine.md): AST Memory & Knowledge Graph
+- [`RFC-009-platform-foundation-and-service-container.md`](file:///f:/projects/Atlas/docs/architecture/RFC-009-platform-foundation-and-service-container.md): Service Container & DI
+- [`RFC-010-developer-intelligence-and-project-health.md`](file:///f:/projects/Atlas/docs/architecture/RFC-010-developer-intelligence-and-project-health.md): Intelligence & Health Dashboard
+- [`RFC-011-extension-sdk-and-marketplace-foundation.md`](file:///f:/projects/Atlas/docs/architecture/RFC-011-extension-sdk-and-marketplace-foundation.md): Extension SDK Framework
+- [`RFC-012-source-control-and-collaborative-development.md`](file:///f:/projects/Atlas/docs/architecture/RFC-012-source-control-and-collaborative-development.md): 3-Way Merge Resolver & Git IPC Bridge
+- [`RFC-013-ai-runtime-and-agent-architecture.md`](file:///f:/projects/Atlas/docs/architecture/RFC-013-ai-runtime-and-agent-architecture.md): AI Runtime & Safety Approval
+- [`RFC-014-cloud-sync-accounts-and-team-collaboration.md`](file:///f:/projects/Atlas/docs/architecture/RFC-014-cloud-sync-accounts-and-team-collaboration.md): Cloud Sync & Workspace Profiles
+- [`RFC-015-release-engineering-and-quality-assurance.md`](file:///f:/projects/Atlas/docs/architecture/RFC-015-release-engineering-and-quality-assurance.md): Release Engineering & Performance Budgets
+- [`RFC-016-v1.0-release-specification-and-final-architecture.md`](file:///f:/projects/Atlas/docs/architecture/RFC-016-v1.0-release-specification-and-final-architecture.md): Atlas Studio v1.0 System Blueprint
 
 ---
 
-## Tech Stack
+## 📜 License
 
-| | Choice |
-|---|---|
-| Language | TypeScript throughout |
-| Database | SQLite via sql.js (WASM — zero native compilation) |
-| Parser | tree-sitter (incremental AST, 40+ languages planned) |
-| Editor | CodeMirror 6 |
-| Shell | Electron |
-| Build | Turborepo + pnpm |
-| AI | OpenAI / Anthropic / Gemini (your choice) |
-
----
-
-## Status
-
-Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell are all functional.
-
-**What's live:**
-- **Atlas Studio v0.1 Frameless IDE Core** — Single-line merged header with custom window controls and interactive dropdown menus
-- **Frameless Window Integration** — Native OS title bar eliminated (frame: false), draggable header with -webkit-app-region partitioning
-- **Top Navigation Menu System** — Interactive File, Edit, Selection, View, Go, Run, Terminal, and Help menus
-- **Find & Replace Overlay & Document Formatting** — In-editor search bar (Ctrl+F / Ctrl+H) and Shift+Alt+F formatter
-- **Split Editor Mode & Workspace Persistence** — Side-by-side split view (Ctrl+\), recent workspaces list, and drag-and-drop file opening
-- **Multi-Tab Terminal & Shell Selection** — Multiple terminal tabs with PowerShell / CMD / Bash shell switching
-- **Git Branch Selector & Remote Push/Pull** — Live branch selector dropdown and push/pull sync controls
-- **Platform Service Container & Event Bus** — Dependency Injection ServiceContainer, typed EventBus, unified CommandService (atlas.*), and isolated ExtensionHost
-- **Developer Intelligence & Health Dashboard** — AST symbol queries (Definition, References, Search), visual DependencyGraph view, circular dependency detection, and ProjectHealth rating panel
-- **Extension SDK & Marketplace** — Official @atlas/sdk package, .atlasx package spec (manifest.json, install/uninstall/update), permission security sandbox, and ExtensionGallery panel
-- **First-Class Source Control & Collaboration** — Asynchronous non-blocking Git IPC bridge, 3-way MergeConflictEditor (Accept Current/Incoming/Both), GitHistoryPanel commit timeline & stash manager, and Release Notes Draft Generator
-- **Unprivileged AI Runtime & Agent Architecture** — Configuration-driven ProviderRouter (Gemini, OpenAI, Anthropic, Ollama), token-aware ContextEngine, human approval AiSafetyModal diff preview, and InlineAiTool (Explain Code, Generate Tests, Generate Docs)
-- **Optional Cloud Sync, Accounts & Team Collaboration** — AccountService with SecurityStore encrypted local token storage, CloudSyncEngine selective sync, ProfileManager (Personal, Work, Open Source, Research), and AccountPanel team activity timeline
-- **Release Engineering, Distribution & Quality Assurance** — Multi-channel AutoUpdaterService (Stable, Beta, Nightly), PerformanceMonitor budget enforcement (<2s Cold Start), DiagnosticService bundle exporter, SecurityAuditService SPDX-2.3 SBOM generator, GitHub Actions CI/CD workflow, and ReleaseManagerPanel
-- **Integrated Terminal Panel** — Embedded interactive shell (`xterm.js` + `@xterm/addon-fit`)
-- **File Explorer Tree View** — Workspace file tree navigation, folder opening, file creation, and deletion
-- **Git Source Control Sidebar** — Changed files status view, stage/unstage controls, commit entry, and `DiffViewer`
-- **Dynamic package resolution** — automatically indexes monorepos via package.json scanning
-- **Call-graph indexing** — AST-level function-to-function call connection resolution
-- **Local vector embeddings** — 384-dimensional in-process embeddings stored in SQLite
-- **Impact engine** — blast-radius in < 15ms
-- **Unit & Integration Test Suite** — 11 passing test suites verifying agents, parser, and graph
-- **Standalone Electron packaging** — NSIS Windows installer builder pipeline (`dist-app/AtlasStudio Setup 0.1.0.exe`)
-
-**Coming in Phase 2:**
-- In-editor AI inline completions (`Ctrl+K` prompt bar)
-- Interactive AI reasoning timeline panel
-- Ollama / Local open-weight LLM adapter
-
----
-
-## License
-
-© 2026 Atlas Studio. All rights reserved.
-
-This repository is source-available for reference and collaboration purposes. It is not open source — no license is granted to use, copy, modify, or distribute this code without explicit written permission from the author.
+Atlas Studio is open source software licensed under the **MIT License**.
