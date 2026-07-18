@@ -15,6 +15,8 @@ import { ProjectHealth } from "./components/ProjectHealth.js";
 import { ExtensionGallery } from "./components/ExtensionGallery.js";
 import { GitHistoryPanel } from "./components/GitHistoryPanel.js";
 import { MergeConflictEditor } from "./components/MergeConflictEditor.js";
+import { AiSafetyModal } from "./components/AiSafetyModal.js";
+import { InlineAiTool } from "./components/InlineAiTool.js";
 import logoImg from "./assets/logo.png";
 
 interface EditorTab { filePath: string; content: string; language: string; isDirty: boolean; }
@@ -38,6 +40,8 @@ export function App() {
   const [isSplit, setIsSplit]                       = useState(false);
   const [splitTabIndex, setSplitTabIndex]           = useState(0);
   const [showMergeConflict, setShowMergeConflict]   = useState(false);
+  const [showAiSafety, setShowAiSafety]             = useState(false);
+  const [showInlineAi, setShowInlineAi]             = useState(false);
 
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
   const [tabs, setTabs]               = useState<EditorTab[]>([]);
@@ -129,7 +133,8 @@ export function App() {
       else if (ctrl && e.key.toLowerCase()==="k")          { e.preventDefault(); setShowCommandPalette(p=>!p); }
       else if (ctrl && e.key.toLowerCase()==="s")          { e.preventDefault(); handleSave(); }
       else if (ctrl && e.key.toLowerCase()==="\\")         { e.preventDefault(); setIsSplit(p=>!p); }
-      else if (e.key==="Escape")                           { setOpenMenu(null); setShowCommandPalette(false); }
+      else if (ctrl && e.key.toLowerCase()==="i")          { e.preventDefault(); setShowInlineAi(p=>!p); }
+      else if (e.key==="Escape")                           { setOpenMenu(null); setShowCommandPalette(false); setShowInlineAi(false); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -170,6 +175,7 @@ export function App() {
     ],
     View: [
       { label:"Command Palette",     shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
+      { label:"Inline AI Assistant", shortcut:"Ctrl+I",       action:()=>setShowInlineAi(p=>!p) },
       { label:"Split Editor",        shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
       { label:"separator", separator:true },
       { label:"Explorer",            shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
@@ -195,6 +201,8 @@ export function App() {
     { id:"open-settings",   label:"Open Settings",         shortcut:"Ctrl+,",       action:()=>setActiveSidebar("settings") },
     { id:"open-folder",     label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
     { id:"split-editor",    label:"Toggle Split Editor",   shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
+    { id:"inline-ai",       label:"Inline AI Assistant",   shortcut:"Ctrl+I",       action:()=>setShowInlineAi(p=>!p) },
+    { id:"ai-safety",       label:"AI Proposed Edit Preview",shortcut:"",           action:()=>setShowAiSafety(true) },
     { id:"show-history",    label:"Git History & Graph",   shortcut:"",             action:()=>setActiveSidebar("history") },
     { id:"merge-resolver",  label:"3-Way Merge Conflict Resolver",shortcut:"",     action:()=>setShowMergeConflict(p=>!p) },
     { id:"show-graph",      label:"Dependency Graph",      shortcut:"",             action:()=>setActiveSidebar("graph") },
@@ -348,6 +356,23 @@ export function App() {
           {activeTab && <Breadcrumb filePath={activeTab.filePath} repoPath={repoPath}/>}
 
           <div style={s.editorArea}>
+            {showInlineAi && (
+              <InlineAiTool
+                onExplain={() => {}}
+                onGenerateTests={() => {
+                  if (activeTab) {
+                    const testPath = activeTab.filePath.replace(/\.ts$/, ".test.ts");
+                    handleOpenFile(testPath);
+                  }
+                  setShowInlineAi(false);
+                }}
+                onGenerateDocs={() => {
+                  setShowInlineAi(false);
+                }}
+                onClose={() => setShowInlineAi(false)}
+              />
+            )}
+
             {showMergeConflict ? (
               <MergeConflictEditor filePath={activeTab?.filePath || "src/index.ts"} onComplete={()=>setShowMergeConflict(false)}/>
             ) : activeDiff ? (
@@ -430,6 +455,15 @@ export function App() {
 
         {showRightAiSidebar && <AiSidebar repoPath={repoPath} activeFilePath={activeTab?.filePath}/>}
       </div>
+
+      {showAiSafety && (
+        <AiSafetyModal
+          filePath={activeTab?.filePath || "src/index.ts"}
+          proposedCode="// Proposed AI modification\nexport function example() { return true; }"
+          onApprove={() => setShowAiSafety(false)}
+          onReject={() => setShowAiSafety(false)}
+        />
+      )}
 
       <StatusBar repoPath={repoPath} activeLanguage={activeTab?.language} cursorSymbol={cursorSymbol}/>
       <CommandPalette isOpen={showCommandPalette} commands={commands} onClose={()=>setShowCommandPalette(false)}/>
