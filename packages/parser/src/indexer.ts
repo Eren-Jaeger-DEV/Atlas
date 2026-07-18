@@ -8,7 +8,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { sha256 } from "js-sha256";
 import fg from "fast-glob";
@@ -81,20 +81,103 @@ function makeEdgeId(fromId: string, kind: string, toId: string): string {
 // Per-file parsing
 // ---------------------------------------------------------------------------
 
+async function scanWorkspacePackages(repoRoot: string): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  const packageJsons = await fg("**/package.json", {
+    cwd: repoRoot,
+    absolute: true,
+    ignore: ["**/node_modules/**"],
+  });
+
+  for (const p of packageJsons) {
+    try {
+      const content = JSON.parse(readFileSync(p, "utf-8"));
+      const pkgName = content.name;
+      if (!pkgName) continue;
+
+      const pkgDir = path.dirname(p);
+      let entrypoint: string | null = null;
+      const testPaths: string[] = [];
+
+      if (content.main) {
+        testPaths.push(content.main);
+      }
+      if (content.exports) {
+        if (typeof content.exports === "string") {
+          testPaths.push(content.exports);
+        } else if (typeof content.exports === "object") {
+          const dotEntry = content.exports["."] || content.exports["import"] || content.exports["require"];
+          if (dotEntry) {
+            if (typeof dotEntry === "string") {
+              testPaths.push(dotEntry);
+            } else if (typeof dotEntry === "object") {
+              if (dotEntry.import) testPaths.push(dotEntry.import);
+              if (dotEntry.require) testPaths.push(dotEntry.require);
+              if (dotEntry.default) testPaths.push(dotEntry.default);
+            }
+          }
+        }
+      }
+
+      for (const tp of testPaths) {
+        const srcPath = tp
+          .replace(/^\.\//, "")
+          .replace(/^dist\//, "src/")
+          .replace(/\.js$/, ".ts")
+          .replace(/\.jsx$/, ".tsx");
+
+        const fullPath = path.resolve(pkgDir, srcPath);
+        if (existsSync(fullPath)) {
+          entrypoint = fullPath;
+          break;
+        }
+
+        const tsxPath = fullPath.replace(/\.ts$/, ".tsx");
+        if (existsSync(tsxPath)) {
+          entrypoint = tsxPath;
+          break;
+        }
+      }
+
+      if (!entrypoint) {
+        const fallbacks = [
+          "src/index.ts",
+          "src/index.tsx",
+          "src/main.ts",
+          "src/main.tsx",
+          "src/index.js",
+          "src/index.jsx",
+          "index.ts",
+          "index.js",
+        ];
+        for (const fb of fallbacks) {
+          const fullPath = path.resolve(pkgDir, fb);
+          if (existsSync(fullPath)) {
+            entrypoint = fullPath;
+            break;
+          }
+        }
+      }
+
+      if (entrypoint) {
+        map[pkgName] = entrypoint.replace(/\\/g, "/");
+      }
+    } catch {
+      // Ignore invalid package.jsons
+    }
+  }
+
+  return map;
+}
+
 function resolveImportPath(
   baseDir: string,
   importSpecifier: string,
-  repoRoot: string
+  repoRoot: string,
+  workspacePackages: Record<string, string>
 ): string | null {
-  const WORKSPACE_PACKAGES: Record<string, string> = {
-    "@atlas/core": "packages/core/src/index.ts",
-    "@atlas/parser": "packages/parser/src/index.ts",
-    "@atlas/graph": "packages/graph/src/index.ts",
-    "@atlas/agents": "packages/agents/src/index.ts",
-  };
-
-  if (importSpecifier in WORKSPACE_PACKAGES) {
-    return path.resolve(repoRoot, WORKSPACE_PACKAGES[importSpecifier]!).replace(/\\/g, "/");
+  if (importSpecifier in workspacePackages) {
+    return workspacePackages[importSpecifier]!;
   }
 
   if (!importSpecifier.startsWith(".")) {
@@ -168,7 +251,8 @@ function runQuery(language: any, queryStr: string, tree: TreeSitter.Tree): any[]
 
 async function parseFile(
   filePath: string,
-  repoRoot: string
+  repoRoot: string,
+  workspacePackages: Record<string, string>
 ): Promise<ParsedFile> {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
@@ -301,7 +385,7 @@ async function parseFile(
     if (!rawSource) continue;
 
     // Resolve workspace package or relative path to actual file on disk
-    const resolvedPath = resolveImportPath(path.dirname(filePath), rawSource, repoRoot);
+    const resolvedPath = resolveImportPath(path.dirname(filePath), rawSource, repoRoot, workspacePackages);
     if (!resolvedPath) continue;
 
     const targetRelPath = path.relative(repoRoot, resolvedPath).replace(/\\/g, "/");
@@ -383,6 +467,9 @@ export async function indexRepository(
     ],
   });
 
+  // Scan workspace packages dynamically
+  const workspacePackages = await scanWorkspacePackages(repoRoot);
+
   const allNodes: GraphNode[] = [];
   const allEdges: GraphEdge[] = [];
   const errors: Array<{ filePath: string; error: string }> = [];
@@ -392,7 +479,7 @@ export async function indexRepository(
     onProgress?.(i + 1, files.length, filePath);
 
     try {
-      const { nodes, edges } = await parseFile(filePath, repoRoot);
+      const { nodes, edges } = await parseFile(filePath, repoRoot, workspacePackages);
       allNodes.push(...nodes);
       allEdges.push(...edges);
     } catch (err) {
