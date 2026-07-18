@@ -10,5 +10,6 @@
     { "path": "../core" },
     { "path": "../graph" }
   ],
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/tests/**/*"]
 }
