@@ -6,6 +6,7 @@ import { GitPanel } from "./components/GitPanel.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { DiffViewer } from "./components/DiffViewer.js";
 import { CommandPalette, CommandItem } from "./components/CommandPalette.js";
+import logoImg from "./assets/logo.png";
 
 interface EditorTab {
   filePath: string;
@@ -211,6 +212,7 @@ export function App() {
       {/* Top Header Bar */}
       <header style={styles.topBar}>
         <div style={styles.logo}>
+          <img src={logoImg} alt="Atlas Studio" style={styles.logoImg} />
           <span style={styles.logoAtlas}>Atlas</span>
           <span style={styles.logoStudio}> Studio v0.1</span>
         </div>
@@ -347,6 +349,7 @@ export function App() {
             ) : (
               <div style={styles.welcomeScreen}>
                 <div style={styles.welcomeCard}>
+                  <img src={logoImg} alt="Atlas Studio Logo" style={styles.welcomeLogoImg} />
                   <h2>Atlas Studio v0.1</h2>
                   <p style={styles.welcomeSub}>Professional AI-Native IDE Platform</p>
                   <div style={styles.welcomeActions}>
@@ -437,6 +440,21 @@ const styles: Record<string, React.CSSProperties> = {
   logo: {
     display: "flex",
     alignItems: "center",
+  },
+  logoImg: {
+    width: "20px",
+    height: "20px",
+    borderRadius: "50%",
+    marginRight: "8px",
+    objectFit: "cover",
+  },
+  welcomeLogoImg: {
+    width: "96px",
+    height: "96px",
+    borderRadius: "50%",
+    marginBottom: "16px",
+    objectFit: "cover",
+    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
   },
   logoAtlas: {
     fontWeight: 800,
