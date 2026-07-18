@@ -56,6 +56,7 @@ out/
 
 # AI Agent Rules
 .agents/
+Atlas_Studio_Product_Focus.md
 
 # Electron app builds
 dist-app/
