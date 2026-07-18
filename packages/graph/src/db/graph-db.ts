@@ -289,6 +289,10 @@ export class GraphDB {
     return this.all<any>("SELECT * FROM edges WHERE to_id = $id", { $id: nodeId }).map(this.rowToEdge);
   }
 
+  getAllEdges(): GraphEdge[] {
+    return this.all<any>("SELECT * FROM edges").map(this.rowToEdge.bind(this));
+  }
+
   private rowToEdge(row: any): GraphEdge {
     return {
       id: row.id,

@@ -154,6 +154,7 @@ Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell ar
 - **Multi-Tab Terminal & Shell Selection** — Multiple terminal tabs with PowerShell / CMD / Bash shell switching
 - **Git Branch Selector & Remote Push/Pull** — Live branch selector dropdown and push/pull sync controls
 - **Platform Service Container & Event Bus** — Dependency Injection ServiceContainer, typed EventBus, unified CommandService (atlas.*), and isolated ExtensionHost
+- **Developer Intelligence & Health Dashboard** — AST symbol queries (Definition, References, Search), visual DependencyGraph view, circular dependency detection, and ProjectHealth rating panel
 - **Integrated Terminal Panel** — Embedded interactive shell (`xterm.js` + `@xterm/addon-fit`)
 - **File Explorer Tree View** — Workspace file tree navigation, folder opening, file creation, and deletion
 - **Git Source Control Sidebar** — Changed files status view, stage/unstage controls, commit entry, and `DiffViewer`

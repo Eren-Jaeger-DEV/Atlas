@@ -10,10 +10,12 @@ import { SettingsPanel, EditorSettings, DEFAULT_SETTINGS } from "./components/Se
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { AiSidebar } from "./components/AiSidebar.js";
+import { DependencyGraph } from "./components/DependencyGraph.js";
+import { ProjectHealth } from "./components/ProjectHealth.js";
 import logoImg from "./assets/logo.png";
 
 interface EditorTab { filePath: string; content: string; language: string; isDirty: boolean; }
-type SidebarView = "explorer" | "git" | "impact" | "ai" | "settings";
+type SidebarView = "explorer" | "git" | "impact" | "graph" | "health" | "ai" | "settings";
 type BottomTab = "terminal" | "output" | "ai";
 
 interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; }
@@ -46,7 +48,6 @@ export function App() {
   const activeTab = tabs[activeTabIndex];
   const splitTab = tabs[splitTabIndex];
 
-  // Save recent project
   const saveRecentProject = useCallback((path: string) => {
     setRecentProjects(prev => {
       const updated = [path, ...prev.filter(p => p !== path)].slice(0, 10);
@@ -99,7 +100,6 @@ export function App() {
     catch { setActiveDiff({ filePath, diffText: "Error loading diff" }); }
   };
 
-  // Drag and Drop Handler
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
@@ -108,7 +108,6 @@ export function App() {
     }
   };
 
-  // Outside click menu handler
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenu(null);
@@ -117,7 +116,6 @@ export function App() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // Keyboard Shortcuts
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
@@ -167,13 +165,15 @@ export function App() {
       { label:"Paste",      shortcut:"Ctrl+V",       action:()=>document.execCommand("paste") },
     ],
     View: [
-      { label:"Command Palette",   shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
-      { label:"Split Editor",      shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
+      { label:"Command Palette",     shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
+      { label:"Split Editor",        shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
       { label:"separator", separator:true },
-      { label:"Explorer",          shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
-      { label:"Source Control",    shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
-      { label:"Toggle AI Sidebar", shortcut:"Ctrl+L",       action:()=>setShowRightAiSidebar(p=>!p) },
-      { label:"Toggle Panel",      shortcut:"Ctrl+`",       action:()=>setShowBottomPanel(p=>!p) },
+      { label:"Explorer",            shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
+      { label:"Source Control",      shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
+      { label:"Dependency Graph",    shortcut:"",             action:()=>setActiveSidebar("graph") },
+      { label:"Project Health",      shortcut:"",             action:()=>setActiveSidebar("health") },
+      { label:"Toggle AI Sidebar",   shortcut:"Ctrl+L",       action:()=>setShowRightAiSidebar(p=>!p) },
+      { label:"Toggle Panel",        shortcut:"Ctrl+`",       action:()=>setShowBottomPanel(p=>!p) },
     ],
     Terminal: [
       { label:"New Terminal",    shortcut:"Ctrl+`",       action:()=>{ setShowBottomPanel(true); setBottomTab("terminal"); } },
@@ -188,6 +188,8 @@ export function App() {
     { id:"open-settings",   label:"Open Settings",         shortcut:"Ctrl+,",       action:()=>setActiveSidebar("settings") },
     { id:"open-folder",     label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
     { id:"split-editor",    label:"Toggle Split Editor",   shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
+    { id:"show-graph",      label:"Dependency Graph",      shortcut:"",             action:()=>setActiveSidebar("graph") },
+    { id:"show-health",     label:"Project Health",        shortcut:"",             action:()=>setActiveSidebar("health") },
     { id:"toggle-terminal", label:"Toggle Terminal",        shortcut:"Ctrl+`",       action:()=>setShowBottomPanel(p=>!p) },
     { id:"show-explorer",   label:"Explorer",               shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
     { id:"show-git",        label:"Source Control",         shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
@@ -278,6 +280,8 @@ export function App() {
               {id:"explorer",lbl:"Explorer",icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>},
               {id:"git",     lbl:"Git",     icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>},
               {id:"impact",  lbl:"Impact",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
+              {id:"graph",   lbl:"Graph",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>},
+              {id:"health",  lbl:"Health",  icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>},
               {id:"ai",      lbl:"Agent",   icon:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
             ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
               <button key={id} style={{...s.actBtn,...(activeSidebar===id?s.actOn:{})}} onClick={()=>setActiveSidebar(id)} title={lbl}>
@@ -297,6 +301,8 @@ export function App() {
           {activeSidebar==="explorer" && <FileExplorer repoPath={repoPath} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo}/>}
           {activeSidebar==="git"      && <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff}/>}
           {activeSidebar==="impact"   && <ImpactPanel filePath={activeTab?.filePath} symbolName={cursorSymbol}/>}
+          {activeSidebar==="graph"    && <DependencyGraph repoPath={repoPath}/>}
+          {activeSidebar==="health"   && <ProjectHealth repoPath={repoPath}/>}
           {activeSidebar==="ai"       && (
             <div style={s.agentPane}>
               <p style={s.paneHdr}>ATLAS AI AGENT</p>
@@ -313,7 +319,7 @@ export function App() {
           {activeSidebar==="settings" && <SettingsPanel settings={settings} onUpdateSettings={setSettings}/>}
         </aside>
 
-        {/* Central Editor Area with optional Split View */}
+        {/* Central Editor Area */}
         <div style={s.center}>
           <div style={s.tabBar}>
             {tabs.map((tab,i)=>(
@@ -332,7 +338,6 @@ export function App() {
               <DiffViewer filePath={activeDiff.filePath} diffText={activeDiff.diffText} onClose={()=>setActiveDiff(null)}/>
             ) : tabs.length > 0 ? (
               <div style={{ display: "flex", width: "100%", height: "100%" }}>
-                {/* Primary Editor Pane */}
                 <div style={{ flex: 1, borderRight: isSplit ? "1px solid #27272a" : "none", height: "100%" }}>
                   {activeTab && (
                     <EditorPane
@@ -345,7 +350,6 @@ export function App() {
                   )}
                 </div>
 
-                {/* Secondary Split Editor Pane */}
                 {isSplit && (
                   <div style={{ flex: 1, height: "100%" }}>
                     {splitTab ? (
@@ -362,7 +366,6 @@ export function App() {
                 )}
               </div>
             ) : (
-              /* Welcome Screen with Recent Projects */
               <div style={s.welcome}>
                 <div style={s.welcomeCard}>
                   <img src={logoImg} alt="Atlas" style={s.welcomeLogo}/>
@@ -374,7 +377,6 @@ export function App() {
                     <button style={s.wBtnO} onClick={()=>setActiveSidebar("settings")}>Settings</button>
                   </div>
 
-                  {/* Recent Projects List */}
                   {recentProjects.length > 0 && (
                     <div style={s.recentBox}>
                       <p style={s.recentHdr}>RECENT WORKSPACES</p>
@@ -391,7 +393,6 @@ export function App() {
             )}
           </div>
 
-          {/* Bottom Dock Panel */}
           {showBottomPanel && (
             <div style={s.dock}>
               <div style={s.dockTabs}>

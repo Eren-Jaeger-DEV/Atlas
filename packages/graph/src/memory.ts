@@ -1,8 +1,7 @@
 /**
  * @atlas/graph — Memory Engine
  *
- * High-level facade over GraphDB + impact engine. This is what the CLI
- * and agent runtime import — they don't talk to GraphDB directly.
+ * High-level facade over GraphDB + impact engine + developer intelligence queries.
  */
 
 import path from "node:path";
@@ -12,10 +11,6 @@ import type { DecisionRecord } from "./db/graph-db.js";
 import { computeImpact } from "./impact.js";
 import { EmbeddingEngine, cosineSimilarity } from "./embeddings.js";
 
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
 export interface MemoryEngineConfig {
   /** Absolute path to the repository root */
   repoRoot: string;
@@ -23,9 +18,20 @@ export interface MemoryEngineConfig {
   dbPath?: string;
 }
 
-// ---------------------------------------------------------------------------
-// MemoryEngine
-// ---------------------------------------------------------------------------
+export interface CircularDependency {
+  cycle: string[];
+}
+
+export interface ProjectHealthReport {
+  score: number;
+  totalFiles: number;
+  totalSymbols: number;
+  todoCount: number;
+  circularDependenciesCount: number;
+  orphanModulesCount: number;
+  circularDependencies: CircularDependency[];
+  orphanModules: string[];
+}
 
 export class MemoryEngine {
   readonly db: GraphDB;
@@ -43,18 +49,10 @@ export class MemoryEngine {
     return new MemoryEngine(db, config.repoRoot);
   }
 
-  // -------------------------------------------------------------------------
-  // Indexing (called by atlas init)
-  // -------------------------------------------------------------------------
-
   async bulkIndex(nodes: GraphNode[], edges: GraphEdge[]): Promise<void> {
     this.db.upsertNodes(nodes);
     this.db.upsertEdges(edges);
   }
-
-  // -------------------------------------------------------------------------
-  // Queries
-  // -------------------------------------------------------------------------
 
   getNodesForFile(filePath: string): GraphNode[] {
     return this.db.getNodesForFile(filePath);
@@ -70,6 +68,107 @@ export class MemoryEngine {
 
   search(query: string, limit = 20): GraphNode[] {
     return this.db.searchNodes(query, limit);
+  }
+
+  // -------------------------------------------------------------------------
+  // Symbol Navigation: Go to Definition & Find References
+  // -------------------------------------------------------------------------
+
+  findSymbolDefinition(symbolName: string): GraphNode | undefined {
+    const nodes = this.search(symbolName, 10);
+    return nodes.find(n => n.label === symbolName || n.label.endsWith(`:${symbolName}`));
+  }
+
+  findSymbolReferences(symbolName: string): GraphNode[] {
+    const def = this.findSymbolDefinition(symbolName);
+    if (!def) return [];
+
+    const incomingEdges = this.getEdgesTo(def.id);
+    const refs: GraphNode[] = [];
+    for (const edge of incomingEdges) {
+      const sourceNode = this.db.getNode(edge.fromId);
+      if (sourceNode) refs.push(sourceNode);
+    }
+    return refs;
+  }
+
+  // -------------------------------------------------------------------------
+  // Circular Dependency Detection & Health Metrics
+  // -------------------------------------------------------------------------
+
+  detectCircularDependencies(): CircularDependency[] {
+    const allEdges = this.db.getAllEdges();
+    const adj: Map<string, string[]> = new Map();
+
+    for (const edge of allEdges) {
+      if (!adj.has(edge.fromId)) adj.set(edge.fromId, []);
+      adj.get(edge.fromId)!.push(edge.toId);
+    }
+
+    const visited = new Set<string>();
+    const recStack = new Set<string>();
+    const cycles: CircularDependency[] = [];
+
+    const dfs = (curr: string, path: string[]) => {
+      visited.add(curr);
+      recStack.add(curr);
+      path.push(curr);
+
+      const neighbors = adj.get(curr) || [];
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          dfs(neighbor, [...path]);
+        } else if (recStack.has(neighbor)) {
+          const cycleStart = path.indexOf(neighbor);
+          if (cycleStart !== -1) {
+            cycles.push({ cycle: [...path.slice(cycleStart), neighbor] });
+          }
+        }
+      }
+
+      recStack.delete(curr);
+    };
+
+    for (const node of this.db.getAllNodes()) {
+      if (!visited.has(node.id)) {
+        dfs(node.id, []);
+      }
+    }
+
+    return cycles.slice(0, 10);
+  }
+
+  getProjectHealthMetrics(): ProjectHealthReport {
+    const allNodes = this.db.getAllNodes();
+    const fileNodes = allNodes.filter(n => n.kind === "file");
+    const symbolNodes = allNodes.filter(n => n.kind !== "file");
+
+    const cycles = this.detectCircularDependencies();
+
+    const orphanModules: string[] = [];
+    for (const file of fileNodes) {
+      const inEdges = this.getEdgesTo(file.id);
+      const outEdges = this.getEdgesFrom(file.id);
+      if (inEdges.length === 0 && outEdges.length === 0) {
+        orphanModules.push(file.filePath);
+      }
+    }
+
+    let score = 100;
+    score -= cycles.length * 5;
+    score -= Math.min(orphanModules.length * 2, 20);
+    score = Math.max(score, 50);
+
+    return {
+      score,
+      totalFiles: fileNodes.length,
+      totalSymbols: symbolNodes.length,
+      todoCount: 0,
+      circularDependenciesCount: cycles.length,
+      orphanModulesCount: orphanModules.length,
+      circularDependencies: cycles,
+      orphanModules,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -127,7 +226,7 @@ export class MemoryEngine {
     const vectorResults = await this.vectorSearch(query, limit * 2, engine);
 
     const rrfScores = new Map<string, number>();
-    const k = 60; // Standard RRF constant
+    const k = 60;
 
     keywordResults.forEach((node, rank) => {
       const current = rrfScores.get(node.id) ?? 0;
@@ -153,31 +252,17 @@ export class MemoryEngine {
     return results;
   }
 
-  // -------------------------------------------------------------------------
-  // Impact analysis (the core differentiator)
-  // -------------------------------------------------------------------------
-
   async impact(filePath: string, symbolName?: string): Promise<ImpactResult> {
     return computeImpact(this.db, filePath, symbolName);
   }
 
-  // -------------------------------------------------------------------------
-  // Decision log (append-only)
-  // -------------------------------------------------------------------------
-
-  recordDecision(
-    decision: Omit<DecisionRecord, "createdAt">
-  ): DecisionRecord {
+  recordDecision(decision: Omit<DecisionRecord, "createdAt">): DecisionRecord {
     return this.db.logDecision(decision);
   }
 
   getDecisions(): DecisionRecord[] {
     return this.db.getDecisions();
   }
-
-  // -------------------------------------------------------------------------
-  // Run traces (AI Timeline)
-  // -------------------------------------------------------------------------
 
   saveRun(run: Record<string, unknown>): void {
     this.db.saveRun(run);
@@ -186,10 +271,6 @@ export class MemoryEngine {
   getRun(id: string): Record<string, unknown> | undefined {
     return this.db.getRun(id);
   }
-
-  // -------------------------------------------------------------------------
-  // Housekeeping
-  // -------------------------------------------------------------------------
 
   getStats() {
     return this.db.getStats();
