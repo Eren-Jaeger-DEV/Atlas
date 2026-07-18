@@ -65,3 +65,10 @@ export { SecurityStore } from "./cloud/SecurityStore.js";
 export { ProfileManager, type WorkspaceProfile } from "./cloud/ProfileManager.js";
 export { CloudSyncEngine, type SyncPayload } from "./cloud/CloudSyncEngine.js";
 export { CollaborationService, type TeamMember, type ActivityItem } from "./cloud/CollaborationService.js";
+
+// Release Engineering & Distribution
+export { ReleaseConfig, type ReleaseChannel, type BuildMetadata } from "./release/ReleaseConfig.js";
+export { AutoUpdaterService, type UpdateInfo } from "./release/AutoUpdaterService.js";
+export { PerformanceMonitor, type PerformanceBudgets } from "./release/PerformanceMonitor.js";
+export { DiagnosticService, type DiagnosticBundle } from "./release/DiagnosticService.js";
+export { SecurityAuditService, type SbomReport } from "./release/SecurityAuditService.js";

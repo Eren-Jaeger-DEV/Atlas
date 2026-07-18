@@ -159,6 +159,7 @@ Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell ar
 - **First-Class Source Control & Collaboration** — Asynchronous non-blocking Git IPC bridge, 3-way MergeConflictEditor (Accept Current/Incoming/Both), GitHistoryPanel commit timeline & stash manager, and Release Notes Draft Generator
 - **Unprivileged AI Runtime & Agent Architecture** — Configuration-driven ProviderRouter (Gemini, OpenAI, Anthropic, Ollama), token-aware ContextEngine, human approval AiSafetyModal diff preview, and InlineAiTool (Explain Code, Generate Tests, Generate Docs)
 - **Optional Cloud Sync, Accounts & Team Collaboration** — AccountService with SecurityStore encrypted local token storage, CloudSyncEngine selective sync, ProfileManager (Personal, Work, Open Source, Research), and AccountPanel team activity timeline
+- **Release Engineering, Distribution & Quality Assurance** — Multi-channel AutoUpdaterService (Stable, Beta, Nightly), PerformanceMonitor budget enforcement (<2s Cold Start), DiagnosticService bundle exporter, SecurityAuditService SPDX-2.3 SBOM generator, GitHub Actions CI/CD workflow, and ReleaseManagerPanel
 - **Integrated Terminal Panel** — Embedded interactive shell (`xterm.js` + `@xterm/addon-fit`)
 - **File Explorer Tree View** — Workspace file tree navigation, folder opening, file creation, and deletion
 - **Git Source Control Sidebar** — Changed files status view, stage/unstage controls, commit entry, and `DiffViewer`
