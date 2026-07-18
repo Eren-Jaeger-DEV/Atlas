@@ -35,6 +35,7 @@ export type {
   LLMProviderConfig,
   LLMProviderName,
 } from "./types/llm.js";
+export type { ExtensionPermission, ExtensionManifest } from "./types/extension.js";
 
 // Plugin API
 export type {
@@ -55,3 +56,5 @@ export { ServiceContainer } from "./platform/ServiceContainer.js";
 export { CommandService, type CommandDescriptor, type CommandHandler } from "./services/CommandService.js";
 export { SettingsService, DEFAULT_SETTINGS_SCHEMA, type SettingsSchema } from "./services/SettingsService.js";
 export { ExtensionHost, type ExtensionContext, type ExtensionModule } from "./services/ExtensionHost.js";
+export { PermissionEngine, type PermissionRequest } from "./security/PermissionEngine.js";
+export { ExtensionManager, type InstalledExtension, type AtlasExtensionModule } from "./extensions/ExtensionManager.js";
