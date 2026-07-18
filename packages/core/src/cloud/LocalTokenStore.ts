@@ -1,10 +1,11 @@
 /**
- * SecurityStore
+ * LocalTokenStore
  *
- * Encrypted local credential and token storage for Atlas Studio.
+ * Local credential and token storage for Atlas Studio.
+ * NOTE: Currently uses plain Base64 encoding, NOT encryption.
  */
 
-export class SecurityStore {
+export class LocalTokenStore {
   private static storage: Map<string, string> = new Map();
 
   public static setSecureItem(key: string, value: string): void {

@@ -4,7 +4,7 @@
  * Manages user accounts, authentication session, device tokens, and offline detection.
  */
 
-import { SecurityStore } from "./SecurityStore.js";
+import { LocalTokenStore } from "./LocalTokenStore.js";
 import { EventBus } from "../events/EventBus.js";
 
 export interface UserProfile {
@@ -26,7 +26,7 @@ export class AccountService {
   }
 
   private restoreSession(): void {
-    const token = SecurityStore.getSecureItem("user_token");
+    const token = LocalTokenStore.getSecureItem("user_token");
     if (token) {
       const storedName = localStorage.getItem("atlas_user_name") || "Developer";
       const storedEmail = localStorage.getItem("atlas_user_email") || "developer@local";
@@ -41,7 +41,7 @@ export class AccountService {
 
   public async signIn(email: string, name?: string): Promise<UserProfile> {
     const token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    SecurityStore.setSecureItem("user_token", token);
+    LocalTokenStore.setSecureItem("user_token", token);
 
     const userName = name || email.split("@")[0] || "Developer";
     localStorage.setItem("atlas_user_name", userName);
@@ -59,7 +59,7 @@ export class AccountService {
   }
 
   public signOut(): void {
-    SecurityStore.removeSecureItem("user_token");
+    LocalTokenStore.removeSecureItem("user_token");
     localStorage.removeItem("atlas_user_name");
     localStorage.removeItem("atlas_user_email");
     this.currentUser = null;

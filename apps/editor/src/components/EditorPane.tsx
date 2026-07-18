@@ -1,13 +1,10 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import MonacoEditor, { OnMount, OnChange, loader } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
+import * as monaco from "monaco-editor";
 
-// Configure Monaco to load workers from CDN in production, locally in dev
-loader.config({
-  paths: {
-    vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs",
-  },
-});
+// Configure Monaco to bundle locally rather than from CDN
+loader.config({ monaco });
 
 interface EditorPaneProps {
   filePath?: string;

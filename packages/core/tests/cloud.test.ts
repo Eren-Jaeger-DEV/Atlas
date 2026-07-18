@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { AccountService, CloudSyncEngine, ProfileManager, SecurityStore, EventBus } from "../src/index.js";
+import { AccountService, CloudSyncEngine, ProfileManager, LocalTokenStore, EventBus } from "../src/index.js";
 
 describe("Cloud Sync, Accounts & Team Collaboration — Phase 8", () => {
-  it("should encrypt and store tokens via SecurityStore", () => {
-    SecurityStore.setSecureItem("test_token", "secret-payload-123");
-    const retrieved = SecurityStore.getSecureItem("test_token");
+  it("should encrypt and store tokens via LocalTokenStore", () => {
+    LocalTokenStore.setSecureItem("test_token", "secret-payload-123");
+    const retrieved = LocalTokenStore.getSecureItem("test_token");
     expect(retrieved).toBe("secret-payload-123");
 
-    SecurityStore.removeSecureItem("test_token");
-    expect(SecurityStore.getSecureItem("test_token")).toBeNull();
+    LocalTokenStore.removeSecureItem("test_token");
+    expect(LocalTokenStore.getSecureItem("test_token")).toBeNull();
   });
 
   it("should handle user sign-in and session state in AccountService", async () => {
