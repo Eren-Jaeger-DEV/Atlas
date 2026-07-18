@@ -1,89 +1,141 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
-interface NodeData {
+const api = () => (window as any).atlasAPI;
+
+interface GraphNode {
+  id: string;
+  label?: string;
+  kind?: string;
+  filePath?: string;
+}
+
+interface LayoutNode {
   id: string;
   label: string;
   kind: string;
+  x: number;
+  y: number;
 }
 
 interface DependencyGraphProps {
   repoPath?: string;
 }
 
+// Simple deterministic circle layout — no external library needed
+function circleLayout(nodes: GraphNode[], cx: number, cy: number, r: number): LayoutNode[] {
+  return nodes.map((n, i) => {
+    const angle = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+    return {
+      id: n.id ?? String(i),
+      label: n.label ?? (n.filePath ? n.filePath.split(/[/\\]/).pop()! : `Node ${i}`),
+      kind: n.kind ?? "symbol",
+      x: cx + r * Math.cos(angle),
+      y: cy + r * Math.sin(angle),
+    };
+  });
+}
+
 export function DependencyGraph({ repoPath }: DependencyGraphProps) {
-  const [nodes, setNodes] = useState<NodeData[]>([]);
-  const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
+  const [nodes, setNodes] = useState<LayoutNode[]>([]);
+  const [selectedNode, setSelectedNode] = useState<LayoutNode | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    // Generate workspace component visual nodes from active path
-    if (repoPath) {
-      setNodes([
-        { id: "1", label: "App.tsx", kind: "file" },
-        { id: "2", label: "EditorPane.tsx", kind: "file" },
-        { id: "3", label: "FileExplorer.tsx", kind: "file" },
-        { id: "4", label: "GitPanel.tsx", kind: "file" },
-        { id: "5", label: "TerminalPanel.tsx", kind: "file" },
-        { id: "6", label: "ServiceContainer.ts", kind: "file" },
-        { id: "7", label: "EventBus.ts", kind: "file" },
-      ]);
-    }
+    if (!repoPath) return;
+    setLoading(true);
+    setError(null);
+
+    api()
+      .search("*")
+      .then((results: GraphNode[]) => {
+        const topN = (Array.isArray(results) ? results : []).slice(0, 30);
+        setNodes(circleLayout(topN, 300, 220, 180));
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false));
   }, [repoPath]);
+
+  const kindColor = (kind: string) => {
+    switch (kind) {
+      case "function": return "#fbbf24";
+      case "class":    return "#60a5fa";
+      case "variable": return "#86efac";
+      case "file":     return "#e4e4e7";
+      default:         return "#a1a1aa";
+    }
+  };
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.title}>VISUAL DEPENDENCY GRAPH</span>
-        <span style={styles.subtext}>{repoPath ? `${nodes.length} nodes` : "No workspace open"}</span>
+        <span style={styles.subtext}>
+          {loading ? "Indexing..." : repoPath ? `${nodes.length} symbols` : "No workspace open"}
+        </span>
       </div>
 
       <div style={styles.graphContainer}>
-        <svg width="100%" height="100%" style={styles.svg}>
-          {/* Edge lines */}
-          <line x1="120" y1="60" x2="260" y2="100" stroke="#3f3f46" strokeWidth="1.5" />
-          <line x1="120" y1="60" x2="260" y2="160" stroke="#3f3f46" strokeWidth="1.5" />
-          <line x1="120" y1="60" x2="260" y2="220" stroke="#3f3f46" strokeWidth="1.5" />
-          <line x1="260" y1="100" x2="420" y2="120" stroke="#3f3f46" strokeWidth="1.5" />
-          <line x1="260" y1="160" x2="420" y2="180" stroke="#3f3f46" strokeWidth="1.5" />
+        {!repoPath && (
+          <p style={styles.emptyMsg}>Open a workspace to explore its dependency graph.</p>
+        )}
 
-          {/* Root node */}
-          <g transform="translate(60, 40)" onClick={() => setSelectedNode(nodes[0])} style={{ cursor: "pointer" }}>
-            <rect width="120" height="36" rx="6" fill="#18181b" stroke="#e4e4e7" strokeWidth="1.5" />
-            <text x="60" y="22" textAnchor="middle" fill="#fafafa" fontSize="12" fontWeight="600">App.tsx</text>
-          </g>
+        {error && (
+          <p style={{ ...styles.emptyMsg, color: "#f87171" }}>[FAIL] {error}</p>
+        )}
 
-          {/* Child nodes */}
-          <g transform="translate(200, 80)" onClick={() => setSelectedNode(nodes[1])} style={{ cursor: "pointer" }}>
-            <rect width="120" height="34" rx="6" fill="#18181b" stroke="#27272a" strokeWidth="1" />
-            <text x="60" y="21" textAnchor="middle" fill="#e4e4e7" fontSize="11">EditorPane.tsx</text>
-          </g>
+        {nodes.length > 0 && (
+          <svg ref={svgRef} width="100%" height="100%" viewBox="0 0 600 440" style={styles.svg}>
+            {/* Draw edges from center to all outer nodes */}
+            {nodes.map((n, i) => {
+              const center = nodes[0];
+              if (i === 0) return null;
+              return (
+                <line
+                  key={`edge-${n.id}`}
+                  x1={center.x} y1={center.y}
+                  x2={n.x} y2={n.y}
+                  stroke="#27272a" strokeWidth="1"
+                />
+              );
+            })}
 
-          <g transform="translate(200, 140)" onClick={() => setSelectedNode(nodes[2])} style={{ cursor: "pointer" }}>
-            <rect width="120" height="34" rx="6" fill="#18181b" stroke="#27272a" strokeWidth="1" />
-            <text x="60" y="21" textAnchor="middle" fill="#e4e4e7" fontSize="11">FileExplorer.tsx</text>
-          </g>
+            {/* Draw nodes */}
+            {nodes.map(n => (
+              <g
+                key={n.id}
+                transform={`translate(${n.x - 44},${n.y - 14})`}
+                onClick={() => setSelectedNode(n)}
+                style={{ cursor: "pointer" }}
+              >
+                <rect
+                  width="88" height="28" rx="5"
+                  fill={selectedNode?.id === n.id ? "#27272a" : "#18181b"}
+                  stroke={kindColor(n.kind)}
+                  strokeWidth={selectedNode?.id === n.id ? "1.5" : "1"}
+                />
+                <text
+                  x="44" y="17"
+                  textAnchor="middle"
+                  fill={kindColor(n.kind)}
+                  fontSize="9"
+                  fontFamily="monospace"
+                >
+                  {n.label.length > 12 ? n.label.slice(0, 12) + "..." : n.label}
+                </text>
+              </g>
+            ))}
+          </svg>
+        )}
 
-          <g transform="translate(200, 200)" onClick={() => setSelectedNode(nodes[3])} style={{ cursor: "pointer" }}>
-            <rect width="120" height="34" rx="6" fill="#18181b" stroke="#27272a" strokeWidth="1" />
-            <text x="60" y="21" textAnchor="middle" fill="#e4e4e7" fontSize="11">GitPanel.tsx</text>
-          </g>
-
-          {/* Service nodes */}
-          <g transform="translate(360, 100)" style={{ cursor: "pointer" }}>
-            <rect width="130" height="34" rx="6" fill="#18181b" stroke="#38bdf8" strokeWidth="1" />
-            <text x="65" y="21" textAnchor="middle" fill="#38bdf8" fontSize="11">ServiceContainer</text>
-          </g>
-
-          <g transform="translate(360, 160)" style={{ cursor: "pointer" }}>
-            <rect width="130" height="34" rx="6" fill="#18181b" stroke="#38bdf8" strokeWidth="1" />
-            <text x="65" y="21" textAnchor="middle" fill="#38bdf8" fontSize="11">EventBus.ts</text>
-          </g>
-        </svg>
-
+        {/* Detail panel */}
         {selectedNode && (
-          <div style={styles.infoBox}>
-            <p style={styles.infoHdr}>NODE DETAILS</p>
-            <p style={styles.infoTxt}>Label: {selectedNode.label}</p>
-            <p style={styles.infoTxt}>Type: {selectedNode.kind}</p>
+          <div style={styles.detail}>
+            <p style={styles.detailHdr}>NODE INSPECTOR</p>
+            <p style={styles.detailRow}><strong>Label:</strong> {selectedNode.label}</p>
+            <p style={styles.detailRow}><strong>Kind:</strong> {selectedNode.kind}</p>
+            <p style={styles.detailRow}><strong>ID:</strong> {selectedNode.id}</p>
           </div>
         )}
       </div>
@@ -93,57 +145,26 @@ export function DependencyGraph({ repoPath }: DependencyGraphProps) {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    backgroundColor: "#09090b",
-    color: "#fafafa",
+    display: "flex", flexDirection: "column", height: "100%",
+    backgroundColor: "#09090b", color: "#fafafa",
   },
   header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 12px",
-    backgroundColor: "#0d0d10",
-    borderBottom: "1px solid #27272a",
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "8px 12px", backgroundColor: "#0d0d10", borderBottom: "1px solid #27272a",
   },
-  title: {
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.8px",
-  },
-  subtext: {
-    fontSize: "11px",
-    color: "#71717a",
-  },
+  title: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.8px" },
+  subtext: { fontSize: "11px", color: "#71717a" },
   graphContainer: {
-    flex: 1,
-    position: "relative",
-    overflow: "hidden",
+    flex: 1, position: "relative", overflow: "hidden",
+    display: "flex", flexDirection: "column",
   },
-  svg: {
-    width: "100%",
-    height: "100%",
+  svg: { flex: 1 },
+  emptyMsg: { fontSize: "11px", color: "#52525b", margin: "20px 12px" },
+  detail: {
+    position: "absolute", bottom: "12px", right: "12px",
+    backgroundColor: "#141417", border: "1px solid #27272a",
+    borderRadius: "6px", padding: "10px 12px", minWidth: "200px",
   },
-  infoBox: {
-    position: "absolute",
-    bottom: "12px",
-    right: "12px",
-    backgroundColor: "#18181b",
-    border: "1px solid #27272a",
-    borderRadius: "6px",
-    padding: "10px",
-    minWidth: "160px",
-  },
-  infoHdr: {
-    fontSize: "10px",
-    fontWeight: 700,
-    color: "#71717a",
-    margin: "0 0 4px",
-  },
-  infoTxt: {
-    fontSize: "12px",
-    margin: "0 0 2px",
-    color: "#e4e4e7",
-  },
+  detailHdr: { fontSize: "10px", fontWeight: 700, color: "#71717a", margin: "0 0 6px" },
+  detailRow: { fontSize: "11px", color: "#e4e4e7", margin: "0 0 2px" },
 };

@@ -1,11 +1,11 @@
 /**
- * Atlas Editor â€” Electron Main Process
+ * Atlas Editor - Electron Main Process
  *
  * Architectural rule enforced here:
  * The main process spawns the agent runtime as a separate process
  * and communicates via IPC. It does NOT directly import @atlas/agents.
  *
- * The renderer (CodeMirror + React) knows nothing about AI.
+ * The renderer (Monaco + React) knows nothing about AI.
  * The AI plugin in the renderer talks to THIS process via ipcRenderer,
  * which then delegates to the agent runtime subprocess.
  */
@@ -14,8 +14,9 @@ import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Menu } from 
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
-import { spawn, execFile, ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import * as pty from "node-pty";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
@@ -25,7 +26,8 @@ const execFileAsync = promisify(execFile);
 const isDev = process.env["NODE_ENV"] === "development";
 
 let mainWindow: BrowserWindow | null = null;
-const terminalProcesses = new Map<string, ChildProcessWithoutNullStreams>();
+const terminalProcesses = new Map<string, pty.IPty>();
+
 
 // ---------------------------------------------------------------------------
 // Window creation
@@ -290,32 +292,31 @@ ipcMain.handle("atlas:rename-file", async (_event, oldPath: string, newPath: str
   await rename(oldPath, newPath);
 });
 
-// Integrated Terminal Subprocess
+// Integrated Terminal - real PTY via node-pty (ANSI colors, interactive programs, real resize)
 ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: string) => {
   if (terminalProcesses.has(termId)) return { success: true };
 
   const targetCwd = cwd || global.__atlasRepoRoot || process.cwd();
   const isWin = process.platform === "win32";
-  const defaultShell = isWin ? "cmd.exe" : "bash";
-  const shellArgs = isWin ? ["/k"] : [];
+  const shell = isWin
+    ? (process.env["COMSPEC"] || "cmd.exe")
+    : (process.env["SHELL"] || "/bin/bash");
 
-  const proc = spawn(defaultShell, shellArgs, {
+  const proc = pty.spawn(shell, [], {
+    name: "xterm-256color",
+    cols: 80,
+    rows: 24,
     cwd: targetCwd,
-    env: process.env,
-    shell: true,
+    env: process.env as Record<string, string>,
   });
 
   terminalProcesses.set(termId, proc);
 
-  proc.stdout.on("data", (chunk: Buffer) => {
-    event.sender.send("atlas:terminal-data", { termId, data: chunk.toString("utf-8") });
+  proc.onData((data: string) => {
+    event.sender.send("atlas:terminal-data", { termId, data });
   });
 
-  proc.stderr.on("data", (chunk: Buffer) => {
-    event.sender.send("atlas:terminal-data", { termId, data: chunk.toString("utf-8") });
-  });
-
-  proc.on("exit", () => {
+  proc.onExit(() => {
     terminalProcesses.delete(termId);
   });
 
@@ -325,13 +326,18 @@ ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: stri
 ipcMain.handle("atlas:terminal-input", async (_event, termId: string, data: string) => {
   const proc = terminalProcesses.get(termId);
   if (proc) {
-    proc.stdin.write(data);
+    proc.write(data);
   }
 });
 
-ipcMain.handle("atlas:terminal-resize", async () => {
+ipcMain.handle("atlas:terminal-resize", async (_event, termId: string, cols: number, rows: number) => {
+  const proc = terminalProcesses.get(termId);
+  if (proc) {
+    proc.resize(Math.max(1, cols), Math.max(1, rows));
+  }
   return { success: true };
 });
+
 
 // Git Source Control
 ipcMain.handle("atlas:git-status", async (_event, repoPath: string) => {
@@ -441,6 +447,36 @@ ipcMain.handle("atlas:git-blame", async (_event, repoPath: string, filePath: str
   }
 });
 
+ipcMain.handle("atlas:git-stash-list", async (_event, repoPath: string) => {
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    const { stdout } = await execFileAsync("git", ["stash", "list", "--pretty=format:%gd: %s"], { cwd });
+    return stdout.split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("atlas:scan-todos", async (_event, repoPath: string) => {
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    const { stdout } = await execFileAsync("git", [
+      "grep", "-rn", "--count",
+      "-e", "TODO", "-e", "FIXME", "-e", "HACK", "-e", "XXX",
+      "--", ":!node_modules", ":!dist", ":!*.lock",
+    ], { cwd });
+    const total = stdout.split("\n").filter(Boolean).reduce((acc, line) => {
+      const count = parseInt(line.split(":").pop() ?? "0", 10);
+      return acc + (isNaN(count) ? 0 : count);
+    }, 0);
+    return { total };
+  } catch {
+    return { total: 0 };
+  }
+});
+
+
+
 // Open repo (sets the active repo root)
 ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
   global.__atlasRepoRoot = repoPath;
@@ -475,6 +511,61 @@ ipcMain.handle("atlas:run", async (event, goal: string) => {
     return { error: err instanceof Error ? err.message : String(err) };
   }
 });
+
+// Generate real SBOM from workspace package.json files
+ipcMain.handle("atlas:generate-sbom", async () => {
+  const repoRoot = global.__atlasRepoRoot || process.cwd();
+  const { readdir: rd, readFile: rf } = await import("node:fs/promises");
+  const results: Array<{ path: string; content: Record<string, unknown> }> = [];
+
+  // Scan packages/ and apps/ directories for package.json files
+  const scanDirs = ["packages", "apps"].map(d => path.join(repoRoot, d));
+  for (const dir of scanDirs) {
+    try {
+      const entries = await rd(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const pkgPath = path.join(dir, entry.name, "package.json");
+        try {
+          const raw = await rf(pkgPath, "utf-8");
+          results.push({ path: pkgPath, content: JSON.parse(raw) });
+        } catch { /* skip if no package.json */ }
+      }
+    } catch { /* skip if dir doesn't exist */ }
+  }
+
+  // Also include root package.json
+  try {
+    const rootPkg = path.join(repoRoot, "package.json");
+    const raw = await rf(rootPkg, "utf-8");
+    results.push({ path: rootPkg, content: JSON.parse(raw) });
+  } catch { /* skip */ }
+
+  const { SecurityAuditService } = await import("@atlas/core");
+  return SecurityAuditService.generateSbom(results);
+});
+
+// List real installed extensions from ~/.atlas/extensions/
+ipcMain.handle("atlas:list-extensions", async () => {
+  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
+  try {
+    const entries = await readdir(extDir, { withFileTypes: true });
+    const manifests = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const mPath = path.join(extDir, entry.name, "manifest.json");
+      try {
+        const raw = await readFile(mPath, "utf-8");
+        manifests.push({ dirName: entry.name, ...JSON.parse(raw) });
+      } catch { /* skip malformed or missing manifest */ }
+    }
+    return manifests;
+  } catch {
+    return []; // Extensions directory doesn't exist yet — no extensions installed
+  }
+});
+
+
 
 // ---------------------------------------------------------------------------
 // App lifecycle

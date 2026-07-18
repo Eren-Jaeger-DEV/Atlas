@@ -1,106 +1,101 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-interface ExtensionCardData {
-  id: string;
-  name: string;
-  version: string;
-  publisher: string;
-  description: string;
-  installed: boolean;
-  permissions: string[];
+const api = () => (window as any).atlasAPI;
+
+interface ExtensionManifest {
+  id?: string;
+  dirName?: string;
+  name?: string;
+  version?: string;
+  publisher?: string;
+  description?: string;
+  permissions?: string[];
 }
 
 export function ExtensionGallery() {
+  const [extensions, setExtensions] = useState<ExtensionManifest[]>([]);
   const [search, setSearch] = useState("");
-  const [extensions, setExtensions] = useState<ExtensionCardData[]>([
-    {
-      id: "atlas.git-lens",
-      name: "Atlas GitLens",
-      version: "1.0.0",
-      publisher: "Atlas Team",
-      description: "Blame annotations and rich commit history inspector.",
-      installed: true,
-      permissions: ["workspace.read", "terminal.execute"],
-    },
-    {
-      id: "atlas.prettier",
-      name: "Prettier Code Formatter",
-      version: "2.4.0",
-      publisher: "Prettier Org",
-      description: "Opinionated code formatter for JS, TS, HTML, JSON, CSS.",
-      installed: false,
-      permissions: ["workspace.write"],
-    },
-    {
-      id: "atlas.docker-tools",
-      name: "Docker & Container Tools",
-      version: "0.8.2",
-      publisher: "Container Devs",
-      description: "Inspect local container logs and manage Docker compose.",
-      installed: false,
-      permissions: ["terminal.execute"],
-    },
-  ]);
+  const [loading, setLoading] = useState(false);
 
-  const toggleInstall = (id: string) => {
-    setExtensions(prev =>
-      prev.map(ext => (ext.id === id ? { ...ext, installed: !ext.installed } : ext))
+  useEffect(() => {
+    setLoading(true);
+    api()
+      .listExtensions()
+      .then((list: ExtensionManifest[]) => {
+        setExtensions(Array.isArray(list) ? list : []);
+      })
+      .catch(() => setExtensions([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = extensions.filter(ext => {
+    const q = search.toLowerCase();
+    return (
+      (ext.name ?? "").toLowerCase().includes(q) ||
+      (ext.description ?? "").toLowerCase().includes(q) ||
+      (ext.id ?? ext.dirName ?? "").toLowerCase().includes(q)
     );
-  };
-
-  const filtered = extensions.filter(
-    ext =>
-      ext.name.toLowerCase().includes(search.toLowerCase()) ||
-      ext.description.toLowerCase().includes(search.toLowerCase())
-  );
+  });
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.title}>EXTENSIONS MARKETPLACE</span>
-        <span style={styles.subtext}>{extensions.length} Available</span>
+        <span style={styles.subtext}>
+          {loading ? "Scanning..." : `${extensions.length} Installed`}
+        </span>
       </div>
 
       <div style={styles.searchBox}>
         <input
           style={styles.searchInput}
-          placeholder="Search extensions in marketplace..."
+          placeholder="Filter installed extensions..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </div>
 
       <div style={styles.list}>
-        {filtered.map(ext => (
-          <div key={ext.id} style={styles.card}>
+        {!loading && extensions.length === 0 && (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyTitle}>No Extensions Installed</p>
+            <p style={styles.emptyDesc}>
+              Install extensions by placing a folder containing a{" "}
+              <code style={styles.code}>manifest.json</code> into the Atlas
+              extensions directory. Marketplace integration is coming in a
+              future release.
+            </p>
+            <p style={styles.emptyPath}>
+              Extensions dir:{" "}
+              <code style={styles.code}>%APPDATA%\atlas\extensions\</code>
+            </p>
+          </div>
+        )}
+
+        {filtered.map((ext, idx) => (
+          <div key={ext.id ?? ext.dirName ?? idx} style={styles.card}>
             <div style={styles.cardHeader}>
               <div>
-                <p style={styles.extName}>{ext.name}</p>
+                <p style={styles.extName}>{ext.name ?? ext.dirName ?? "Unknown Extension"}</p>
                 <p style={styles.extMeta}>
-                  v{ext.version} by <span style={{ color: "#38bdf8" }}>{ext.publisher}</span>
+                  v{ext.version ?? "?.?.?"} by{" "}
+                  <span style={{ color: "#38bdf8" }}>{ext.publisher ?? "Unknown"}</span>
                 </p>
               </div>
-
-              <button
-                style={{
-                  ...styles.actionBtn,
-                  ...(ext.installed ? styles.installedBtn : styles.installBtn),
-                }}
-                onClick={() => toggleInstall(ext.id)}
-              >
-                {ext.installed ? "Uninstall" : "Install"}
-              </button>
+              <span style={styles.installedBadge}>[INSTALLED]</span>
             </div>
 
-            <p style={styles.extDesc}>{ext.description}</p>
+            {ext.description && (
+              <p style={styles.extDesc}>{ext.description}</p>
+            )}
 
-            <div style={styles.permList}>
-              {ext.permissions.map(p => (
-                <span key={p} style={styles.permBadge}>
-                  {p}
-                </span>
-              ))}
-            </div>
+            {Array.isArray(ext.permissions) && ext.permissions.length > 0 && (
+              <div style={styles.permList}>
+                {ext.permissions.map(p => (
+                  <span key={p} style={styles.permBadge}>{p}</span>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -110,111 +105,49 @@ export function ExtensionGallery() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    backgroundColor: "#0d0d10",
-    color: "#fafafa",
+    display: "flex", flexDirection: "column", height: "100%",
+    backgroundColor: "#0d0d10", color: "#fafafa",
   },
   header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 12px",
-    backgroundColor: "#09090b",
-    borderBottom: "1px solid #27272a",
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "8px 12px", backgroundColor: "#09090b", borderBottom: "1px solid #27272a",
   },
-  title: {
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.8px",
-  },
-  subtext: {
-    fontSize: "11px",
-    color: "#71717a",
-  },
-  searchBox: {
-    padding: "10px 12px",
-    borderBottom: "1px solid #27272a",
-  },
+  title: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.8px" },
+  subtext: { fontSize: "11px", color: "#71717a" },
+  searchBox: { padding: "10px 12px", borderBottom: "1px solid #27272a" },
   searchInput: {
-    width: "100%",
-    backgroundColor: "#18181b",
-    border: "1px solid #27272a",
-    color: "#fafafa",
-    borderRadius: "6px",
-    padding: "6px 10px",
-    fontSize: "12px",
-    outline: "none",
+    width: "100%", backgroundColor: "#18181b", border: "1px solid #27272a",
+    color: "#fafafa", borderRadius: "6px", padding: "6px 10px", fontSize: "12px", outline: "none",
+    boxSizing: "border-box",
   },
   list: {
-    flex: 1,
-    padding: "12px",
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
+    flex: 1, padding: "12px", overflowY: "auto",
+    display: "flex", flexDirection: "column", gap: "10px",
   },
+  emptyState: {
+    backgroundColor: "#141417", border: "1px solid #27272a",
+    borderRadius: "8px", padding: "20px", display: "flex", flexDirection: "column", gap: "8px",
+  },
+  emptyTitle: { fontSize: "13px", fontWeight: 700, margin: 0, color: "#a1a1aa" },
+  emptyDesc: { fontSize: "11px", color: "#71717a", margin: 0, lineHeight: "1.6" },
+  emptyPath: { fontSize: "10px", color: "#52525b", margin: 0 },
+  code: { fontFamily: "monospace", color: "#38bdf8", fontSize: "10px" },
   card: {
-    backgroundColor: "#141417",
-    border: "1px solid #27272a",
-    borderRadius: "6px",
-    padding: "12px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
+    backgroundColor: "#141417", border: "1px solid #27272a",
+    borderRadius: "6px", padding: "12px", display: "flex", flexDirection: "column", gap: "8px",
   },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+  cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+  extName: { fontSize: "13px", fontWeight: 700, margin: "0 0 2px", color: "#fafafa" },
+  extMeta: { fontSize: "10px", color: "#71717a", margin: 0 },
+  installedBadge: {
+    fontSize: "9px", fontWeight: 700, color: "#4ade80",
+    backgroundColor: "rgba(74,222,128,0.08)", padding: "2px 6px",
+    borderRadius: "3px", whiteSpace: "nowrap",
   },
-  extName: {
-    fontSize: "13px",
-    fontWeight: 700,
-    margin: "0 0 2px",
-    color: "#fafafa",
-  },
-  extMeta: {
-    fontSize: "10px",
-    color: "#71717a",
-    margin: 0,
-  },
-  extDesc: {
-    fontSize: "11px",
-    color: "#a1a1aa",
-    margin: 0,
-    lineHeight: "1.4",
-  },
-  actionBtn: {
-    border: "none",
-    borderRadius: "4px",
-    padding: "4px 10px",
-    fontSize: "11px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  installBtn: {
-    backgroundColor: "#fafafa",
-    color: "#09090b",
-  },
-  installedBtn: {
-    backgroundColor: "#27272a",
-    color: "#f87171",
-  },
-  permList: {
-    display: "flex",
-    gap: "4px",
-    flexWrap: "wrap",
-    marginTop: "4px",
-  },
+  extDesc: { fontSize: "11px", color: "#a1a1aa", margin: 0, lineHeight: "1.4" },
+  permList: { display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "2px" },
   permBadge: {
-    backgroundColor: "#18181b",
-    border: "1px solid #27272a",
-    color: "#71717a",
-    fontSize: "9px",
-    padding: "1px 5px",
-    borderRadius: "3px",
-    fontFamily: "monospace",
+    backgroundColor: "#18181b", border: "1px solid #27272a", color: "#71717a",
+    fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontFamily: "monospace",
   },
 };

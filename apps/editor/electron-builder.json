@@ -3,6 +3,7 @@
   "productName": "AtlasStudio",
   "asar": true,
   "publish": null,
+  "npmRebuild": false,
   "directories": {
     "output": "dist-app"
   },

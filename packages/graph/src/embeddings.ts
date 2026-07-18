@@ -98,8 +98,13 @@ export class EmbeddingEngine {
           quantized: true,
         });
         return extractor;
-      } catch {
-        // Fallback to local feature hash vector generator if offline/unsupported
+      } catch (err) {
+        console.warn(
+          "[WARN] @xenova/transformers failed to load — falling back to hash-based embeddings.\n" +
+          "[WARN] Symbol search results will have degraded semantic quality.\n" +
+          "[WARN] Cause:",
+          err
+        );
         return null;
       }
     })();
@@ -119,8 +124,8 @@ export class EmbeddingEngine {
         const output = await extractor(text, { pooling: "mean", normalize: true });
         return Array.from(output.data as Float32Array);
       }
-    } catch {
-      // Ignore transformer error and fall through to local generator
+    } catch (err) {
+      console.warn("[WARN] Transformer embed call failed — using local hash embedding. Cause:", err);
     }
 
     return generateLocalEmbedding(text);

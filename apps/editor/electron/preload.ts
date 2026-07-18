@@ -139,7 +139,24 @@ contextBridge.exposeInMainWorld("atlasAPI", {
 
   getGitConfig: (repoPath?: string): Promise<{ name: string; email: string }> =>
     ipcRenderer.invoke("system:get-git-config", repoPath),
+
+  // Stash list
+  gitStashList: (repoPath: string): Promise<string[]> =>
+    ipcRenderer.invoke("atlas:git-stash-list", repoPath),
+
+  // TODO/FIXME scanner
+  scanTodos: (repoPath: string): Promise<{ total: number }> =>
+    ipcRenderer.invoke("atlas:scan-todos", repoPath),
+
+  // Extension listing
+  listExtensions: (): Promise<Record<string, unknown>[]> =>
+    ipcRenderer.invoke("atlas:list-extensions"),
+
+  // SBOM generation
+  generateSbom: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke("atlas:generate-sbom"),
 });
+
 
 
 

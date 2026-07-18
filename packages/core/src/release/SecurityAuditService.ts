@@ -1,13 +1,15 @@
 /**
  * SecurityAuditService
  *
- * Generates Software Bill of Materials (SBOM) JSON and verifies SHA-256 binary integrity.
+ * Generates a real Software Bill of Materials (SBOM) by reading workspace
+ * package.json files. Runs only in the main process via IPC.
  */
 
 export interface SbomEntry {
   name: string;
   version: string;
   license: string;
+  path: string;
 }
 
 export interface SbomReport {
@@ -17,19 +19,25 @@ export interface SbomReport {
   generatedAt: string;
 }
 
+/**
+ * Generate SBOM from a pre-scanned list of package manifests.
+ * The main process IPC handler passes the real package.json contents.
+ */
 export class SecurityAuditService {
-  public static generateSbom(): SbomReport {
+  public static generateSbom(
+    manifests: Array<{ path: string; content: Record<string, unknown> }>
+  ): SbomReport {
+    const packages: SbomEntry[] = manifests.map(m => ({
+      name: String(m.content["name"] ?? "unknown"),
+      version: String(m.content["version"] ?? "0.0.0"),
+      license: String(m.content["license"] ?? "UNLICENSED"),
+      path: m.path,
+    }));
+
     return {
       format: "SPDX-2.3",
       name: "Atlas Studio Platform",
-      packages: [
-        { name: "@atlas/core", version: "0.1.0", license: "MIT" },
-        { name: "@atlas/sdk", version: "0.1.0", license: "MIT" },
-        { name: "@atlas/agents", version: "0.1.0", license: "MIT" },
-        { name: "@atlas/graph", version: "0.1.0", license: "MIT" },
-        { name: "@atlas/parser", version: "0.1.0", license: "MIT" },
-        { name: "@atlas/editor", version: "0.1.0", license: "MIT" },
-      ],
+      packages,
       generatedAt: new Date().toISOString(),
     };
   }

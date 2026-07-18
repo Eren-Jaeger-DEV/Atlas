@@ -16,20 +16,7 @@ interface MergeConflictEditorProps {
 
 export function MergeConflictEditor({
   filePath,
-  conflictBlocks = [
-    {
-      id: 1,
-      currentChange: "const theme = 'dark';",
-      incomingChange: "const theme = 'system';",
-      resolved: false,
-    },
-    {
-      id: 2,
-      currentChange: "export function getConfig() { return true; }",
-      incomingChange: "export function getConfig() { return false; }",
-      resolved: false,
-    },
-  ],
+  conflictBlocks = [],
   onComplete,
 }: MergeConflictEditorProps) {
   const [blocks, setBlocks] = useState<MergeConflictBlock[]>(conflictBlocks);
