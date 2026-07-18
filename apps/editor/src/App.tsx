@@ -23,6 +23,7 @@ export function App() {
   const [activeSidebar, setActiveSidebar] = useState<SidebarView>("explorer");
   const [bottomTab, setBottomTab] = useState<BottomTab>("terminal");
   const [showBottomPanel, setShowBottomPanel] = useState(true);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
 
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
