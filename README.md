@@ -83,4 +83,7 @@ Engineering decisions and architectural evolutions are formally documented as RF
 
 ## 📜 License
 
-Atlas Studio is open source software licensed under the **MIT License**.
+Copyright (c) 2026 Atlas Studio. All rights reserved.
+
+This software and its source code are proprietary and confidential. No part of this repository may be reproduced, distributed, modified, or used in any form without explicit written permission from the author.
+
