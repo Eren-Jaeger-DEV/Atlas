@@ -10,11 +10,16 @@
  * which then delegates to the agent runtime subprocess.
  */
 
-import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net } from "electron";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
 import { spawn, execFile, ChildProcessWithoutNullStreams } from "node:child_process";
 import { promisify } from "node:util";
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
+]);
 
 const execFileAsync = promisify(execFile);
 const isDev = process.env["NODE_ENV"] === "development";
@@ -47,8 +52,16 @@ function createWindow(): void {
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+    mainWindow.loadURL("app://bundle/index.html");
   }
+
+  mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    console.log(`[RENDERER LOG ${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+    console.error(`[DID FAIL LOAD] ${errorCode}: ${errorDescription}`);
+  });
 
   mainWindow.show();
   mainWindow.focus();
@@ -288,6 +301,16 @@ declare global {
 }
 
 app.whenReady().then(() => {
+  protocol.handle("app", (request) => {
+    const url = new URL(request.url);
+    let relativePath = url.pathname;
+    if (relativePath.startsWith("/")) relativePath = relativePath.slice(1);
+    if (!relativePath) relativePath = "index.html";
+
+    const filePath = path.join(__dirname, "../dist", relativePath);
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+
   createWindow();
 
   app.on("activate", () => {
