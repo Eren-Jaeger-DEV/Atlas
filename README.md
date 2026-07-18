@@ -153,6 +153,7 @@ Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell ar
 - **Split Editor Mode & Workspace Persistence** — Side-by-side split view (Ctrl+\), recent workspaces list, and drag-and-drop file opening
 - **Multi-Tab Terminal & Shell Selection** — Multiple terminal tabs with PowerShell / CMD / Bash shell switching
 - **Git Branch Selector & Remote Push/Pull** — Live branch selector dropdown and push/pull sync controls
+- **Platform Service Container & Event Bus** — Dependency Injection ServiceContainer, typed EventBus, unified CommandService (atlas.*), and isolated ExtensionHost
 - **Integrated Terminal Panel** — Embedded interactive shell (`xterm.js` + `@xterm/addon-fit`)
 - **File Explorer Tree View** — Workspace file tree navigation, folder opening, file creation, and deletion
 - **Git Source Control Sidebar** — Changed files status view, stage/unstage controls, commit entry, and `DiffViewer`

@@ -48,3 +48,10 @@ export type {
   IPanelRegistration,
   ICommandRegistration,
 } from "./plugin/extension-api.js";
+
+// Platform & Service Architecture
+export { EventBus, type AtlasEventName, type EventCallback } from "./events/EventBus.js";
+export { ServiceContainer } from "./platform/ServiceContainer.js";
+export { CommandService, type CommandDescriptor, type CommandHandler } from "./services/CommandService.js";
+export { SettingsService, DEFAULT_SETTINGS_SCHEMA, type SettingsSchema } from "./services/SettingsService.js";
+export { ExtensionHost, type ExtensionContext, type ExtensionModule } from "./services/ExtensionHost.js";
