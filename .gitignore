@@ -63,3 +63,6 @@ dist-app/
 
 # Archives
 *.zip
+
+# Scratch & helper scripts
+scripts/
