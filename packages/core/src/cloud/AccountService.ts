@@ -28,20 +28,24 @@ export class AccountService {
   private restoreSession(): void {
     const token = SecurityStore.getSecureItem("user_token");
     if (token) {
+      const storedName = localStorage.getItem("atlas_user_name") || "Developer";
+      const storedEmail = localStorage.getItem("atlas_user_email") || "developer@local";
       this.currentUser = {
-        id: "usr_atlas_001",
-        name: "Eren Jaeger",
-        email: "eren@atlas.dev",
+        id: `usr_${Date.now()}`,
+        name: storedName,
+        email: storedEmail,
         plan: "Pro",
       };
     }
   }
 
-  public async signIn(email: string, password?: string): Promise<UserProfile> {
+  public async signIn(email: string, name?: string): Promise<UserProfile> {
     const token = `token_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     SecurityStore.setSecureItem("user_token", token);
 
-    const userName = email.split("@")[0] || "User";
+    const userName = name || email.split("@")[0] || "Developer";
+    localStorage.setItem("atlas_user_name", userName);
+    localStorage.setItem("atlas_user_email", email);
 
     const user: UserProfile = {
       id: "usr_" + Math.random().toString(36).substring(2, 9),
@@ -56,6 +60,8 @@ export class AccountService {
 
   public signOut(): void {
     SecurityStore.removeSecureItem("user_token");
+    localStorage.removeItem("atlas_user_name");
+    localStorage.removeItem("atlas_user_email");
     this.currentUser = null;
   }
 

@@ -1,57 +1,72 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-interface UserAccount {
-  name: string;
-  email: string;
-  plan: string;
-  signedIn: boolean;
-}
+const api = () => (window as any).atlasAPI;
 
 export function AccountPanel() {
-  const [user, setUser] = useState<UserAccount>({
-    name: "Eren Jaeger",
-    email: "eren@atlas.dev",
-    plan: "Pro Developer",
-    signedIn: true,
-  });
-
+  const [userName, setUserName] = useState("Developer");
+  const [userEmail, setUserEmail] = useState("developer@local");
+  const [signedIn, setSignedIn] = useState(true);
   const [activeProfile, setActiveProfile] = useState("Personal");
   const [syncEnabled, setSyncEnabled] = useState(true);
+  const [activities, setActivities] = useState<Array<{ author: string; action: string; time: string }>>([]);
 
-  const teamMembers = [
-    { name: "Eren Jaeger", status: "active", file: "App.tsx" },
-    { name: "Armin Arlert", status: "idle", file: "EventBus.ts" },
-    { name: "Mikasa Ackerman", status: "offline", file: "" },
-  ];
+  useEffect(() => {
+    async function loadIdentity() {
+      const a = api();
+      if (!a) return;
 
-  const activities = [
-    { author: "Eren Jaeger", action: "Pushed 3 commits to main", time: "5 mins ago" },
-    { author: "Armin Arlert", action: "Resolved merge conflict in EditorPane.tsx", time: "20 mins ago" },
-    { author: "Mikasa Ackerman", action: "Published extension atlas.prettier v2.4", time: "1 hour ago" },
-  ];
+      try {
+        if (a.getGitConfig) {
+          const cfg = await a.getGitConfig();
+          if (cfg.name) setUserName(cfg.name);
+          if (cfg.email) setUserEmail(cfg.email);
+        } else if (a.getSystemUserInfo) {
+          const info = await a.getSystemUserInfo();
+          if (info.username) setUserName(info.username);
+        }
+      } catch {
+        // Fallback to local
+      }
+
+      try {
+        if (a.gitLog) {
+          const logs = await a.gitLog(localStorage.getItem("atlas_last_repo") || "", 5);
+          if (logs && logs.length > 0) {
+            setActivities(
+              logs.map(l => ({
+                author: l.author || "Developer",
+                action: l.message,
+                time: l.date,
+              }))
+            );
+          }
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    loadIdentity();
+  }, []);
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.title}>ACCOUNT & TEAM COLLABORATION</span>
-        <span style={styles.subtext}>{user.signedIn ? "[PASS] Online & Synced" : "[WARN] Offline"}</span>
+        <span style={styles.subtext}>{signedIn ? "[PASS] Online & Synced" : "[WARN] Offline"}</span>
       </div>
 
       <div style={styles.content}>
         {/* User Card */}
         <div style={styles.userCard}>
-          <div style={styles.avatar}>{user.name.charAt(0)}</div>
+          <div style={styles.avatar}>{userName.charAt(0).toUpperCase()}</div>
           <div style={styles.userMeta}>
-            <p style={styles.userName}>{user.name}</p>
-            <p style={styles.userEmail}>{user.email}</p>
-            <span style={styles.planBadge}>{user.plan}</span>
+            <p style={styles.userName}>{userName}</p>
+            <p style={styles.userEmail}>{userEmail}</p>
+            <span style={styles.planBadge}>Pro Developer</span>
           </div>
 
-          <button
-            style={styles.authBtn}
-            onClick={() => setUser(prev => ({ ...prev, signedIn: !prev.signedIn }))}
-          >
-            {user.signedIn ? "Sign Out" : "Sign In"}
+          <button style={styles.authBtn} onClick={() => setSignedIn(p => !p)}>
+            {signedIn ? "Sign Out" : "Sign In"}
           </button>
         </div>
 
@@ -83,37 +98,21 @@ export function AccountPanel() {
           </div>
         </div>
 
-        {/* Team Members */}
+        {/* Dynamic Activity Log */}
         <div style={styles.section}>
-          <p style={styles.secHdr}>TEAM PRESENCE ({teamMembers.length})</p>
-          {teamMembers.map(m => (
-            <div key={m.name} style={styles.teamRow}>
-              <span style={styles.memberName}>
-                <span
-                  style={{
-                    ...styles.statusDot,
-                    backgroundColor:
-                      m.status === "active" ? "#4ade80" : m.status === "idle" ? "#facc15" : "#71717a",
-                  }}
-                />
-                {m.name}
-              </span>
-              <span style={styles.memberFile}>{m.file || "Offline"}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Activity Timeline */}
-        <div style={styles.section}>
-          <p style={styles.secHdr}>TEAM ACTIVITY TIMELINE</p>
-          {activities.map((a, idx) => (
-            <div key={idx} style={styles.activityRow}>
-              <p style={styles.actMsg}>
-                <strong>{a.author}</strong> {a.action}
-              </p>
-              <p style={styles.actTime}>{a.time}</p>
-            </div>
-          ))}
+          <p style={styles.secHdr}>RECENT WORKSPACE GIT ACTIVITY</p>
+          {activities.length === 0 ? (
+            <p style={styles.noAct}>No recent git commits found in active workspace.</p>
+          ) : (
+            activities.map((a, idx) => (
+              <div key={idx} style={styles.activityRow}>
+                <p style={styles.actMsg}>
+                  <strong>{a.author}</strong> {a.action}
+                </p>
+                <p style={styles.actTime}>{a.time}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -239,28 +238,6 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "3px 8px",
     fontSize: "11px",
   },
-  teamRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    fontSize: "12px",
-    borderBottom: "1px solid #27272a",
-    paddingBottom: "4px",
-  },
-  memberName: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-  },
-  statusDot: {
-    width: "6px",
-    height: "6px",
-    borderRadius: "50%",
-  },
-  memberFile: {
-    fontSize: "11px",
-    color: "#71717a",
-  },
   activityRow: {
     display: "flex",
     flexDirection: "column",
@@ -274,6 +251,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actTime: {
     fontSize: "9px",
+    color: "#71717a",
+    margin: 0,
+  },
+  noAct: {
+    fontSize: "11px",
     color: "#71717a",
     margin: 0,
   },

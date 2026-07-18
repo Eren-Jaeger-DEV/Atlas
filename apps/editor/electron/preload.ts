@@ -132,5 +132,14 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     });
     return () => listeners.forEach((off) => off());
   },
+
+  // System Info & Git Config
+  getSystemUserInfo: (): Promise<{ username: string; homedir: string; platform: string; hostname: string }> =>
+    ipcRenderer.invoke("system:get-user-info"),
+
+  getGitConfig: (repoPath?: string): Promise<{ name: string; email: string }> =>
+    ipcRenderer.invoke("system:get-git-config", repoPath),
 });
+
+
 

@@ -485,6 +485,30 @@ ipcMain.handle("window:minimize",     () => mainWindow?.minimize());
 ipcMain.handle("window:maximize",     () => { if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize(); });
 ipcMain.handle("window:close",        () => mainWindow?.close());
 ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
+
+ipcMain.handle("system:get-user-info", async () => {
+  const os = await import("node:os");
+  return {
+    username: os.userInfo().username,
+    homedir: os.homedir(),
+    platform: process.platform,
+    hostname: os.hostname(),
+  };
+});
+
+ipcMain.handle("system:get-git-config", async (_event, repoPath?: string) => {
+  const cwd = repoPath || process.cwd();
+  try {
+    const { stdout: name } = await execFileAsync("git", ["config", "user.name"], { cwd });
+    const { stdout: email } = await execFileAsync("git", ["config", "user.email"], { cwd });
+    return { name: name.trim(), email: email.trim() };
+  } catch {
+    const os = await import("node:os");
+    const u = os.userInfo().username;
+    return { name: u, email: `${u}@${os.hostname()}` };
+  }
+});
+
 // ---------------------------------------------------------------------------
 declare global {
   var __atlasRepoRoot: string | undefined;
