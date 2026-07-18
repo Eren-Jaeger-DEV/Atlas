@@ -301,14 +301,37 @@ declare global {
 }
 
 app.whenReady().then(() => {
-  protocol.handle("app", (request) => {
+  protocol.handle("app", async (request) => {
     const url = new URL(request.url);
     let relativePath = url.pathname;
     if (relativePath.startsWith("/")) relativePath = relativePath.slice(1);
     if (!relativePath) relativePath = "index.html";
 
     const filePath = path.join(__dirname, "../dist", relativePath);
-    return net.fetch(pathToFileURL(filePath).toString());
+    try {
+      const data = await readFile(filePath);
+      const mimeTypes: Record<string, string> = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".svg": "image/svg+xml",
+        ".json": "application/json",
+      };
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = mimeTypes[ext] || "application/octet-stream";
+
+      return new Response(data, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    } catch {
+      return new Response("Not Found", { status: 404 });
+    }
   });
 
   createWindow();

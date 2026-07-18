@@ -4,7 +4,15 @@ import path from "node:path";
 
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "remove-crossorigin",
+      transformIndexHtml(html) {
+        return html.replace(/crossorigin/g, "");
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@atlas/core": path.resolve(__dirname, "../../packages/core/src"),
@@ -17,6 +25,7 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    modulePreload: false,
     rollupOptions: {
       input: path.resolve(__dirname, "index.html"),
     },
