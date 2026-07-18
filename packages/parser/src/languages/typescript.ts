@@ -53,6 +53,9 @@ export const CLASS_QUERY = `
 export const IMPORT_QUERY = `
 (import_statement
   source: (string) @import.source) @import.node
+
+(export_statement
+  source: (string) @import.source) @import.node
 `;
 
 /**

@@ -122,8 +122,8 @@ export async function computeImpact(
     };
   }
 
-  // Traverse downstream (who depends on this node?)
-  const reachable = db.getReachableNodes(startNodeId, "downstream");
+  // Traverse upstream (who depends on this node?)
+  const reachable = db.getReachableNodes(startNodeId, "upstream");
 
   // Collect affected file paths (deduplicated)
   const seenFiles = new Set<string>();

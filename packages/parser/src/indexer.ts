@@ -8,6 +8,7 @@
  */
 
 import { readFile } from "node:fs/promises";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { sha256 } from "js-sha256";
 import fg from "fast-glob";
@@ -79,6 +80,73 @@ function makeEdgeId(fromId: string, kind: string, toId: string): string {
 // ---------------------------------------------------------------------------
 // Per-file parsing
 // ---------------------------------------------------------------------------
+
+function resolveImportPath(
+  baseDir: string,
+  importSpecifier: string,
+  repoRoot: string
+): string | null {
+  const WORKSPACE_PACKAGES: Record<string, string> = {
+    "@atlas/core": "packages/core/src/index.ts",
+    "@atlas/parser": "packages/parser/src/index.ts",
+    "@atlas/graph": "packages/graph/src/index.ts",
+    "@atlas/agents": "packages/agents/src/index.ts",
+  };
+
+  if (importSpecifier in WORKSPACE_PACKAGES) {
+    return path.resolve(repoRoot, WORKSPACE_PACKAGES[importSpecifier]!).replace(/\\/g, "/");
+  }
+
+  if (!importSpecifier.startsWith(".")) {
+    return null;
+  }
+
+  let absolutePath = path.resolve(baseDir, importSpecifier);
+  const ext = path.extname(absolutePath);
+
+  // If it ends with .js or .jsx, check for .ts/.tsx first
+  if (ext === ".js" || ext === ".jsx") {
+    const basePath = absolutePath.slice(0, -ext.length);
+    for (const testExt of [".ts", ".tsx", ".d.ts", ext]) {
+      const p = basePath + testExt;
+      if (existsSync(p)) {
+        return p.replace(/\\/g, "/");
+      }
+    }
+  }
+
+  // Check if target is a file or a directory
+  if (existsSync(absolutePath)) {
+    const stat = statSync(absolutePath);
+    if (stat.isDirectory()) {
+      for (const indexFile of ["index.ts", "index.tsx", "index.js", "index.jsx"]) {
+        const p = path.join(absolutePath, indexFile);
+        if (existsSync(p)) {
+          return p.replace(/\\/g, "/");
+        }
+      }
+    }
+    return absolutePath.replace(/\\/g, "/");
+  }
+
+  // Try appending extensions for extensionless imports
+  for (const testExt of [".ts", ".tsx", ".js", ".jsx", ".py"]) {
+    const p = absolutePath + testExt;
+    if (existsSync(p)) {
+      return p.replace(/\\/g, "/");
+    }
+  }
+
+  // Try index files for directory extensionless imports
+  for (const indexFile of ["index.ts", "index.tsx", "index.js", "index.jsx"]) {
+    const p = path.join(absolutePath, indexFile);
+    if (existsSync(p)) {
+      return p.replace(/\\/g, "/");
+    }
+  }
+
+  return null;
+}
 
 interface ParsedFile {
   nodes: GraphNode[];
@@ -232,13 +300,13 @@ async function parseFile(
     const rawSource = sourceCapture.node.text.replace(/['"]/g, "");
     if (!rawSource) continue;
 
-    // Resolve relative imports to their likely absolute file path
-    let targetPath = rawSource;
-    if (rawSource.startsWith(".")) {
-      targetPath = path.resolve(path.dirname(filePath), rawSource);
-    }
+    // Resolve workspace package or relative path to actual file on disk
+    const resolvedPath = resolveImportPath(path.dirname(filePath), rawSource, repoRoot);
+    if (!resolvedPath) continue;
 
-    const targetNodeId = makeNodeId(targetPath, targetPath, "file");
+    const targetRelPath = path.relative(repoRoot, resolvedPath).replace(/\\/g, "/");
+    const targetNodeId = makeNodeId(resolvedPath, targetRelPath, "file");
+
     edges.push({
       id: makeEdgeId(fileNodeId, "imports", targetNodeId),
       kind: "imports",
