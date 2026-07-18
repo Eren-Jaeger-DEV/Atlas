@@ -99,7 +99,7 @@ export async function runTester(
 ): Promise<TestResult> {
   const { repoRoot, onProgress } = options;
 
-  onProgress?.("🧪 Tester: running test suite...");
+  onProgress?.("Tester: running test suite...");
 
   const start = Date.now();
   const result = await runTestsTool(repoRoot);
@@ -123,9 +123,9 @@ export async function runTester(
     durationMs,
   };
 
-  const statusEmoji = testResult.status === "passed" ? "✅" : "❌";
+  const statusSymbol = testResult.status === "passed" ? "[PASS]" : "[FAIL]";
   onProgress?.(
-    `${statusEmoji} Tester: ${testResult.passed}/${testResult.total} passed (${durationMs}ms)`
+    `${statusSymbol} Tester: ${testResult.passed}/${testResult.total} passed (${durationMs}ms)`
   );
 
   return testResult;

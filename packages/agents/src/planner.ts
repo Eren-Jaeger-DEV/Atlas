@@ -180,7 +180,7 @@ export async function runPlanner(
       createdAt: Date.now(),
     };
 
-    onProgress?.(`✅ Planner: ${steps.length} step plan ready`);
+    onProgress?.(`[OK] Planner: ${steps.length} step plan ready`);
     return plan;
   }
 

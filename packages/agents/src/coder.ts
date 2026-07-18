@@ -127,7 +127,7 @@ export async function runCoder(
 ): Promise<CoderOutput> {
   const { provider, memory, repoRoot, onProgress } = options;
 
-  onProgress?.(`✍️  Coder: working on "${step.title}"...`);
+  onProgress?.(`Coder: working on "${step.title}"...`);
 
   const ctx: CoderContext = {
     filesBefore: new Map(),
@@ -218,7 +218,7 @@ export async function runCoder(
       createdAt: Date.now(),
     };
 
-    onProgress?.(`✅ Coder: modified ${output.modifiedFiles.length} file(s)`);
+     onProgress?.(`Coder: modified ${output.modifiedFiles.length} file(s)`);
     return output;
   }
 

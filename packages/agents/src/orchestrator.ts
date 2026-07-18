@@ -131,7 +131,7 @@ export class Orchestrator {
           retries++;
           if (retries <= this.maxCoderRetries) {
             this.progress(
-              `⚠️  Tests failed — retrying Coder (attempt ${retries}/${this.maxCoderRetries})...`
+              `[WARN] Tests failed — retrying Coder (attempt ${retries}/${this.maxCoderRetries})...`
             );
             this.emit({ type: "state_change", state: "CODING", runId });
 
@@ -146,7 +146,7 @@ export class Orchestrator {
             });
           } else {
             this.progress(
-              `❌ Tests still failing after ${this.maxCoderRetries} retries — proceeding to review`
+              `[FAIL] Tests still failing after ${this.maxCoderRetries} retries — proceeding to review`
             );
           }
         }

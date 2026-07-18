@@ -118,14 +118,14 @@ export async function runReviewer(
     createdAt: Date.now(),
   };
 
-  const riskEmoji: Record<string, string> = {
-    low: "🟢",
-    medium: "🟡",
-    high: "🟠",
-    critical: "🔴",
+  const riskSymbol: Record<string, string> = {
+    low: "[LOW]",
+    medium: "[MEDIUM]",
+    high: "[HIGH]",
+    critical: "[CRITICAL]",
   };
   onProgress?.(
-    `${riskEmoji[result.overallRisk] ?? "⚪"} Reviewer: ${result.overallRisk} risk, ${findings.length} finding(s)`
+    `${riskSymbol[result.overallRisk] ?? "[UNKNOWN]"} Reviewer: ${result.overallRisk} risk, ${findings.length} finding(s)`
   );
 
   return result;
