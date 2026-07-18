@@ -1,0 +1,55 @@
+# Atlas Studio
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output — all packages and apps
+dist/
+**/dist/
+electron-dist/
+**/electron-dist/
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Turbo cache
+.turbo/
+
+# Environment — NEVER commit real keys
+.env
+.env.local
+.env.*.local
+
+# Atlas graph database
+.atlas/
+*.db
+*.db-shm
+*.db-wal
+
+# Source maps
+*.js.map
+*.d.ts.map
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+
+# Electron
+out/

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
+    "exactOptionalPropertyTypes": false
+  },
+  "references": [
+    { "path": "../core" },
+    { "path": "../graph" }
+  ],
+  "include": ["src/**/*"]
+}
