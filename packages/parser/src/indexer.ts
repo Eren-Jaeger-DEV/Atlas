@@ -231,9 +231,16 @@ function resolveImportPath(
   return null;
 }
 
+interface RawCall {
+  callerId: string;
+  calleeName: string;
+  line: number;
+}
+
 interface ParsedFile {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  rawCalls: RawCall[];
 }
 
 /**
@@ -249,6 +256,29 @@ function runQuery(language: any, queryStr: string, tree: TreeSitter.Tree): any[]
   }
 }
 
+function getEnclosingFunctionName(node: TreeSitter.SyntaxNode): string | null {
+  let parent = node.parent;
+  while (parent) {
+    if (
+      parent.type === "function_declaration" ||
+      parent.type === "function_definition" ||
+      parent.type === "method_definition"
+    ) {
+      const nameNode = parent.childForFieldName("name");
+      if (nameNode) return nameNode.text;
+    }
+    if (parent.type === "arrow_function") {
+      const gp = parent.parent;
+      if (gp && gp.type === "variable_declarator") {
+        const nameNode = gp.childForFieldName("name");
+        if (nameNode) return nameNode.text;
+      }
+    }
+    parent = parent.parent;
+  }
+  return null;
+}
+
 async function parseFile(
   filePath: string,
   repoRoot: string,
@@ -256,12 +286,13 @@ async function parseFile(
 ): Promise<ParsedFile> {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
+  const rawCalls: RawCall[] = [];
   const now = Date.now();
 
   const content = await readFile(filePath, "utf-8");
   const ext = path.extname(filePath).toLowerCase();
   const lang = SUPPORTED_EXTENSIONS[ext];
-  if (!lang) return { nodes: [], edges: [] };
+  if (!lang) return { nodes: [], edges: [], rawCalls: [] };
 
   // Normalize path separators to forward slashes for cross-platform consistency
   const normalizedFilePath = filePath.replace(/\\/g, "/");
@@ -285,6 +316,7 @@ async function parseFile(
   let classQuery: string;
   let importQuery: string;
   let todoQuery: string;
+  let callQuery: string;
 
   if (lang === "python") {
     ({ parser, language } = await getPythonParser());
@@ -292,6 +324,7 @@ async function parseFile(
     classQuery = PYQueries.CLASS_QUERY;
     importQuery = PYQueries.IMPORT_QUERY;
     todoQuery = PYQueries.TODO_QUERY;
+    callQuery = PYQueries.CALL_QUERY;
   } else {
     ({ parser, language } =
       lang === "tsx" ? await getTSXParser() : await getTypeScriptParser());
@@ -299,6 +332,7 @@ async function parseFile(
     classQuery = TSQueries.CLASS_QUERY;
     importQuery = TSQueries.IMPORT_QUERY;
     todoQuery = TSQueries.TODO_QUERY;
+    callQuery = TSQueries.CALL_QUERY;
   }
 
   const tree = parser.parse(content);
@@ -401,6 +435,28 @@ async function parseFile(
     });
   }
 
+  // --- Parse calls → collects raw call occurrences
+  const callMatches = runQuery(language, callQuery, tree);
+  for (const match of callMatches) {
+    const nameCapture = match.captures.find((c: any) => c.name.endsWith(".name"));
+    const nodeCapture = match.captures.find((c: any) => c.name.endsWith(".node"));
+    if (!nameCapture || !nodeCapture) continue;
+
+    const calleeName = nameCapture.node.text;
+    const line = nodeCapture.node.startPosition.row + 1;
+
+    const callerName = getEnclosingFunctionName(nodeCapture.node);
+    const callerId = callerName
+      ? makeNodeId(normalizedFilePath, callerName, "function")
+      : fileNodeId;
+
+    rawCalls.push({
+      callerId,
+      calleeName,
+      line,
+    });
+  }
+
   // --- Parse TODO/FIXME comments
   const todoMatches = runQuery(language, todoQuery, tree);
   for (const match of todoMatches) {
@@ -434,7 +490,7 @@ async function parseFile(
     });
   }
 
-  return { nodes, edges };
+  return { nodes, edges, rawCalls };
 }
 
 // ---------------------------------------------------------------------------
@@ -472,6 +528,7 @@ export async function indexRepository(
 
   const allNodes: GraphNode[] = [];
   const allEdges: GraphEdge[] = [];
+  const allRawCalls: Array<{ fileNodeId: string; callerId: string; calleeName: string; line: number }> = [];
   const errors: Array<{ filePath: string; error: string }> = [];
 
   for (let i = 0; i < files.length; i++) {
@@ -479,13 +536,84 @@ export async function indexRepository(
     onProgress?.(i + 1, files.length, filePath);
 
     try {
-      const { nodes, edges } = await parseFile(filePath, repoRoot, workspacePackages);
+      const { nodes, edges, rawCalls } = await parseFile(filePath, repoRoot, workspacePackages);
       allNodes.push(...nodes);
       allEdges.push(...edges);
+
+      const relPath = path.relative(repoRoot, filePath).replace(/\\/g, "/");
+      const normalizedFilePath = filePath.replace(/\\/g, "/");
+      const fileNodeId = makeNodeId(normalizedFilePath, relPath, "file");
+
+      allRawCalls.push(
+        ...rawCalls.map((c) => ({
+          ...c,
+          fileNodeId,
+        }))
+      );
     } catch (err) {
       errors.push({
         filePath,
         error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // ─── Pass 2: Call-Graph Resolution ───────────────────────────────────────
+  const BUILTIN_GLOBALS = new Set([
+    "console", "process", "require", "describe", "it", "expect", "beforeEach", "afterEach", "beforeAll", "afterAll",
+    "Promise", "Object", "Array", "Map", "Set", "JSON", "Math", "Error", "String", "Number", "Boolean",
+    "RegExp", "Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "global", "module", "exports",
+    "__dirname", "__filename", "import", "export", "undefined", "null", "NaN", "Infinity", "eval", "parseInt",
+    "parseFloat", "isNaN", "isFinite", "decodeURI", "decodeURIComponent", "encodeURI", "encodeURIComponent"
+  ]);
+
+  // Map "fileNodeId:symbolName" -> target symbol node ID
+  const localSymbolsMap = new Map<string, string>();
+  for (const node of allNodes) {
+    if (node.kind === "function" || node.kind === "class") {
+      const relPath = path.relative(repoRoot, node.filePath).replace(/\\/g, "/");
+      const fileNodeId = makeNodeId(node.filePath, relPath, "file");
+      localSymbolsMap.set(`${fileNodeId}:${node.label}`, node.id);
+    }
+  }
+
+  // Map "fileNodeId" -> Set of imported file node IDs
+  const importedFilesMap = new Map<string, Set<string>>();
+  for (const edge of allEdges) {
+    if (edge.kind === "imports") {
+      if (!importedFilesMap.has(edge.fromId)) {
+        importedFilesMap.set(edge.fromId, new Set());
+      }
+      importedFilesMap.get(edge.fromId)!.add(edge.toId);
+    }
+  }
+
+  // Resolve raw calls
+  for (const raw of allRawCalls) {
+    if (BUILTIN_GLOBALS.has(raw.calleeName)) continue;
+
+    // 1. Local resolution
+    let targetNodeId = localSymbolsMap.get(`${raw.fileNodeId}:${raw.calleeName}`);
+
+    // 2. Imported resolution
+    if (!targetNodeId) {
+      const imports = importedFilesMap.get(raw.fileNodeId);
+      if (imports) {
+        for (const importedFileId of imports) {
+          const key = `${importedFileId}:${raw.calleeName}`;
+          targetNodeId = localSymbolsMap.get(key);
+          if (targetNodeId) break;
+        }
+      }
+    }
+
+    if (targetNodeId) {
+      allEdges.push({
+        id: makeEdgeId(raw.callerId, "calls", targetNodeId),
+        kind: "calls",
+        fromId: raw.callerId,
+        toId: targetNodeId,
+        createdAt: Date.now(),
       });
     }
   }
