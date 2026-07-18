@@ -146,18 +146,22 @@ Persistent SQLite knowledge graph, built from your actual source code. Every age
 Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell are all functional.
 
 **What's live:**
-- `atlas init` — indexes TypeScript, JavaScript, Python
+- `atlas init` — indexes TypeScript, JavaScript, Python dynamically by scanning packages
 - `atlas impact` — blast-radius in < 15ms
 - `atlas run` — full Planner → Coder → Tester → Reviewer loop
 - `atlas ask` — memory graph search
+- **Dynamic package resolution** — automatically indexes monorepos via package.json scanning
+- **Unit & Integration Test Suite** — 10 test suites (18 tests total) verifying full agent state transitions, tool execution, and Orchestrator retries
 - Editor shell — CodeMirror 6, live impact panel
 
 **Coming in Phase 2:**
+- Call-graph indexing (AST method-to-method link parsing)
+- Electron compilation packaging (standalone installers)
 - In-editor AI coding (inline completions + agent-driven edits)
 - Multi-file diff review UI
 - Git integration (commit, blame, history in-graph)
 - 40-language parser support
-- Cloud sync for the memory graph
+- Local vector embeddings for semantic query matching
 
 ---
 
