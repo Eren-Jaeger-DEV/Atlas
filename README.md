@@ -149,10 +149,11 @@ Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell ar
 - `atlas init` — indexes TypeScript, JavaScript, Python dynamically by scanning packages
 - `atlas impact` — blast-radius in < 15ms, resolving exact method-to-method call-graph boundaries
 - `atlas run` — full Planner → Coder → Tester → Reviewer loop
-- `atlas ask` — memory graph search
+- `atlas ask` — memory graph search with hybrid vector + keyword semantic ranking
 - **Dynamic package resolution** — automatically indexes monorepos via package.json scanning
 - **Call-graph indexing** — AST-level function-to-function call connection resolution
-- **Unit & Integration Test Suite** — 10 test suites (18 tests total) verifying full agent state transitions, tool execution, and Orchestrator retries
+- **Local vector embeddings** — 384-dimensional in-process embeddings stored in SQLite
+- **Unit & Integration Test Suite** — 11 test suites verifying full agent state transitions, tool execution, and vector similarity search
 - **Standalone Electron packaging** — NSIS Windows installer builder pipeline configured
 - Editor shell — CodeMirror 6, live impact panel
 
@@ -161,7 +162,6 @@ Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell ar
 - Multi-file diff review UI
 - Git integration (commit, blame, history in-graph)
 - 40-language parser support
-- Local vector embeddings for semantic query matching
 
 ---
 

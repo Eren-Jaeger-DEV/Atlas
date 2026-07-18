@@ -7,3 +7,4 @@ export type { DecisionRecord } from "./db/graph-db.js";
 export { MemoryEngine } from "./memory.js";
 export type { MemoryEngineConfig } from "./memory.js";
 export { computeImpact } from "./impact.js";
+export { EmbeddingEngine, cosineSimilarity, generateLocalEmbedding } from "./embeddings.js";

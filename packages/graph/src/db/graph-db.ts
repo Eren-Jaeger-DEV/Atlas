@@ -74,6 +74,12 @@ CREATE TABLE IF NOT EXISTS runs (
   started_at    INTEGER NOT NULL,
   completed_at  INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS node_embeddings (
+  node_id     TEXT PRIMARY KEY,
+  vector_json TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
 `;
 
 // ---------------------------------------------------------------------------
@@ -208,14 +214,18 @@ export class GraphDB {
   }
 
   getNodesForFile(filePath: string): GraphNode[] {
-    return this.all<any>("SELECT * FROM nodes WHERE file_path = $fp", { $fp: filePath }).map(this.rowToNode);
+    return this.all<any>("SELECT * FROM nodes WHERE file_path = $fp", { $fp: filePath }).map(this.rowToNode.bind(this));
+  }
+
+  getAllNodes(): GraphNode[] {
+    return this.all<any>("SELECT * FROM nodes").map(this.rowToNode.bind(this));
   }
 
   searchNodes(query: string, limit = 20): GraphNode[] {
     return this.all<any>(
       "SELECT * FROM nodes WHERE label LIKE $q OR summary LIKE $q LIMIT $limit",
       { $q: `%${query}%`, $limit: limit }
-    ).map(this.rowToNode);
+    ).map(this.rowToNode.bind(this));
   }
 
   getNodeByLabel(label: string, filePath?: string): GraphNode | undefined {
@@ -431,6 +441,42 @@ export class GraphDB {
     const decisionCount = (this.get<any>("SELECT COUNT(*) as c FROM decisions")?.["c"] as number) ?? 0;
     const runCount = (this.get<any>("SELECT COUNT(*) as c FROM runs")?.["c"] as number) ?? 0;
     return { nodeCount, edgeCount, decisionCount, runCount };
+  }
+
+  // -------------------------------------------------------------------------
+  // Vector Embeddings
+  // -------------------------------------------------------------------------
+
+  upsertNodeEmbedding(nodeId: string, vector: number[]): void {
+    this.run(
+      `INSERT INTO node_embeddings (node_id, vector_json, created_at)
+       VALUES ($nodeId, $vectorJson, $createdAt)
+       ON CONFLICT(node_id) DO UPDATE SET
+         vector_json = excluded.vector_json,
+         created_at  = excluded.created_at`,
+      {
+        $nodeId: nodeId,
+        $vectorJson: JSON.stringify(vector),
+        $createdAt: Date.now(),
+      }
+    );
+    this.persist();
+  }
+
+  getNodeEmbeddings(): Array<{ nodeId: string; vector: number[] }> {
+    const rows = this.all<any>("SELECT node_id, vector_json FROM node_embeddings");
+    return rows.map((r) => ({
+      nodeId: r.node_id,
+      vector: JSON.parse(r.vector_json),
+    }));
+  }
+
+  getNodeEmbedding(nodeId: string): number[] | undefined {
+    const row = this.get<any>("SELECT vector_json FROM node_embeddings WHERE node_id = $id", {
+      $id: nodeId,
+    });
+    if (!row) return undefined;
+    return JSON.parse(row.vector_json);
   }
 
   close(): void {

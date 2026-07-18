@@ -10,6 +10,7 @@ import type { GraphNode, GraphEdge, ImpactResult } from "@atlas/core";
 import { GraphDB } from "./db/graph-db.js";
 import type { DecisionRecord } from "./db/graph-db.js";
 import { computeImpact } from "./impact.js";
+import { EmbeddingEngine, cosineSimilarity } from "./embeddings.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -69,6 +70,87 @@ export class MemoryEngine {
 
   search(query: string, limit = 20): GraphNode[] {
     return this.db.searchNodes(query, limit);
+  }
+
+  // -------------------------------------------------------------------------
+  // Vector Embeddings & Hybrid Search
+  // -------------------------------------------------------------------------
+
+  async indexEmbeddings(engine?: EmbeddingEngine): Promise<number> {
+    const embedder = engine ?? new EmbeddingEngine();
+    const existingEmbeddings = new Set(this.db.getNodeEmbeddings().map((e) => e.nodeId));
+    const allNodes = this.db.getAllNodes();
+
+    let count = 0;
+    for (const node of allNodes) {
+      if (existingEmbeddings.has(node.id)) continue;
+      const textToEmbed = `${node.kind} ${node.label} ${node.filePath} ${node.summary ?? ""}`.trim();
+      const vector = await embedder.embed(textToEmbed);
+      this.db.upsertNodeEmbedding(node.id, vector);
+      count++;
+    }
+    return count;
+  }
+
+  async vectorSearch(query: string, limit = 20, engine?: EmbeddingEngine): Promise<GraphNode[]> {
+    const embedder = engine ?? new EmbeddingEngine();
+    const queryVector = await embedder.embed(query);
+    const storedEmbeddings = this.db.getNodeEmbeddings();
+
+    if (storedEmbeddings.length === 0) {
+      await this.indexEmbeddings(embedder);
+    }
+
+    const embeddingsList = this.db.getNodeEmbeddings();
+    const scored: Array<{ nodeId: string; score: number }> = [];
+
+    for (const item of embeddingsList) {
+      const score = cosineSimilarity(queryVector, item.vector);
+      if (score > 0) {
+        scored.push({ nodeId: item.nodeId, score });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+
+    const results: GraphNode[] = [];
+    for (const item of scored.slice(0, limit)) {
+      const node = this.db.getNode(item.nodeId);
+      if (node) results.push(node);
+    }
+
+    return results;
+  }
+
+  async hybridSearch(query: string, limit = 20, engine?: EmbeddingEngine): Promise<GraphNode[]> {
+    const keywordResults = this.search(query, limit * 2);
+    const vectorResults = await this.vectorSearch(query, limit * 2, engine);
+
+    const rrfScores = new Map<string, number>();
+    const k = 60; // Standard RRF constant
+
+    keywordResults.forEach((node, rank) => {
+      const current = rrfScores.get(node.id) ?? 0;
+      rrfScores.set(node.id, current + 1 / (k + rank + 1));
+    });
+
+    vectorResults.forEach((node, rank) => {
+      const current = rrfScores.get(node.id) ?? 0;
+      rrfScores.set(node.id, current + 1 / (k + rank + 1));
+    });
+
+    const sortedNodeIds = Array.from(rrfScores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([id]) => id);
+
+    const results: GraphNode[] = [];
+    for (const id of sortedNodeIds) {
+      const node = this.db.getNode(id);
+      if (node) results.push(node);
+    }
+
+    return results;
   }
 
   // -------------------------------------------------------------------------

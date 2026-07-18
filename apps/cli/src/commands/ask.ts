@@ -15,7 +15,7 @@ export async function askCommand(question: string): Promise<void> {
   }
 
   const engine = await MemoryEngine.create({ repoRoot });
-  const results = engine.search(question, 10);
+  const results = await engine.hybridSearch(question, 10);
 
   console.log(chalk.bold.cyan(`\n  Atlas Ask: "${question}"\n`));
 
