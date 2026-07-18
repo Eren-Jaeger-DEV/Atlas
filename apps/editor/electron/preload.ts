@@ -16,9 +16,63 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   search: (query: string): Promise<GraphNode[]> =>
     ipcRenderer.invoke("atlas:search", query),
 
-  // Repo management
+  // Repo & Workspace management
   openRepo: (repoPath: string) =>
     ipcRenderer.invoke("atlas:open-repo", repoPath),
+
+  selectDirectory: (): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:select-directory"),
+
+  // File Operations
+  readDir: (dirPath: string): Promise<Array<{ name: string; path: string; isDirectory: boolean }>> =>
+    ipcRenderer.invoke("atlas:read-dir", dirPath),
+
+  readFile: (filePath: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:read-file", filePath),
+
+  writeFile: (filePath: string, content: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:write-file", filePath, content),
+
+  createFile: (filePath: string, isDirectory: boolean): Promise<void> =>
+    ipcRenderer.invoke("atlas:create-file", filePath, isDirectory),
+
+  deleteFile: (filePath: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:delete-file", filePath),
+
+  renameFile: (oldPath: string, newPath: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:rename-file", oldPath, newPath),
+
+  // Integrated Terminal
+  terminalCreate: (termId: string, cwd?: string) =>
+    ipcRenderer.invoke("atlas:terminal-create", termId, cwd),
+
+  terminalInput: (termId: string, data: string) =>
+    ipcRenderer.invoke("atlas:terminal-input", termId, data),
+
+  terminalResize: (termId: string, cols: number, rows: number) =>
+    ipcRenderer.invoke("atlas:terminal-resize", termId, cols, rows),
+
+  onTerminalData: (handler: (data: { termId: string; data: string }) => void) => {
+    const listener = (_ipcEvent: unknown, payload: { termId: string; data: string }) => handler(payload);
+    ipcRenderer.on("atlas:terminal-data", listener);
+    return () => ipcRenderer.removeListener("atlas:terminal-data", listener);
+  },
+
+  // Git Source Control
+  gitStatus: (repoPath: string): Promise<Array<{ path: string; status: string; staged: boolean }>> =>
+    ipcRenderer.invoke("atlas:git-status", repoPath),
+
+  gitStage: (repoPath: string, filePath: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:git-stage", repoPath, filePath),
+
+  gitUnstage: (repoPath: string, filePath: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:git-unstage", repoPath, filePath),
+
+  gitCommit: (repoPath: string, message: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:git-commit", repoPath, message),
+
+  gitDiff: (repoPath: string, filePath: string, staged: boolean): Promise<string> =>
+    ipcRenderer.invoke("atlas:git-diff", repoPath, filePath, staged),
 
   // Agent run
   run: (goal: string): Promise<RunRecord> =>

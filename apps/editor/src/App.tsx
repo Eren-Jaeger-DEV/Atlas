@@ -1,13 +1,10 @@
-/**
- * Atlas Editor — App Root
- *
- * Layout: Sidebar | Editor | Impact Panel
- * The AI plugin panel renders conditionally in a bottom drawer.
- */
-
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { EditorPane } from "./components/EditorPane.js";
 import { ImpactPanel } from "./components/ImpactPanel.js";
+import { FileExplorer } from "./components/FileExplorer.js";
+import { GitPanel } from "./components/GitPanel.js";
+import { TerminalPanel } from "./components/TerminalPanel.js";
+import { DiffViewer } from "./components/DiffViewer.js";
 
 interface EditorTab {
   filePath: string;
@@ -16,9 +13,19 @@ interface EditorTab {
   isDirty: boolean;
 }
 
+type SidebarView = "explorer" | "git" | "impact" | "ai";
+type BottomTab = "terminal" | "output" | "ai";
+
 export function App() {
+  const [repoPath, setRepoPath] = useState<string | undefined>();
+  const [activeSidebar, setActiveSidebar] = useState<SidebarView>("explorer");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("terminal");
+  const [showBottomPanel, setShowBottomPanel] = useState(true);
+
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [activeDiff, setActiveDiff] = useState<{ filePath: string; diffText: string } | null>(null);
+
   const [cursorSymbol, setCursorSymbol] = useState<string | undefined>();
   const [aiGoal, setAiGoal] = useState("");
   const [aiRunning, setAiRunning] = useState(false);
@@ -26,30 +33,109 @@ export function App() {
 
   const activeTab = tabs[activeTabIndex];
 
+  const handleSelectRepo = async () => {
+    const api = (window as any).atlasAPI;
+    if (api?.selectDirectory) {
+      const selected = await api.selectDirectory();
+      if (selected) {
+        setRepoPath(selected);
+      }
+    }
+  };
+
+  const handleOpenFile = async (filePath: string) => {
+    setActiveDiff(null);
+    const existingIndex = tabs.findIndex((t) => t.filePath === filePath);
+    if (existingIndex >= 0) {
+      setActiveTabIndex(existingIndex);
+      return;
+    }
+
+    const api = (window as any).atlasAPI;
+    if (api?.readFile) {
+      try {
+        const content = await api.readFile(filePath);
+        const ext = filePath.split(".").pop()?.toLowerCase();
+        let language: "typescript" | "javascript" | "python" = "typescript";
+        if (ext === "py") language = "python";
+        else if (ext === "js" || ext === "jsx") language = "javascript";
+
+        const newTab: EditorTab = { filePath, content, language, isDirty: false };
+        setTabs((prev) => [...prev, newTab]);
+        setActiveTabIndex(tabs.length);
+      } catch {
+        // Handle read file error gracefully
+      }
+    }
+  };
+
+  const handleCloseTab = (index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTabs((prev) => prev.filter((_, i) => i !== index));
+    if (activeTabIndex >= index && activeTabIndex > 0) {
+      setActiveTabIndex(activeTabIndex - 1);
+    }
+  };
+
+  const handleSaveTab = async (index: number) => {
+    const targetTab = tabs[index];
+    if (!targetTab) return;
+    const api = (window as any).atlasAPI;
+    if (api?.writeFile) {
+      await api.writeFile(targetTab.filePath, targetTab.content);
+      setTabs((prev) =>
+        prev.map((t, i) => (i === index ? { ...t, isDirty: false } : t))
+      );
+    }
+  };
+
+  const handleViewDiff = async (filePath: string, staged: boolean) => {
+    const api = (window as any).atlasAPI;
+    if (api?.gitDiff) {
+      const fullPath = repoPath ? `${repoPath}/${filePath}`.replace(/\/+/g, "/") : filePath;
+      const diffText = await api.gitDiff(repoPath, filePath, staged);
+      setActiveDiff({ filePath: fullPath, diffText });
+    }
+  };
+
   // Debounced symbol detection on cursor move
   const symbolTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const handleCursorChange = useCallback((_line: number, _col: number) => {
     clearTimeout(symbolTimerRef.current);
     symbolTimerRef.current = setTimeout(() => {
-      // TODO: In Phase 2, derive symbol name from cursor position using graph
       setCursorSymbol(undefined);
     }, 300);
   }, []);
 
+  // Keyboard shortcut listener (Ctrl+S to save)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (activeTab) {
+          handleSaveTab(activeTabIndex);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTab, activeTabIndex]);
+
   // AI run via IPC
-  const handleRun = async () => {
+  const handleRunAi = async () => {
     if (!aiGoal || aiRunning) return;
     setAiRunning(true);
     setAiEvents([]);
+    setBottomTab("ai");
+    setShowBottomPanel(true);
 
     const api = (window as any).atlasAPI;
     if (!api) {
-      setAiEvents(["Error: Atlas API not available. Is the editor running in Electron?"]);
+      setAiEvents(["Error: Atlas API not available."]);
       setAiRunning(false);
       return;
     }
 
-    // Subscribe to events
     const unsubscribe = api.onEvent((ev: any) => {
       setAiEvents((prev) => [...prev, JSON.stringify(ev, null, 2)]);
     });
@@ -64,320 +150,478 @@ export function App() {
 
   return (
     <div style={styles.root}>
-      {/* Sidebar */}
-      <aside style={styles.sidebar}>
+      {/* Top Header Bar */}
+      <header style={styles.topBar}>
         <div style={styles.logo}>
           <span style={styles.logoAtlas}>Atlas</span>
-          <span style={styles.logoStudio}> Studio</span>
+          <span style={styles.logoStudio}> Studio v0.1</span>
         </div>
-        <div style={styles.sidebarContent}>
-          {tabs.length === 0 ? (
-            <p style={styles.hint}>Open a file to get started</p>
-          ) : (
-            tabs.map((tab, i) => (
-              <div
-                key={tab.filePath}
-                style={{
-                  ...styles.sidebarTab,
-                  ...(i === activeTabIndex ? styles.sidebarTabActive : {}),
-                }}
-                onClick={() => setActiveTabIndex(i)}
-              >
-                {tab.filePath.split(/[/\\]/).at(-1)}
-                {tab.isDirty && <span style={styles.dirtyDot}>●</span>}
-              </div>
-            ))
-          )}
-        </div>
-      </aside>
-
-      {/* Editor area */}
-      <main style={styles.editorArea}>
-        {activeTab ? (
-          <EditorPane
-            filePath={activeTab.filePath}
-            content={activeTab.content}
-            language={activeTab.language}
-            onChange={(content) => {
-              setTabs((prev) =>
-                prev.map((t, i) =>
-                  i === activeTabIndex ? { ...t, content, isDirty: true } : t
-                )
-              );
-            }}
-            onCursorChange={handleCursorChange}
-          />
-        ) : (
-          <WelcomeScreen />
-        )}
-      </main>
-
-      {/* Impact panel */}
-      <aside style={styles.impactPanel}>
-        <ImpactPanel
-          filePath={activeTab?.filePath}
-          symbolName={cursorSymbol}
-        />
-      </aside>
-
-      {/* AI panel (bottom drawer) */}
-      <div style={styles.aiPanel}>
-        <div style={styles.aiHeader}>
-          <span style={styles.aiTitle}>⚡ AI Agent</span>
-          {aiRunning && <span style={styles.aiRunning}>Running...</span>}
-        </div>
-        <div style={styles.aiInput}>
-          <input
-            id="ai-goal-input"
-            style={styles.goalInput}
-            placeholder="Describe a goal... (e.g. add input validation to the signup endpoint)"
-            value={aiGoal}
-            onChange={(e) => setAiGoal(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleRun()}
-            disabled={aiRunning}
-          />
-          <button
-            id="ai-run-button"
-            style={{ ...styles.runButton, ...(aiRunning ? styles.runButtonDisabled : {}) }}
-            onClick={handleRun}
-            disabled={aiRunning}
-          >
-            {aiRunning ? "Running..." : "Run"}
+        <div style={styles.workspaceInfo}>
+          <button style={styles.openRepoButton} onClick={handleSelectRepo}>
+            📁 {repoPath ? repoPath.split(/[/\\]/).pop() : "Open Workspace Folder"}
           </button>
         </div>
-        {aiEvents.length > 0 && (
-          <div style={styles.aiEventLog}>
-            {aiEvents.slice(-20).map((ev, i) => (
-              <pre key={i} style={styles.aiEvent}>{ev}</pre>
+        <div style={styles.topControls}>
+          <button
+            style={{ ...styles.dockToggle, ...(showBottomPanel ? styles.dockToggleActive : {}) }}
+            onClick={() => setShowBottomPanel(!showBottomPanel)}
+            title="Toggle Bottom Terminal Panel"
+          >
+            💻 Terminal Panel
+          </button>
+        </div>
+      </header>
+
+      {/* Main Workspace Layout */}
+      <div style={styles.mainLayout}>
+        {/* Activity Bar */}
+        <nav style={styles.activityBar}>
+          <button
+            style={{ ...styles.activityButton, ...(activeSidebar === "explorer" ? styles.activityButtonActive : {}) }}
+            onClick={() => setActiveSidebar("explorer")}
+            title="File Explorer"
+          >
+            📁
+          </button>
+          <button
+            style={{ ...styles.activityButton, ...(activeSidebar === "git" ? styles.activityButtonActive : {}) }}
+            onClick={() => setActiveSidebar("git")}
+            title="Source Control (Git)"
+          >
+            🌿
+          </button>
+          <button
+            style={{ ...styles.activityButton, ...(activeSidebar === "impact" ? styles.activityButtonActive : {}) }}
+            onClick={() => setActiveSidebar("impact")}
+            title="Impact Analysis"
+          >
+            ⚡
+          </button>
+          <button
+            style={{ ...styles.activityButton, ...(activeSidebar === "ai" ? styles.activityButtonActive : {}) }}
+            onClick={() => setActiveSidebar("ai")}
+            title="Atlas AI Agent"
+          >
+            🤖
+          </button>
+        </nav>
+
+        {/* Sidebar Panel */}
+        <aside style={styles.sidebarPanel}>
+          {activeSidebar === "explorer" && (
+            <FileExplorer repoPath={repoPath} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo} />
+          )}
+          {activeSidebar === "git" && (
+            <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff} />
+          )}
+          {activeSidebar === "impact" && (
+            <ImpactPanel filePath={activeTab?.filePath} symbolName={cursorSymbol} />
+          )}
+          {activeSidebar === "ai" && (
+            <div style={styles.aiSidebar}>
+              <div style={styles.sidebarHeader}>ATLAS AI AGENT</div>
+              <div style={styles.aiGoalBox}>
+                <textarea
+                  style={styles.goalTextarea}
+                  placeholder="Describe goal... (e.g. add user validation)"
+                  value={aiGoal}
+                  onChange={(e) => setAiGoal(e.target.value)}
+                />
+                <button style={styles.aiRunBtn} onClick={handleRunAi} disabled={aiRunning}>
+                  {aiRunning ? "Running Agent..." : "⚡ Run Autonomous Agent"}
+                </button>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        {/* Editor & Content Area */}
+        <div style={styles.centerArea}>
+          {/* Tab Bar */}
+          <div style={styles.tabBar}>
+            {tabs.map((tab, i) => (
+              <div
+                key={tab.filePath}
+                style={{ ...styles.tabItem, ...(i === activeTabIndex && !activeDiff ? styles.tabItemActive : {}) }}
+                onClick={() => {
+                  setActiveDiff(null);
+                  setActiveTabIndex(i);
+                }}
+              >
+                <span style={styles.tabLabel}>{tab.filePath.split(/[/\\]/).pop()}</span>
+                {tab.isDirty && <span style={styles.dirtyDot}>●</span>}
+                <span style={styles.closeTabIcon} onClick={(e) => handleCloseTab(i, e)}>
+                  ×
+                </span>
+              </div>
             ))}
           </div>
-        )}
+
+          {/* Active View: Diff or Code Mirror */}
+          <div style={styles.editorViewContainer}>
+            {activeDiff ? (
+              <DiffViewer filePath={activeDiff.filePath} diffText={activeDiff.diffText} onClose={() => setActiveDiff(null)} />
+            ) : activeTab ? (
+              <EditorPane
+                filePath={activeTab.filePath}
+                content={activeTab.content}
+                language={activeTab.language}
+                onChange={(content) => {
+                  setTabs((prev) =>
+                    prev.map((t, i) => (i === activeTabIndex ? { ...t, content, isDirty: true } : t))
+                  );
+                }}
+                onCursorChange={handleCursorChange}
+              />
+            ) : (
+              <div style={styles.welcomeScreen}>
+                <div style={styles.welcomeCard}>
+                  <h2>Atlas Studio v0.1</h2>
+                  <p style={styles.welcomeSub}>Professional AI-Native IDE Platform</p>
+                  <div style={styles.welcomeActions}>
+                    <button style={styles.welcomeButton} onClick={handleSelectRepo}>
+                      Open Workspace Folder
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Dock Panel */}
+          {showBottomPanel && (
+            <div style={styles.bottomDock}>
+              <div style={styles.dockTabBar}>
+                <button
+                  style={{ ...styles.dockTab, ...(bottomTab === "terminal" ? styles.dockTabActive : {}) }}
+                  onClick={() => setBottomTab("terminal")}
+                >
+                  Terminal
+                </button>
+                <button
+                  style={{ ...styles.dockTab, ...(bottomTab === "output" ? styles.dockTabActive : {}) }}
+                  onClick={() => setBottomTab("output")}
+                >
+                  Output & Logs
+                </button>
+                <button
+                  style={{ ...styles.dockTab, ...(bottomTab === "ai" ? styles.dockTabActive : {}) }}
+                  onClick={() => setBottomTab("ai")}
+                >
+                  AI Run Stream
+                </button>
+              </div>
+
+              <div style={styles.dockContent}>
+                {bottomTab === "terminal" && <TerminalPanel repoPath={repoPath} />}
+                {bottomTab === "output" && (
+                  <div style={styles.outputLog}>
+                    <p style={styles.logLine}>[INFO] Atlas Studio v0.1 Workspace initialized: {repoPath ?? "None"}</p>
+                    <p style={styles.logLine}>[PASS] All IPC background channels ready.</p>
+                  </div>
+                )}
+                {bottomTab === "ai" && (
+                  <div style={styles.aiEventLog}>
+                    {aiEvents.length === 0 ? (
+                      <p style={styles.noEvents}>No active agent runs.</p>
+                    ) : (
+                      aiEvents.map((ev, idx) => (
+                        <pre key={idx} style={styles.eventPre}>
+                          {ev}
+                        </pre>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
-function WelcomeScreen() {
-  return (
-    <div style={styles.welcome}>
-      <h1 style={styles.welcomeTitle}>Atlas Studio</h1>
-      <p style={styles.welcomeSub}>AI-native code intelligence</p>
-      <div style={styles.welcomeTips}>
-        <div style={styles.tip}>
-          <code style={styles.tipCmd}>atlas init</code>
-          <span style={styles.tipDesc}>Build the memory graph for your repo</span>
-        </div>
-        <div style={styles.tip}>
-          <code style={styles.tipCmd}>atlas impact src/auth.ts:login</code>
-          <span style={styles.tipDesc}>Instant dependency impact — no AI needed</span>
-        </div>
-        <div style={styles.tip}>
-          <code style={styles.tipCmd}>atlas run "add rate limiting"</code>
-          <span style={styles.tipDesc}>Full Planner → Coder → Tester → Reviewer loop</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 
 const styles: Record<string, React.CSSProperties> = {
   root: {
-    display: "grid",
-    gridTemplateColumns: "200px 1fr 260px",
-    gridTemplateRows: "1fr 220px",
-    height: "100vh",
-    background: "#0f0f13",
-    color: "#cdd6f4",
-    fontFamily: "'Inter', system-ui, sans-serif",
-    overflow: "hidden",
-  },
-  sidebar: {
-    gridRow: "1 / 3",
-    background: "#131320",
-    borderRight: "1px solid #1e1e2e",
     display: "flex",
-    flexDirection: "column" as const,
+    flexDirection: "column",
+    height: "100vh",
+    width: "100vw",
+    backgroundColor: "#16161e",
+    color: "#c0caf5",
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     overflow: "hidden",
   },
-  logo: {
-    padding: "16px 14px",
-    borderBottom: "1px solid #1e1e2e",
-    fontSize: 16,
-    fontWeight: 800,
-  },
-  logoAtlas: {
-    background: "linear-gradient(135deg, #89b4fa, #cba6f7)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  logoStudio: {
-    color: "#585b70",
-    fontWeight: 400,
-  },
-  sidebarContent: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "8px 4px",
-  },
-  sidebarTab: {
-    padding: "6px 10px",
-    borderRadius: 4,
-    cursor: "pointer",
-    fontSize: 12,
-    color: "#6272a4",
+  topBar: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    height: "36px",
+    backgroundColor: "#1a1b26",
+    borderBottom: "1px solid #24283b",
+    padding: "0 12px",
     userSelect: "none",
   },
-  sidebarTabActive: {
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-  },
-  dirtyDot: {
-    color: "#f1fa8c",
-    fontSize: 8,
-  },
-  editorArea: {
-    gridRow: 1,
-    gridColumn: 2,
-    overflow: "hidden",
-  },
-  impactPanel: {
-    gridRow: "1 / 2",
-    gridColumn: 3,
-    background: "#131320",
-    borderLeft: "1px solid #1e1e2e",
-    overflowY: "auto",
-  },
-  aiPanel: {
-    gridRow: 2,
-    gridColumn: "2 / 4",
-    background: "#0d0d17",
-    borderTop: "1px solid #1e1e2e",
-    display: "flex",
-    flexDirection: "column" as const,
-    overflow: "hidden",
-  },
-  aiHeader: {
-    padding: "10px 16px",
+  logo: {
     display: "flex",
     alignItems: "center",
-    gap: 12,
-    borderBottom: "1px solid #1e1e2e",
   },
-  aiTitle: {
-    fontWeight: 700,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    color: "#7f849c",
+  logoAtlas: {
+    fontWeight: 800,
+    fontSize: "14px",
+    color: "#7aa2f7",
   },
-  aiRunning: {
-    fontSize: 11,
-    color: "#89b4fa",
+  logoStudio: {
+    fontWeight: 400,
+    fontSize: "12px",
+    color: "#565f89",
+    marginLeft: "4px",
   },
-  aiInput: {
+  workspaceInfo: {
     display: "flex",
-    gap: 8,
-    padding: "10px 16px",
-    borderBottom: "1px solid #1e1e2e",
+    alignItems: "center",
   },
-  goalInput: {
-    flex: 1,
-    background: "#1e1e2e",
-    border: "1px solid #313244",
-    borderRadius: 6,
-    padding: "8px 12px",
-    color: "#cdd6f4",
-    fontSize: 13,
-    outline: "none",
-    fontFamily: "'Inter', system-ui, sans-serif",
-  },
-  runButton: {
-    background: "linear-gradient(135deg, #89b4fa, #cba6f7)",
-    color: "#0f0f13",
-    border: "none",
-    borderRadius: 6,
-    padding: "8px 20px",
-    fontWeight: 700,
-    fontSize: 13,
+  openRepoButton: {
+    background: "#24283b",
+    border: "1px solid #3b4261",
+    color: "#c0caf5",
+    padding: "3px 10px",
+    borderRadius: "4px",
+    fontSize: "11px",
     cursor: "pointer",
-    fontFamily: "'Inter', system-ui, sans-serif",
   },
-  runButtonDisabled: {
-    opacity: 0.5,
-    cursor: "not-allowed",
-  },
-  aiEventLog: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "8px 16px",
-  },
-  aiEvent: {
-    fontSize: 11,
-    color: "#585b70",
-    margin: 0,
-    padding: "2px 0",
-    fontFamily: "'JetBrains Mono', monospace",
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-  },
-  hint: {
-    color: "#44415a",
-    fontStyle: "italic",
-    padding: "12px 10px",
-    fontSize: 12,
-  },
-  welcome: {
+  topControls: {
     display: "flex",
-    flexDirection: "column" as const,
+    gap: "8px",
+  },
+  dockToggle: {
+    background: "#24283b",
+    border: "1px solid #3b4261",
+    color: "#565f89",
+    padding: "3px 8px",
+    borderRadius: "4px",
+    fontSize: "11px",
+    cursor: "pointer",
+  },
+  dockToggleActive: {
+    color: "#7aa2f7",
+    borderColor: "#7aa2f7",
+  },
+  mainLayout: {
+    display: "flex",
+    flex: 1,
+    overflow: "hidden",
+  },
+  activityBar: {
+    width: "48px",
+    backgroundColor: "#1a1b26",
+    borderRight: "1px solid #24283b",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    paddingTop: "8px",
+    gap: "12px",
+  },
+  activityButton: {
+    width: "36px",
+    height: "36px",
+    background: "none",
+    border: "none",
+    borderRadius: "8px",
+    color: "#565f89",
+    fontSize: "18px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityButtonActive: {
+    backgroundColor: "#24283b",
+    color: "#7aa2f7",
+  },
+  sidebarPanel: {
+    width: "260px",
+    backgroundColor: "#16161e",
+    borderRight: "1px solid #24283b",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  centerArea: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  tabBar: {
+    display: "flex",
+    height: "34px",
+    backgroundColor: "#1a1b26",
+    borderBottom: "1px solid #24283b",
+    overflowX: "auto",
+  },
+  tabItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "0 12px",
+    backgroundColor: "#16161e",
+    borderRight: "1px solid #24283b",
+    color: "#565f89",
+    fontSize: "12px",
+    cursor: "pointer",
+    userSelect: "none",
+  },
+  tabItemActive: {
+    backgroundColor: "#24283b",
+    color: "#c0caf5",
+    borderBottom: "2px solid #7aa2f7",
+  },
+  tabLabel: {
+    maxWidth: "140px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  dirtyDot: {
+    color: "#e0af68",
+    fontSize: "10px",
+  },
+  closeTabIcon: {
+    fontSize: "14px",
+    opacity: 0.5,
+    cursor: "pointer",
+  },
+  editorViewContainer: {
+    flex: 1,
+    position: "relative",
+    overflow: "hidden",
+  },
+  welcomeScreen: {
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
     height: "100%",
-    gap: 8,
+    backgroundColor: "#1a1b26",
   },
-  welcomeTitle: {
-    fontSize: 36,
-    fontWeight: 800,
-    background: "linear-gradient(135deg, #89b4fa, #cba6f7, #f38ba8)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-    margin: 0,
+  welcomeCard: {
+    textAlign: "center",
+    padding: "32px",
+    backgroundColor: "#16161e",
+    borderRadius: "8px",
+    border: "1px solid #24283b",
+    maxWidth: "400px",
   },
   welcomeSub: {
-    color: "#585b70",
-    margin: 0,
-    marginBottom: 32,
+    color: "#565f89",
+    fontSize: "13px",
+    marginBottom: "20px",
   },
-  welcomeTips: {
+  welcomeActions: {
     display: "flex",
-    flexDirection: "column" as const,
-    gap: 16,
-    maxWidth: 520,
+    justifyContent: "center",
   },
-  tip: {
+  welcomeButton: {
+    backgroundColor: "#7aa2f7",
+    color: "#15161e",
+    border: "none",
+    borderRadius: "4px",
+    padding: "8px 16px",
+    fontWeight: "bold",
+    fontSize: "13px",
+    cursor: "pointer",
+  },
+  bottomDock: {
+    height: "220px",
+    backgroundColor: "#16161e",
+    borderTop: "1px solid #24283b",
     display: "flex",
-    alignItems: "center",
-    gap: 16,
+    flexDirection: "column",
   },
-  tipCmd: {
-    background: "#1e1e2e",
-    border: "1px solid #313244",
-    borderRadius: 6,
-    padding: "4px 10px",
-    fontFamily: "'JetBrains Mono', monospace",
-    fontSize: 12,
-    color: "#89b4fa",
-    minWidth: 200,
-    flexShrink: 0,
+  dockTabBar: {
+    display: "flex",
+    height: "28px",
+    backgroundColor: "#1a1b26",
+    borderBottom: "1px solid #24283b",
   },
-  tipDesc: {
-    color: "#585b70",
-    fontSize: 13,
+  dockTab: {
+    background: "none",
+    border: "none",
+    color: "#565f89",
+    padding: "0 12px",
+    fontSize: "11px",
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    cursor: "pointer",
+  },
+  dockTabActive: {
+    color: "#7aa2f7",
+    borderBottom: "2px solid #7aa2f7",
+  },
+  dockContent: {
+    flex: 1,
+    overflow: "hidden",
+  },
+  outputLog: {
+    padding: "12px",
+    fontFamily: "monospace",
+    fontSize: "12px",
+    color: "#9aa5ce",
+  },
+  logLine: {
+    margin: "4px 0",
+  },
+  aiEventLog: {
+    padding: "12px",
+    overflowY: "auto",
+    height: "100%",
+  },
+  noEvents: {
+    color: "#565f89",
+    fontSize: "12px",
+  },
+  eventPre: {
+    fontSize: "11px",
+    color: "#7dcfff",
+    whiteSpace: "pre-wrap",
+    margin: "4px 0",
+  },
+  aiSidebar: {
+    padding: "12px",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+  },
+  sidebarHeader: {
+    fontSize: "11px",
+    fontWeight: "bold",
+    color: "#7aa2f7",
+    marginBottom: "12px",
+  },
+  aiGoalBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  goalTextarea: {
+    height: "100px",
+    backgroundColor: "#1f2335",
+    border: "1px solid #3b4261",
+    color: "#c0caf5",
+    borderRadius: "4px",
+    padding: "8px",
+    fontSize: "12px",
+    resize: "none",
+  },
+  aiRunBtn: {
+    backgroundColor: "#7aa2f7",
+    color: "#15161e",
+    border: "none",
+    borderRadius: "4px",
+    padding: "8px",
+    fontWeight: "bold",
+    fontSize: "12px",
+    cursor: "pointer",
   },
 };

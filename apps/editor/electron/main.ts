@@ -10,12 +10,17 @@
  * which then delegates to the agent runtime subprocess.
  */
 
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
 import path from "node:path";
+import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
+import { spawn, execFile, ChildProcessWithoutNullStreams } from "node:child_process";
+import { promisify } from "node:util";
 
+const execFileAsync = promisify(execFile);
 const isDev = process.env["NODE_ENV"] === "development";
 
 let mainWindow: BrowserWindow | null = null;
+const terminalProcesses = new Map<string, ChildProcessWithoutNullStreams>();
 
 // ---------------------------------------------------------------------------
 // Window creation
@@ -98,6 +103,149 @@ ipcMain.handle("atlas:search", async (_event, query: string) => {
   }
 });
 
+// Select Directory Dialog
+ipcMain.handle("atlas:select-directory", async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory"],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const selectedPath = result.filePaths[0]!.replace(/\\/g, "/");
+  global.__atlasRepoRoot = selectedPath;
+  return selectedPath;
+});
+
+// File Operations
+ipcMain.handle("atlas:read-dir", async (_event, dirPath: string) => {
+  try {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    return entries
+      .filter((e) => !e.name.startsWith(".git") && e.name !== "node_modules" && e.name !== "dist" && e.name !== "dist-app")
+      .map((e) => ({
+        name: e.name,
+        path: path.join(dirPath, e.name).replace(/\\/g, "/"),
+        isDirectory: e.isDirectory(),
+      }))
+      .sort((a, b) => (a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1));
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("atlas:read-file", async (_event, filePath: string) => {
+  return await readFile(filePath, "utf-8");
+});
+
+ipcMain.handle("atlas:write-file", async (_event, filePath: string, content: string) => {
+  await writeFile(filePath, content, "utf-8");
+});
+
+ipcMain.handle("atlas:create-file", async (_event, filePath: string, isDirectory: boolean) => {
+  if (isDirectory) {
+    await mkdir(filePath, { recursive: true });
+  } else {
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, "", "utf-8");
+  }
+});
+
+ipcMain.handle("atlas:delete-file", async (_event, filePath: string) => {
+  await rm(filePath, { recursive: true, force: true });
+});
+
+ipcMain.handle("atlas:rename-file", async (_event, oldPath: string, newPath: string) => {
+  await rename(oldPath, newPath);
+});
+
+// Integrated Terminal Subprocess
+ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: string) => {
+  if (terminalProcesses.has(termId)) return { success: true };
+
+  const targetCwd = cwd || global.__atlasRepoRoot || process.cwd();
+  const defaultShell = process.platform === "win32" ? "powershell.exe" : "bash";
+
+  const proc = spawn(defaultShell, [], {
+    cwd: targetCwd,
+    env: process.env,
+  });
+
+  terminalProcesses.set(termId, proc);
+
+  proc.stdout.on("data", (chunk: Buffer) => {
+    event.sender.send("atlas:terminal-data", { termId, data: chunk.toString("utf-8") });
+  });
+
+  proc.stderr.on("data", (chunk: Buffer) => {
+    event.sender.send("atlas:terminal-data", { termId, data: chunk.toString("utf-8") });
+  });
+
+  proc.on("exit", () => {
+    terminalProcesses.delete(termId);
+  });
+
+  return { success: true };
+});
+
+ipcMain.handle("atlas:terminal-input", async (_event, termId: string, data: string) => {
+  const proc = terminalProcesses.get(termId);
+  if (proc) {
+    proc.stdin.write(data);
+  }
+});
+
+ipcMain.handle("atlas:terminal-resize", async () => {
+  return { success: true };
+});
+
+// Git Source Control
+ipcMain.handle("atlas:git-status", async (_event, repoPath: string) => {
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    const { stdout } = await execFileAsync("git", ["status", "--porcelain"], { cwd });
+    const lines = stdout.split("\n").filter(Boolean);
+    return lines.map((line) => {
+      const indexStatus = line.slice(0, 1);
+      const workStatus = line.slice(1, 2);
+      const file = line.slice(3).trim().replace(/\\/g, "/");
+      const isStaged = indexStatus !== " " && indexStatus !== "?";
+      let status = "modified";
+      if (indexStatus === "?" || workStatus === "?") status = "untracked";
+      else if (indexStatus === "A" || workStatus === "A") status = "added";
+      else if (indexStatus === "D" || workStatus === "D") status = "deleted";
+
+      return { path: file, status, staged: isStaged };
+    });
+  } catch {
+    return [];
+  }
+});
+
+ipcMain.handle("atlas:git-stage", async (_event, repoPath: string, filePath: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  await execFileAsync("git", ["add", filePath], { cwd });
+});
+
+ipcMain.handle("atlas:git-unstage", async (_event, repoPath: string, filePath: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  await execFileAsync("git", ["restore", "--staged", filePath], { cwd });
+});
+
+ipcMain.handle("atlas:git-commit", async (_event, repoPath: string, message: string) => {
+  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+  await execFileAsync("git", ["commit", "-m", message], { cwd });
+});
+
+ipcMain.handle("atlas:git-diff", async (_event, repoPath: string, filePath: string, staged: boolean) => {
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    const args = staged ? ["diff", "--cached", filePath] : ["diff", filePath];
+    const { stdout } = await execFileAsync("git", args, { cwd });
+    return stdout;
+  } catch {
+    return "";
+  }
+});
+
 // Open repo (sets the active repo root)
 ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
   global.__atlasRepoRoot = repoPath;
@@ -105,8 +253,6 @@ ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
 });
 
 // Agent run — delegates to agent runtime subprocess
-// NOTE: In Phase 1, this runs in-process for simplicity.
-// Phase 2 should extract to a proper subprocess for isolation.
 ipcMain.handle("atlas:run", async (event, goal: string) => {
   try {
     const { MemoryEngine } = await import("@atlas/graph");
@@ -123,7 +269,6 @@ ipcMain.handle("atlas:run", async (event, goal: string) => {
       memory,
       repoRoot,
       onEvent: (ev) => {
-        // Stream events to renderer
         event.sender.send("atlas:event", ev);
       },
     });
