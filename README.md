@@ -1,4 +1,4 @@
-# Atlas Studio
+﻿# Atlas Studio
 
 **The IDE that actually understands your codebase.**
 
@@ -146,7 +146,9 @@ Persistent SQLite knowledge graph, built from your actual source code. Every age
 Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell are all functional.
 
 **What's live:**
-- **Atlas Studio v0.1 IDE Core** — Professional standalone desktop editor shell
+- **Atlas Studio v0.1 Frameless IDE Core** — Single-line merged header with custom window controls and interactive dropdown menus
+- **Frameless Window Integration** — Native OS title bar eliminated (frame: false), draggable header with -webkit-app-region partitioning
+- **Top Navigation Menu System** — Interactive File, Edit, Selection, View, Go, Run, Terminal, and Help menus
 - **Integrated Terminal Panel** — Embedded interactive shell (`xterm.js` + `@xterm/addon-fit`)
 - **File Explorer Tree View** — Workspace file tree navigation, folder opening, file creation, and deletion
 - **Git Source Control Sidebar** — Changed files status view, stage/unstage controls, commit entry, and `DiffViewer`
