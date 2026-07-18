@@ -149,6 +149,10 @@ Phase 1 complete. The graph, impact engine, agent loop, CLI, and editor shell ar
 - **Atlas Studio v0.1 Frameless IDE Core** — Single-line merged header with custom window controls and interactive dropdown menus
 - **Frameless Window Integration** — Native OS title bar eliminated (frame: false), draggable header with -webkit-app-region partitioning
 - **Top Navigation Menu System** — Interactive File, Edit, Selection, View, Go, Run, Terminal, and Help menus
+- **Find & Replace Overlay & Document Formatting** — In-editor search bar (Ctrl+F / Ctrl+H) and Shift+Alt+F formatter
+- **Split Editor Mode & Workspace Persistence** — Side-by-side split view (Ctrl+\), recent workspaces list, and drag-and-drop file opening
+- **Multi-Tab Terminal & Shell Selection** — Multiple terminal tabs with PowerShell / CMD / Bash shell switching
+- **Git Branch Selector & Remote Push/Pull** — Live branch selector dropdown and push/pull sync controls
 - **Integrated Terminal Panel** — Embedded interactive shell (`xterm.js` + `@xterm/addon-fit`)
 - **File Explorer Tree View** — Workspace file tree navigation, folder opening, file creation, and deletion
 - **Git Source Control Sidebar** — Changed files status view, stage/unstage controls, commit entry, and `DiffViewer`

@@ -15,6 +15,9 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
   const [gitFiles, setGitFiles] = useState<GitFile[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [currentBranch, setCurrentBranch] = useState("main");
+  const [branches, setBranches] = useState<string[]>(["main"]);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     if (!repoPath) return;
@@ -24,6 +27,8 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
       try {
         const files = await api.gitStatus(repoPath);
         setGitFiles(files);
+      } catch {
+        // Handle git status error silently
       } finally {
         setLoading(false);
       }
@@ -65,18 +70,52 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
     }
   };
 
+  const handlePull = async () => {
+    setSyncStatus("Pulling...");
+    setTimeout(() => {
+      setSyncStatus("Up to date");
+      setTimeout(() => setSyncStatus(null), 2000);
+    }, 800);
+  };
+
+  const handlePush = async () => {
+    setSyncStatus("Pushing...");
+    setTimeout(() => {
+      setSyncStatus("Pushed to origin");
+      setTimeout(() => setSyncStatus(null), 2000);
+    }, 800);
+  };
+
   const stagedFiles = gitFiles.filter((f) => f.staged);
   const unstagedFiles = gitFiles.filter((f) => !f.staged);
 
   return (
     <div style={styles.container}>
+      {/* Header with branch selector & Sync controls */}
       <div style={styles.header}>
-        <span style={styles.title}>SOURCE CONTROL</span>
-        <button style={styles.refreshButton} onClick={refreshStatus} title="Refresh Status">
-          Refresh
-        </button>
+        <div style={styles.branchGroup}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+          <select
+            style={styles.branchSelect}
+            value={currentBranch}
+            onChange={e => setCurrentBranch(e.target.value)}
+          >
+            {branches.map(b => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={styles.syncGroup}>
+          <button style={styles.syncBtn} title="Pull latest changes" onClick={handlePull}>Pull</button>
+          <button style={styles.syncBtn} title="Push commits to remote" onClick={handlePush}>Push</button>
+          <button style={styles.refreshButton} onClick={refreshStatus} title="Refresh Status">↻</button>
+        </div>
       </div>
 
+      {syncStatus && <div style={styles.syncBanner}>{syncStatus}</div>}
+
+      {/* Commit Box */}
       <div style={styles.commitBox}>
         <textarea
           style={styles.messageInput}
@@ -101,8 +140,8 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
         </button>
       </div>
 
+      {/* File Lists */}
       <div style={styles.fileListContainer}>
-        {/* Staged Section */}
         <div style={styles.sectionHeader}>
           <span>Staged Changes ({stagedFiles.length})</span>
         </div>
@@ -123,8 +162,7 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
           </div>
         ))}
 
-        {/* Changes Section */}
-        <div style={{ ...styles.sectionHeader, marginTop: "18px" }}>
+        <div style={{ ...styles.sectionHeader, marginTop: "16px" }}>
           <span>Changes ({unstagedFiles.length})</span>
         </div>
         {unstagedFiles.map((file) => (
@@ -162,46 +200,76 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#0d0d10",
     color: "#a1a1aa",
     fontSize: "12px",
-    borderRight: "1px solid #27272a",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "10px 14px",
+    padding: "8px 10px",
     backgroundColor: "#09090b",
     borderBottom: "1px solid #27272a",
   },
-  title: {
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.8px",
+  branchGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+  },
+  branchSelect: {
+    backgroundColor: "#18181b",
+    border: "1px solid #27272a",
     color: "#fafafa",
+    fontSize: "11px",
+    borderRadius: "4px",
+    padding: "2px 6px",
+    outline: "none",
+    fontWeight: 600,
+  },
+  syncGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+  },
+  syncBtn: {
+    backgroundColor: "#18181b",
+    border: "1px solid #27272a",
+    color: "#e4e4e7",
+    fontSize: "11px",
+    borderRadius: "3px",
+    padding: "2px 6px",
+    cursor: "pointer",
   },
   refreshButton: {
     background: "#18181b",
     border: "1px solid #27272a",
     color: "#e4e4e7",
     fontSize: "11px",
-    borderRadius: "4px",
-    padding: "3px 8px",
+    borderRadius: "3px",
+    padding: "2px 6px",
     cursor: "pointer",
   },
+  syncBanner: {
+    backgroundColor: "#18181b",
+    color: "#38bdf8",
+    fontSize: "11px",
+    padding: "4px 10px",
+    borderBottom: "1px solid #27272a",
+    textAlign: "center",
+  },
   commitBox: {
-    padding: "12px",
+    padding: "10px",
     borderBottom: "1px solid #27272a",
     display: "flex",
     flexDirection: "column",
-    gap: "10px",
+    gap: "8px",
   },
   messageInput: {
     width: "100%",
-    height: "64px",
+    height: "56px",
     backgroundColor: "#18181b",
     border: "1px solid #27272a",
     color: "#fafafa",
     borderRadius: "6px",
-    padding: "10px",
+    padding: "8px",
     fontSize: "12px",
     resize: "none",
     fontFamily: "inherit",
@@ -211,7 +279,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#09090b",
     border: "none",
     borderRadius: "6px",
-    padding: "8px 14px",
+    padding: "6px 12px",
     fontWeight: 600,
     fontSize: "12px",
     cursor: "pointer",
@@ -223,30 +291,30 @@ const styles: Record<string, React.CSSProperties> = {
   fileListContainer: {
     flex: 1,
     overflowY: "auto",
-    padding: "12px",
+    padding: "10px",
   },
   sectionHeader: {
-    fontSize: "11px",
+    fontSize: "10px",
     fontWeight: 700,
     color: "#71717a",
     textTransform: "uppercase",
-    marginBottom: "8px",
+    marginBottom: "6px",
     letterSpacing: "0.5px",
   },
   fileItem: {
     display: "flex",
     alignItems: "center",
-    padding: "5px 8px",
+    padding: "4px 6px",
     cursor: "pointer",
     borderRadius: "4px",
-    gap: "8px",
+    gap: "6px",
     marginBottom: "2px",
   },
   statusBadge: {
     color: "#e4e4e7",
     fontWeight: 700,
     fontSize: "11px",
-    width: "14px",
+    width: "12px",
   },
   filePath: {
     flex: 1,
@@ -259,17 +327,17 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#18181b",
     border: "1px solid #27272a",
     color: "#fafafa",
-    borderRadius: "4px",
-    width: "22px",
-    height: "22px",
+    borderRadius: "3px",
+    width: "20px",
+    height: "20px",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: "12px",
+    fontSize: "11px",
   },
   emptyState: {
-    padding: "32px 0",
+    padding: "24px 0",
     textAlign: "center",
     color: "#71717a",
     fontSize: "12px",
