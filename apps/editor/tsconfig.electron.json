@@ -9,7 +9,8 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["node"]
   },
   "include": ["electron/**/*"]
 }

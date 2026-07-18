@@ -4,7 +4,8 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "tsBuildInfoFile": "./tsconfig.tsbuildinfo",
-    "exactOptionalPropertyTypes": false
+    "exactOptionalPropertyTypes": false,
+    "types": ["node"]
   },
   "references": [
     { "path": "../core" },
