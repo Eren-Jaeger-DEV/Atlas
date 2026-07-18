@@ -32,7 +32,6 @@ function createWindow(): void {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    titleBarStyle: "hiddenInset",
     backgroundColor: "#0f0f13",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -40,7 +39,7 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    show: false,
+    show: true,
   });
 
   // Load URL
@@ -51,9 +50,8 @@ function createWindow(): void {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
-  });
+  mainWindow.show();
+  mainWindow.focus();
 
   // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
