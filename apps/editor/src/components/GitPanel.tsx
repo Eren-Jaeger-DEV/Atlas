@@ -72,8 +72,8 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.title}>SOURCE CONTROL</span>
-        <button style={styles.refreshButton} onClick={refreshStatus} title="Refresh Git Status">
-          🔄
+        <button style={styles.refreshButton} onClick={refreshStatus} title="Refresh Status">
+          Refresh
         </button>
       </div>
 
@@ -97,7 +97,7 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
           disabled={!commitMessage.trim() || stagedFiles.length === 0 || loading}
           onClick={handleCommit}
         >
-          {loading ? "Committing..." : "✓ Commit Staged"}
+          {loading ? "Committing..." : "Commit Staged"}
         </button>
       </div>
 
@@ -124,7 +124,7 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
         ))}
 
         {/* Changes Section */}
-        <div style={{ ...styles.sectionHeader, marginTop: "16px" }}>
+        <div style={{ ...styles.sectionHeader, marginTop: "18px" }}>
           <span>Changes ({unstagedFiles.length})</span>
         </div>
         {unstagedFiles.map((file) => (
@@ -159,57 +159,60 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#16161e",
-    color: "#a9b1d6",
-    fontSize: "13px",
+    backgroundColor: "#0d0d10",
+    color: "#a1a1aa",
+    fontSize: "12px",
+    borderRight: "1px solid #27272a",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "8px 12px",
-    backgroundColor: "#1f2335",
-    borderBottom: "1px solid #292e42",
+    padding: "10px 14px",
+    backgroundColor: "#09090b",
+    borderBottom: "1px solid #27272a",
   },
   title: {
     fontSize: "11px",
-    fontWeight: "bold",
-    letterSpacing: "0.5px",
-    color: "#7aa2f7",
+    fontWeight: 700,
+    letterSpacing: "0.8px",
+    color: "#fafafa",
   },
   refreshButton: {
-    background: "none",
-    border: "none",
-    color: "#7aa2f7",
+    background: "#18181b",
+    border: "1px solid #27272a",
+    color: "#e4e4e7",
+    fontSize: "11px",
+    borderRadius: "4px",
+    padding: "3px 8px",
     cursor: "pointer",
-    fontSize: "12px",
   },
   commitBox: {
     padding: "12px",
-    borderBottom: "1px solid #292e42",
+    borderBottom: "1px solid #27272a",
     display: "flex",
     flexDirection: "column",
-    gap: "8px",
+    gap: "10px",
   },
   messageInput: {
     width: "100%",
-    height: "60px",
-    backgroundColor: "#1f2335",
-    border: "1px solid #3b4261",
-    color: "#c0caf5",
-    borderRadius: "4px",
-    padding: "8px",
+    height: "64px",
+    backgroundColor: "#18181b",
+    border: "1px solid #27272a",
+    color: "#fafafa",
+    borderRadius: "6px",
+    padding: "10px",
     fontSize: "12px",
     resize: "none",
     fontFamily: "inherit",
   },
   commitButton: {
-    backgroundColor: "#7aa2f7",
-    color: "#15161e",
+    backgroundColor: "#fafafa",
+    color: "#09090b",
     border: "none",
-    borderRadius: "4px",
-    padding: "6px 12px",
-    fontWeight: "bold",
+    borderRadius: "6px",
+    padding: "8px 14px",
+    fontWeight: 600,
     fontSize: "12px",
     cursor: "pointer",
   },
@@ -220,26 +223,28 @@ const styles: Record<string, React.CSSProperties> = {
   fileListContainer: {
     flex: 1,
     overflowY: "auto",
-    padding: "8px 12px",
+    padding: "12px",
   },
   sectionHeader: {
     fontSize: "11px",
-    fontWeight: "bold",
-    color: "#565f89",
+    fontWeight: 700,
+    color: "#71717a",
     textTransform: "uppercase",
-    marginBottom: "6px",
+    marginBottom: "8px",
+    letterSpacing: "0.5px",
   },
   fileItem: {
     display: "flex",
     alignItems: "center",
-    padding: "4px 6px",
+    padding: "5px 8px",
     cursor: "pointer",
-    borderRadius: "3px",
+    borderRadius: "4px",
     gap: "8px",
+    marginBottom: "2px",
   },
   statusBadge: {
-    color: "#e0af68",
-    fontWeight: "bold",
+    color: "#e4e4e7",
+    fontWeight: 700,
     fontSize: "11px",
     width: "14px",
   },
@@ -248,23 +253,25 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
+    color: "#e4e4e7",
   },
   stageButton: {
-    background: "#292e42",
-    border: "1px solid #3b4261",
-    color: "#c0caf5",
-    borderRadius: "3px",
-    width: "20px",
-    height: "20px",
+    background: "#18181b",
+    border: "1px solid #27272a",
+    color: "#fafafa",
+    borderRadius: "4px",
+    width: "22px",
+    height: "22px",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    fontSize: "12px",
   },
   emptyState: {
-    padding: "24px 0",
+    padding: "32px 0",
     textAlign: "center",
-    color: "#565f89",
+    color: "#71717a",
     fontSize: "12px",
   },
 };

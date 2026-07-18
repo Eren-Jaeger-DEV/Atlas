@@ -14,6 +14,27 @@ interface FileExplorerProps {
   onSelectRepo: () => void;
 }
 
+function FolderIcon({ isOpen }: { isOpen?: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {isOpen ? (
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      ) : (
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+      )}
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <polyline points="13 2 13 9 20 9" />
+    </svg>
+  );
+}
+
 export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplorerProps) {
   const [tree, setTree] = useState<FileItem[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
@@ -95,7 +116,7 @@ export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplore
         <div
           style={{
             ...styles.treeItem,
-            paddingLeft: `${level * 12 + 8}px`,
+            paddingLeft: `${level * 12 + 10}px`,
             ...(selectedPath === node.path ? styles.selectedItem : {}),
           }}
           onClick={() => {
@@ -108,18 +129,18 @@ export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplore
           }}
         >
           <span style={styles.icon}>
-            {node.isDirectory ? (node.isOpen ? "📂" : "📁") : "📄"}
+            {node.isDirectory ? <FolderIcon isOpen={node.isOpen} /> : <FileIcon />}
           </span>
           <span style={styles.label}>{node.name}</span>
           <button
             style={styles.deleteButton}
-            title="Delete"
+            title="Delete File"
             onClick={(e) => {
               e.stopPropagation();
               handleDelete(node);
             }}
           >
-            ×
+            x
           </button>
         </div>
         {node.isDirectory && node.isOpen && node.children && renderTree(node.children, level + 1)}
@@ -161,89 +182,96 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#16161e",
-    color: "#a9b1d6",
-    fontSize: "13px",
+    backgroundColor: "#0d0d10",
+    color: "#a1a1aa",
+    fontSize: "12px",
     userSelect: "none",
+    borderRight: "1px solid #27272a",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "8px 12px",
-    backgroundColor: "#1f2335",
-    borderBottom: "1px solid #292e42",
+    padding: "10px 14px",
+    backgroundColor: "#09090b",
+    borderBottom: "1px solid #27272a",
   },
   headerTitle: {
     fontSize: "11px",
-    fontWeight: "bold",
-    letterSpacing: "0.5px",
-    color: "#7aa2f7",
+    fontWeight: 700,
+    letterSpacing: "0.8px",
+    color: "#fafafa",
   },
   actions: {
     display: "flex",
     gap: "6px",
   },
   actionButton: {
-    background: "#292e42",
-    border: "1px solid #3b4261",
-    color: "#c0caf5",
-    fontSize: "10px",
-    borderRadius: "3px",
-    padding: "2px 6px",
+    background: "#18181b",
+    border: "1px solid #27272a",
+    color: "#e4e4e7",
+    fontSize: "11px",
+    borderRadius: "4px",
+    padding: "3px 8px",
     cursor: "pointer",
+    fontWeight: 500,
   },
   treeContainer: {
     flex: 1,
     overflowY: "auto",
-    paddingTop: "4px",
+    paddingTop: "6px",
   },
   treeItem: {
     display: "flex",
     alignItems: "center",
-    padding: "4px 8px",
+    padding: "5px 10px",
     cursor: "pointer",
-    borderRadius: "3px",
+    borderRadius: "4px",
+    margin: "1px 6px",
   },
   selectedItem: {
-    backgroundColor: "#292e42",
-    color: "#7aa2f7",
+    backgroundColor: "#18181b",
+    color: "#fafafa",
+    borderLeft: "2px solid #fafafa",
   },
   icon: {
-    marginRight: "6px",
-    fontSize: "12px",
+    marginRight: "8px",
+    display: "flex",
+    alignItems: "center",
   },
   label: {
     flex: 1,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
+    color: "#e4e4e7",
   },
   deleteButton: {
     background: "none",
     border: "none",
-    color: "#f7768e",
+    color: "#71717a",
     cursor: "pointer",
-    fontSize: "14px",
-    opacity: 0.6,
+    fontSize: "12px",
+    opacity: 0.7,
+    padding: "0 4px",
   },
   empty: {
-    padding: "24px 12px",
+    padding: "32px 16px",
     textAlign: "center",
   },
   emptyText: {
     fontSize: "12px",
-    color: "#565f89",
-    marginBottom: "12px",
+    color: "#71717a",
+    marginBottom: "14px",
   },
   openButton: {
-    background: "#7aa2f7",
+    background: "#fafafa",
     border: "none",
-    color: "#15161e",
-    fontWeight: "bold",
+    color: "#09090b",
+    fontWeight: 600,
     fontSize: "12px",
-    padding: "6px 14px",
-    borderRadius: "4px",
+    padding: "8px 16px",
+    borderRadius: "6px",
     cursor: "pointer",
   },
 };

@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 export interface CommandItem {
   id: string;
   label: string;
-  category: string;
+  category?: string;
   shortcut?: string;
   action: () => void;
 }
@@ -30,7 +30,7 @@ export function CommandPalette({ commands, isOpen, onClose }: CommandPaletteProp
   const filtered = commands.filter(
     (cmd) =>
       cmd.label.toLowerCase().includes(search.toLowerCase()) ||
-      cmd.category.toLowerCase().includes(search.toLowerCase())
+      (cmd.category && cmd.category.toLowerCase().includes(search.toLowerCase()))
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -82,7 +82,7 @@ export function CommandPalette({ commands, isOpen, onClose }: CommandPaletteProp
                   onClose();
                 }}
               >
-                <span style={styles.category}>{cmd.category}</span>
+                {cmd.category && <span style={styles.category}>{cmd.category}</span>}
                 <span style={styles.label}>{cmd.label}</span>
                 {cmd.shortcut && <span style={styles.shortcut}>{cmd.shortcut}</span>}
               </div>
@@ -101,7 +101,8 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    backdropFilter: "blur(4px)",
     display: "flex",
     justifyContent: "center",
     alignItems: "flex-start",
@@ -109,44 +110,47 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 9999,
   },
   modal: {
-    width: "550px",
-    backgroundColor: "#16161e",
-    border: "1px solid #292e42",
-    borderRadius: "8px",
-    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.5)",
+    width: "560px",
+    backgroundColor: "#0d0d10",
+    border: "1px solid #27272a",
+    borderRadius: "10px",
+    boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)",
     overflow: "hidden",
   },
   input: {
     width: "100%",
-    padding: "12px 16px",
-    backgroundColor: "#1f2335",
+    padding: "14px 18px",
+    backgroundColor: "#09090b",
     border: "none",
-    borderBottom: "1px solid #292e42",
-    color: "#c0caf5",
+    borderBottom: "1px solid #27272a",
+    color: "#fafafa",
     fontSize: "14px",
     outline: "none",
+    fontFamily: "inherit",
   },
   list: {
     maxHeight: "320px",
     overflowY: "auto",
+    padding: "6px",
   },
   item: {
     display: "flex",
     alignItems: "center",
-    padding: "8px 16px",
+    padding: "10px 14px",
     cursor: "pointer",
     fontSize: "13px",
-    color: "#a9b1d6",
+    color: "#a1a1aa",
+    borderRadius: "6px",
   },
   itemSelected: {
-    backgroundColor: "#292e42",
-    color: "#7aa2f7",
+    backgroundColor: "#18181b",
+    color: "#fafafa",
   },
   category: {
     fontSize: "10px",
-    fontWeight: "bold",
+    fontWeight: 700,
     textTransform: "uppercase",
-    color: "#565f89",
+    color: "#71717a",
     width: "90px",
   },
   label: {
@@ -154,15 +158,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   shortcut: {
     fontSize: "11px",
-    color: "#565f89",
-    backgroundColor: "#1f2335",
+    color: "#71717a",
+    backgroundColor: "#18181b",
+    border: "1px solid #27272a",
     padding: "2px 6px",
-    borderRadius: "3px",
+    borderRadius: "4px",
   },
   noMatch: {
-    padding: "16px",
+    padding: "20px",
     textAlign: "center",
-    color: "#565f89",
+    color: "#71717a",
     fontSize: "13px",
   },
 };

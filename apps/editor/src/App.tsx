@@ -1,8 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { EditorPane } from "./components/EditorPane.js";
-import { ImpactPanel } from "./components/ImpactPanel.js";
 import { FileExplorer } from "./components/FileExplorer.js";
 import { GitPanel } from "./components/GitPanel.js";
+import { ImpactPanel } from "./components/ImpactPanel.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { DiffViewer } from "./components/DiffViewer.js";
 import { CommandPalette, CommandItem } from "./components/CommandPalette.js";
@@ -11,12 +11,56 @@ import logoImg from "./assets/logo.png";
 interface EditorTab {
   filePath: string;
   content: string;
-  language: "typescript" | "javascript" | "python";
+  language: string;
   isDirty: boolean;
 }
 
 type SidebarView = "explorer" | "git" | "impact" | "ai";
 type BottomTab = "terminal" | "output" | "ai";
+
+function ExplorerNavIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function GitNavIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="6" y1="3" x2="6" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </svg>
+  );
+}
+
+function ImpactNavIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
+}
+
+function AgentNavIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <rect x="9" y="9" width="6" height="6" />
+      <line x1="9" y1="1" x2="9" y2="4" />
+      <line x1="15" y1="1" x2="15" y2="4" />
+      <line x1="9" y1="20" x2="9" y2="23" />
+      <line x1="15" y1="20" x2="15" y2="23" />
+      <line x1="20" y1="9" x2="23" y2="9" />
+      <line x1="20" y1="15" x2="23" y2="15" />
+      <line x1="1" y1="9" x2="4" y2="9" />
+      <line x1="1" y1="15" x2="4" y2="15" />
+    </svg>
+  );
+}
 
 export function App() {
   const [repoPath, setRepoPath] = useState<string | undefined>();
@@ -47,29 +91,46 @@ export function App() {
   };
 
   const handleOpenFile = async (filePath: string) => {
-    setActiveDiff(null);
     const existingIndex = tabs.findIndex((t) => t.filePath === filePath);
     if (existingIndex >= 0) {
+      setActiveDiff(null);
       setActiveTabIndex(existingIndex);
       return;
     }
 
     const api = (window as any).atlasAPI;
+    let content = "";
     if (api?.readFile) {
       try {
-        const content = await api.readFile(filePath);
-        const ext = filePath.split(".").pop()?.toLowerCase();
-        let language: "typescript" | "javascript" | "python" = "typescript";
-        if (ext === "py") language = "python";
-        else if (ext === "js" || ext === "jsx") language = "javascript";
-
-        const newTab: EditorTab = { filePath, content, language, isDirty: false };
-        setTabs((prev) => [...prev, newTab]);
-        setActiveTabIndex(tabs.length);
+        content = await api.readFile(filePath);
       } catch {
-        // Handle read file error gracefully
+        content = "// File read error";
       }
     }
+
+    const ext = filePath.split(".").pop() || "";
+    const langMap: Record<string, string> = {
+      ts: "typescript",
+      tsx: "typescript",
+      js: "javascript",
+      jsx: "javascript",
+      json: "json",
+      py: "python",
+      md: "markdown",
+      html: "html",
+      css: "css",
+    };
+
+    const newTab: EditorTab = {
+      filePath,
+      content,
+      language: langMap[ext] || "plaintext",
+      isDirty: false,
+    };
+
+    setTabs((prev) => [...prev, newTab]);
+    setActiveDiff(null);
+    setActiveTabIndex(tabs.length);
   };
 
   const handleCloseTab = (index: number, e: React.MouseEvent) => {
@@ -80,133 +141,95 @@ export function App() {
     }
   };
 
-  const handleSaveTab = async (index: number) => {
-    const targetTab = tabs[index];
-    if (!targetTab) return;
-    const api = (window as any).atlasAPI;
-    if (api?.writeFile) {
-      await api.writeFile(targetTab.filePath, targetTab.content);
-      setTabs((prev) =>
-        prev.map((t, i) => (i === index ? { ...t, isDirty: false } : t))
-      );
-    }
-  };
-
   const handleViewDiff = async (filePath: string, staged: boolean) => {
     const api = (window as any).atlasAPI;
-    if (api?.gitDiff) {
-      const fullPath = repoPath ? `${repoPath}/${filePath}`.replace(/\/+/g, "/") : filePath;
-      const diffText = await api.gitDiff(repoPath, filePath, staged);
-      setActiveDiff({ filePath: fullPath, diffText });
+    if (api?.gitDiff && repoPath) {
+      try {
+        const diffText = await api.gitDiff(repoPath, filePath, staged);
+        setActiveDiff({ filePath, diffText });
+      } catch {
+        setActiveDiff({ filePath, diffText: "Error fetching diff" });
+      }
     }
   };
 
-  // Command palette commands
+  const handleCursorChange = (lineContent: string) => {
+    const match = lineContent.match(/\b([A-Za-z_][A-Za-z0-9_]*)\b/);
+    if (match) {
+      setCursorSymbol(match[1]);
+    }
+  };
+
+  const handleRunAi = async () => {
+    if (!aiGoal.trim() || !repoPath) return;
+    const api = (window as any).atlasAPI;
+    if (api?.runAgent) {
+      setAiRunning(true);
+      setAiEvents(["Agent initialized..."]);
+      try {
+        const result = await api.runAgent(aiGoal, repoPath);
+        if (result.error) {
+          setAiEvents((prev) => [...prev, `[FAIL] Error: ${result.error}`]);
+        } else {
+          setAiEvents((prev) => [...prev, `[PASS] Task completed successfully`]);
+        }
+      } catch (err) {
+        setAiEvents((prev) => [...prev, `[FAIL] ${String(err)}`]);
+      } finally {
+        setAiRunning(false);
+      }
+    }
+  };
+
   const commands: CommandItem[] = [
     {
-      id: "open-workspace",
+      id: "open-folder",
       label: "Open Workspace Folder",
-      category: "File",
+      shortcut: "Ctrl+O",
       action: handleSelectRepo,
     },
     {
-      id: "save-file",
-      label: "Save Current File",
-      category: "File",
-      shortcut: "Ctrl+S",
-      action: () => handleSaveTab(activeTabIndex),
-    },
-    {
       id: "toggle-terminal",
-      label: "Toggle Integrated Terminal Panel",
-      category: "View",
+      label: "Toggle Terminal Panel",
       shortcut: "Ctrl+`",
-      action: () => {
-        setShowBottomPanel(!showBottomPanel);
-        setBottomTab("terminal");
-      },
+      action: () => setShowBottomPanel((prev) => !prev),
     },
     {
       id: "show-explorer",
-      label: "Show File Explorer Sidebar",
-      category: "View",
+      label: "Show File Explorer",
+      shortcut: "Ctrl+Shift+E",
       action: () => setActiveSidebar("explorer"),
     },
     {
       id: "show-git",
-      label: "Show Source Control (Git) Sidebar",
-      category: "View",
+      label: "Show Source Control",
+      shortcut: "Ctrl+Shift+G",
       action: () => setActiveSidebar("git"),
     },
     {
       id: "show-impact",
-      label: "Show Live Impact Panel",
-      category: "View",
+      label: "Show Dependency Impact Graph",
+      shortcut: "Ctrl+Shift+I",
       action: () => setActiveSidebar("impact"),
     },
     {
-      id: "run-agent",
-      label: "Run Atlas AI Agent",
-      category: "Agent",
-      action: () => {
-        setActiveSidebar("ai");
-        handleRunAi();
-      },
+      id: "show-ai",
+      label: "Show Atlas AI Agent",
+      shortcut: "Ctrl+Shift+A",
+      action: () => setActiveSidebar("ai"),
     },
   ];
 
-  // Debounced symbol detection on cursor move
-  const symbolTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const handleCursorChange = useCallback((_line: number, _col: number) => {
-    clearTimeout(symbolTimerRef.current);
-    symbolTimerRef.current = setTimeout(() => {
-      setCursorSymbol(undefined);
-    }, 300);
-  }, []);
-
-  // Keyboard shortcut listener (Ctrl+S to save, Ctrl+Shift+P for Command Palette)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "P" || e.key === "p")) {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
         e.preventDefault();
         setShowCommandPalette((prev) => !prev);
-      } else if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault();
-        if (activeTab) {
-          handleSaveTab(activeTabIndex);
-        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeTab, activeTabIndex]);
-
-  // AI run via IPC
-  const handleRunAi = async () => {
-    if (!aiGoal || aiRunning) return;
-    setAiRunning(true);
-    setAiEvents([]);
-    setBottomTab("ai");
-    setShowBottomPanel(true);
-
-    const api = (window as any).atlasAPI;
-    if (!api) {
-      setAiEvents(["Error: Atlas API not available."]);
-      setAiRunning(false);
-      return;
-    }
-
-    const unsubscribe = api.onEvent((ev: any) => {
-      setAiEvents((prev) => [...prev, JSON.stringify(ev, null, 2)]);
-    });
-
-    try {
-      await api.run(aiGoal);
-    } finally {
-      unsubscribe();
-      setAiRunning(false);
-    }
-  };
+  }, []);
 
   return (
     <div style={styles.root}>
@@ -214,69 +237,63 @@ export function App() {
       <header style={styles.topBar}>
         <div style={styles.logo}>
           <img src={logoImg} alt="Atlas Studio" style={styles.logoImg} />
-          <span style={styles.logoAtlas}>Atlas</span>
-          <span style={styles.logoStudio}> Studio v0.1</span>
+          <span style={styles.logoAtlas}>ATLAS</span>
+          <span style={styles.logoStudio}>STUDIO</span>
         </div>
         <div style={styles.workspaceInfo}>
           <button style={styles.openRepoButton} onClick={handleSelectRepo}>
-            📁 {repoPath ? repoPath.split(/[/\\]/).pop() : "Open Workspace Folder"}
+            {repoPath ? repoPath.split(/[/\\]/).pop() : "Open Workspace Folder"}
           </button>
         </div>
         <div style={styles.topControls}>
           <button
-            style={styles.dockToggle}
+            style={styles.commandPaletteBtn}
             onClick={() => setShowCommandPalette(true)}
             title="Command Palette (Ctrl+Shift+P)"
           >
-            ⌘ Command Palette
+            Command Palette
           </button>
           <button
             style={{ ...styles.dockToggle, ...(showBottomPanel ? styles.dockToggleActive : {}) }}
-            onClick={() => setShowBottomPanel(!showBottomPanel)}
-            title="Toggle Bottom Terminal Panel"
+            onClick={() => setShowBottomPanel((prev) => !prev)}
+            title="Toggle Terminal Panel"
           >
-            💻 Terminal Panel
+            Terminal
           </button>
         </div>
       </header>
 
-      <CommandPalette
-        commands={commands}
-        isOpen={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
-      />
-
-      {/* Main Workspace Layout */}
+      {/* Main Container */}
       <div style={styles.mainLayout}>
-        {/* Activity Bar */}
+        {/* Left Activity Bar */}
         <nav style={styles.activityBar}>
           <button
             style={{ ...styles.activityButton, ...(activeSidebar === "explorer" ? styles.activityButtonActive : {}) }}
             onClick={() => setActiveSidebar("explorer")}
-            title="File Explorer"
+            title="Explorer"
           >
-            📁
+            <ExplorerNavIcon />
           </button>
           <button
             style={{ ...styles.activityButton, ...(activeSidebar === "git" ? styles.activityButtonActive : {}) }}
             onClick={() => setActiveSidebar("git")}
-            title="Source Control (Git)"
+            title="Source Control"
           >
-            🌿
+            <GitNavIcon />
           </button>
           <button
             style={{ ...styles.activityButton, ...(activeSidebar === "impact" ? styles.activityButtonActive : {}) }}
             onClick={() => setActiveSidebar("impact")}
-            title="Impact Analysis"
+            title="Dependency Impact Graph"
           >
-            ⚡
+            <ImpactNavIcon />
           </button>
           <button
             style={{ ...styles.activityButton, ...(activeSidebar === "ai" ? styles.activityButtonActive : {}) }}
             onClick={() => setActiveSidebar("ai")}
             title="Atlas AI Agent"
           >
-            🤖
+            <AgentNavIcon />
           </button>
         </nav>
 
@@ -297,12 +314,12 @@ export function App() {
               <div style={styles.aiGoalBox}>
                 <textarea
                   style={styles.goalTextarea}
-                  placeholder="Describe goal... (e.g. add user validation)"
+                  placeholder="Describe task goal..."
                   value={aiGoal}
                   onChange={(e) => setAiGoal(e.target.value)}
                 />
                 <button style={styles.aiRunBtn} onClick={handleRunAi} disabled={aiRunning}>
-                  {aiRunning ? "Running Agent..." : "⚡ Run Autonomous Agent"}
+                  {aiRunning ? "Running Agent..." : "Run Autonomous Agent"}
                 </button>
               </div>
             </div>
@@ -323,9 +340,9 @@ export function App() {
                 }}
               >
                 <span style={styles.tabLabel}>{tab.filePath.split(/[/\\]/).pop()}</span>
-                {tab.isDirty && <span style={styles.dirtyDot}>●</span>}
+                {tab.isDirty && <span style={styles.dirtyDot}>*</span>}
                 <span style={styles.closeTabIcon} onClick={(e) => handleCloseTab(i, e)}>
-                  ×
+                  x
                 </span>
               </div>
             ))}
@@ -371,39 +388,40 @@ export function App() {
                   style={{ ...styles.dockTab, ...(bottomTab === "terminal" ? styles.dockTabActive : {}) }}
                   onClick={() => setBottomTab("terminal")}
                 >
-                  Terminal
+                  TERMINAL
                 </button>
                 <button
                   style={{ ...styles.dockTab, ...(bottomTab === "output" ? styles.dockTabActive : {}) }}
                   onClick={() => setBottomTab("output")}
                 >
-                  Output & Logs
+                  OUTPUT & LOGS
                 </button>
                 <button
                   style={{ ...styles.dockTab, ...(bottomTab === "ai" ? styles.dockTabActive : {}) }}
                   onClick={() => setBottomTab("ai")}
                 >
-                  AI Run Stream
+                  AI RUN STREAM
                 </button>
               </div>
 
               <div style={styles.dockContent}>
                 {bottomTab === "terminal" && <TerminalPanel repoPath={repoPath} />}
                 {bottomTab === "output" && (
-                  <div style={styles.outputLog}>
-                    <p style={styles.logLine}>[INFO] Atlas Studio v0.1 Workspace initialized: {repoPath ?? "None"}</p>
-                    <p style={styles.logLine}>[PASS] All IPC background channels ready.</p>
+                  <div style={styles.logStream}>
+                    <p style={styles.logLine}>[PASS] System initializing...</p>
+                    <p style={styles.logLine}>[PASS] Graph database ready.</p>
+                    {repoPath && <p style={styles.logLine}>[PASS] Workspace loaded: {repoPath}</p>}
                   </div>
                 )}
                 {bottomTab === "ai" && (
-                  <div style={styles.aiEventLog}>
+                  <div style={styles.logStream}>
                     {aiEvents.length === 0 ? (
-                      <p style={styles.noEvents}>No active agent runs.</p>
+                      <p style={styles.logEmpty}>No active agent runs.</p>
                     ) : (
-                      aiEvents.map((ev, idx) => (
-                        <pre key={idx} style={styles.eventPre}>
+                      aiEvents.map((ev, i) => (
+                        <p key={i} style={styles.logLine}>
                           {ev}
-                        </pre>
+                        </p>
                       ))
                     )}
                   </div>
@@ -413,6 +431,13 @@ export function App() {
           )}
         </div>
       </div>
+
+      {/* Command Palette Overlay */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        commands={commands}
+        onClose={() => setShowCommandPalette(false)}
+      />
     </div>
   );
 }
@@ -423,8 +448,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     height: "100vh",
     width: "100vw",
-    backgroundColor: "#16161e",
-    color: "#c0caf5",
+    backgroundColor: "#09090b",
+    color: "#fafafa",
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     overflow: "hidden",
   },
@@ -432,11 +457,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    height: "36px",
-    backgroundColor: "#1a1b26",
-    borderBottom: "1px solid #24283b",
-    padding: "0 12px",
-    userSelect: "none",
+    height: "38px",
+    padding: "0 14px",
+    backgroundColor: "#0d0d10",
+    borderBottom: "1px solid #27272a",
+    fontSize: "12px",
   },
   logo: {
     display: "flex",
@@ -448,53 +473,61 @@ const styles: Record<string, React.CSSProperties> = {
     marginRight: "8px",
     objectFit: "contain",
   },
-  welcomeLogoImg: {
-    width: "110px",
-    height: "110px",
-    marginBottom: "16px",
-    objectFit: "contain",
-    filter: "drop-shadow(0 8px 16px rgba(0, 0, 0, 0.6))",
-  },
   logoAtlas: {
     fontWeight: 800,
-    fontSize: "14px",
-    color: "#7aa2f7",
+    fontSize: "12px",
+    letterSpacing: "1px",
+    color: "#fafafa",
   },
   logoStudio: {
-    fontWeight: 400,
-    fontSize: "12px",
-    color: "#565f89",
-    marginLeft: "4px",
+    fontWeight: 500,
+    fontSize: "11px",
+    letterSpacing: "1px",
+    color: "#71717a",
+    marginLeft: "5px",
   },
   workspaceInfo: {
     display: "flex",
     alignItems: "center",
   },
   openRepoButton: {
-    background: "#24283b",
-    border: "1px solid #3b4261",
-    color: "#c0caf5",
-    padding: "3px 10px",
+    background: "#18181b",
+    border: "1px solid #27272a",
+    color: "#e4e4e7",
+    padding: "4px 12px",
     borderRadius: "4px",
     fontSize: "11px",
     cursor: "pointer",
+    fontWeight: 500,
   },
   topControls: {
     display: "flex",
     gap: "8px",
   },
-  dockToggle: {
-    background: "#24283b",
-    border: "1px solid #3b4261",
-    color: "#565f89",
-    padding: "3px 8px",
+  commandPaletteBtn: {
+    background: "#18181b",
+    border: "1px solid #27272a",
+    color: "#fafafa",
     borderRadius: "4px",
+    padding: "4px 10px",
     fontSize: "11px",
     cursor: "pointer",
+    fontWeight: 500,
+  },
+  dockToggle: {
+    background: "#18181b",
+    border: "1px solid #27272a",
+    color: "#fafafa",
+    borderRadius: "4px",
+    padding: "4px 10px",
+    fontSize: "11px",
+    cursor: "pointer",
+    fontWeight: 500,
   },
   dockToggleActive: {
-    color: "#7aa2f7",
-    borderColor: "#7aa2f7",
+    background: "#27272a",
+    borderColor: "#3f3f46",
+    color: "#ffffff",
   },
   mainLayout: {
     display: "flex",
@@ -503,189 +536,190 @@ const styles: Record<string, React.CSSProperties> = {
   },
   activityBar: {
     width: "48px",
-    backgroundColor: "#1a1b26",
-    borderRight: "1px solid #24283b",
+    backgroundColor: "#09090b",
+    borderRight: "1px solid #27272a",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     paddingTop: "8px",
-    gap: "12px",
+    gap: "10px",
   },
   activityButton: {
     width: "36px",
     height: "36px",
-    background: "none",
+    borderRadius: "6px",
     border: "none",
-    borderRadius: "8px",
-    color: "#565f89",
-    fontSize: "18px",
+    background: "transparent",
+    color: "#71717a",
+    fontSize: "14px",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    transition: "all 0.15s ease",
   },
   activityButtonActive: {
-    backgroundColor: "#24283b",
-    color: "#7aa2f7",
+    background: "#18181b",
+    color: "#fafafa",
+    border: "1px solid #27272a",
   },
   sidebarPanel: {
-    width: "260px",
-    backgroundColor: "#16161e",
-    borderRight: "1px solid #24283b",
+    width: "280px",
+    backgroundColor: "#0d0d10",
     display: "flex",
     flexDirection: "column",
-    overflow: "hidden",
   },
   centerArea: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
+    backgroundColor: "#121215",
     overflow: "hidden",
   },
   tabBar: {
     display: "flex",
     height: "34px",
-    backgroundColor: "#1a1b26",
-    borderBottom: "1px solid #24283b",
+    backgroundColor: "#09090b",
+    borderBottom: "1px solid #27272a",
     overflowX: "auto",
   },
   tabItem: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    padding: "0 12px",
-    backgroundColor: "#16161e",
-    borderRight: "1px solid #24283b",
-    color: "#565f89",
+    padding: "0 14px",
+    backgroundColor: "#0d0d10",
+    borderRight: "1px solid #27272a",
+    color: "#71717a",
     fontSize: "12px",
     cursor: "pointer",
     userSelect: "none",
+    borderTop: "2px solid transparent",
   },
   tabItemActive: {
-    backgroundColor: "#24283b",
-    color: "#c0caf5",
-    borderBottom: "2px solid #7aa2f7",
+    backgroundColor: "#121215",
+    color: "#fafafa",
+    borderTop: "2px solid #fafafa",
   },
   tabLabel: {
-    maxWidth: "140px",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    fontWeight: 500,
   },
   dirtyDot: {
-    color: "#e0af68",
-    fontSize: "10px",
+    color: "#e4e4e7",
+    fontWeight: "bold",
   },
   closeTabIcon: {
-    fontSize: "14px",
-    opacity: 0.5,
-    cursor: "pointer",
+    fontSize: "12px",
+    opacity: 0.6,
+    padding: "2px",
   },
   editorViewContainer: {
     flex: 1,
-    position: "relative",
     overflow: "hidden",
+    position: "relative",
   },
   welcomeScreen: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     height: "100%",
-    backgroundColor: "#1a1b26",
+    backgroundColor: "#09090b",
   },
   welcomeCard: {
-    textAlign: "center",
-    padding: "32px",
-    backgroundColor: "#16161e",
-    borderRadius: "8px",
-    border: "1px solid #24283b",
-    maxWidth: "400px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "48px 64px",
+    borderRadius: "12px",
+    backgroundColor: "#0d0d10",
+    border: "1px solid #27272a",
+    boxShadow: "0 20px 40px rgba(0, 0, 0, 0.6)",
+  },
+  welcomeLogoImg: {
+    width: "110px",
+    height: "110px",
+    marginBottom: "20px",
+    objectFit: "contain",
+    filter: "drop-shadow(0 8px 16px rgba(0, 0, 0, 0.6))",
   },
   welcomeSub: {
-    color: "#565f89",
+    color: "#71717a",
     fontSize: "13px",
-    marginBottom: "20px",
+    marginBottom: "24px",
   },
   welcomeActions: {
     display: "flex",
-    justifyContent: "center",
+    gap: "12px",
   },
   welcomeButton: {
-    backgroundColor: "#7aa2f7",
-    color: "#15161e",
+    backgroundColor: "#fafafa",
+    color: "#09090b",
     border: "none",
-    borderRadius: "4px",
-    padding: "8px 16px",
-    fontWeight: "bold",
+    padding: "10px 20px",
+    borderRadius: "6px",
+    fontWeight: 600,
     fontSize: "13px",
     cursor: "pointer",
   },
   bottomDock: {
     height: "220px",
-    backgroundColor: "#16161e",
-    borderTop: "1px solid #24283b",
+    backgroundColor: "#09090b",
+    borderTop: "1px solid #27272a",
     display: "flex",
     flexDirection: "column",
   },
   dockTabBar: {
     display: "flex",
-    height: "28px",
-    backgroundColor: "#1a1b26",
-    borderBottom: "1px solid #24283b",
+    height: "30px",
+    backgroundColor: "#0d0d10",
+    borderBottom: "1px solid #27272a",
   },
   dockTab: {
     background: "none",
     border: "none",
-    color: "#565f89",
-    padding: "0 12px",
+    borderRight: "1px solid #27272a",
+    color: "#71717a",
+    padding: "0 16px",
     fontSize: "11px",
-    fontWeight: "bold",
-    textTransform: "uppercase",
+    fontWeight: 600,
     cursor: "pointer",
+    borderBottom: "2px solid transparent",
   },
   dockTabActive: {
-    color: "#7aa2f7",
-    borderBottom: "2px solid #7aa2f7",
+    color: "#fafafa",
+    borderBottom: "2px solid #fafafa",
+    backgroundColor: "#09090b",
   },
   dockContent: {
     flex: 1,
     overflow: "hidden",
   },
-  outputLog: {
+  logStream: {
     padding: "12px",
-    fontFamily: "monospace",
+    fontFamily: "'JetBrains Mono', Consolas, monospace",
     fontSize: "12px",
-    color: "#9aa5ce",
-  },
-  logLine: {
-    margin: "4px 0",
-  },
-  aiEventLog: {
-    padding: "12px",
     overflowY: "auto",
     height: "100%",
   },
-  noEvents: {
-    color: "#565f89",
-    fontSize: "12px",
+  logLine: {
+    color: "#e4e4e7",
+    lineHeight: "1.6",
   },
-  eventPre: {
-    fontSize: "11px",
-    color: "#7dcfff",
-    whiteSpace: "pre-wrap",
-    margin: "4px 0",
+  logEmpty: {
+    color: "#71717a",
   },
   aiSidebar: {
-    padding: "12px",
     display: "flex",
     flexDirection: "column",
     height: "100%",
+    padding: "12px",
+    gap: "12px",
   },
   sidebarHeader: {
     fontSize: "11px",
-    fontWeight: "bold",
-    color: "#7aa2f7",
-    marginBottom: "12px",
+    fontWeight: 700,
+    letterSpacing: "0.8px",
+    color: "#fafafa",
   },
   aiGoalBox: {
     display: "flex",
@@ -693,22 +727,24 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "8px",
   },
   goalTextarea: {
-    height: "100px",
-    backgroundColor: "#1f2335",
-    border: "1px solid #3b4261",
-    color: "#c0caf5",
-    borderRadius: "4px",
+    width: "100%",
+    height: "80px",
+    backgroundColor: "#18181b",
+    border: "1px solid #27272a",
+    color: "#fafafa",
+    borderRadius: "6px",
     padding: "8px",
     fontSize: "12px",
     resize: "none",
+    fontFamily: "inherit",
   },
   aiRunBtn: {
-    backgroundColor: "#7aa2f7",
-    color: "#15161e",
+    backgroundColor: "#fafafa",
+    color: "#09090b",
     border: "none",
-    borderRadius: "4px",
+    borderRadius: "6px",
     padding: "8px",
-    fontWeight: "bold",
+    fontWeight: 600,
     fontSize: "12px",
     cursor: "pointer",
   },

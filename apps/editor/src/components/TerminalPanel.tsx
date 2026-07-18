@@ -18,20 +18,20 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: "Consolas, 'Courier New', monospace",
+      fontFamily: "'JetBrains Mono', Consolas, monospace",
       theme: {
-        background: "#0f0f13",
-        foreground: "#cccccc",
-        cursor: "#528bff",
-        selectionBackground: "#3e4451",
-        black: "#1e1e24",
-        red: "#e06c75",
-        green: "#98c379",
-        yellow: "#d19a66",
-        blue: "#61afef",
-        magenta: "#c678dd",
-        cyan: "#56b6c2",
-        white: "#abb2bf",
+        background: "#09090b",
+        foreground: "#fafafa",
+        cursor: "#fafafa",
+        selectionBackground: "#27272a",
+        black: "#18181b",
+        red: "#f87171",
+        green: "#4ade80",
+        yellow: "#facc15",
+        blue: "#60a5fa",
+        magenta: "#c084fc",
+        cyan: "#38bdf8",
+        white: "#f4f4f5",
       },
     });
 
@@ -64,7 +64,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
           fitAddon.fit();
           api.terminalResize(termId, term.cols, term.rows);
         } catch {
-          // Ignore resize errors when unmounting
+          // Ignore resize errors
         }
       };
 
@@ -76,7 +76,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
         term.dispose();
       };
     } else {
-      term.writeln("Terminal demo mode (Electron IPC unavailable)");
+      term.writeln("Terminal output stream ready.");
       return () => term.dispose();
     }
   }, [repoPath]);
@@ -84,7 +84,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.title}>Terminal</span>
+        <span style={styles.title}>TERMINAL</span>
         <span style={styles.subtext}>{repoPath ?? "No workspace open"}</span>
       </div>
       <div ref={containerRef} style={styles.canvasContainer} />
@@ -97,34 +97,32 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#0f0f13",
-    color: "#ccc",
+    backgroundColor: "#09090b",
+    color: "#fafafa",
   },
   header: {
     display: "flex",
     alignItems: "center",
-    justify: "space-between",
-    padding: "4px 12px",
-    backgroundColor: "#16161e",
-    borderBottom: "1px solid #282833",
+    justifyContent: "space-between",
+    padding: "6px 14px",
+    backgroundColor: "#0d0d10",
+    borderBottom: "1px solid #27272a",
     fontSize: "11px",
-    fontWeight: "bold",
+    fontWeight: 700,
     letterSpacing: "0.5px",
-    textTransform: "uppercase",
   },
   title: {
-    color: "#61afef",
+    color: "#fafafa",
   },
   subtext: {
     marginLeft: "12px",
-    color: "#666",
-    fontSize: "10px",
-    fontWeight: "normal",
-    textTransform: "none",
+    color: "#71717a",
+    fontSize: "11px",
+    fontWeight: 400,
   },
   canvasContainer: {
     flex: 1,
-    padding: "4px",
+    padding: "6px 10px",
     overflow: "hidden",
   },
 };

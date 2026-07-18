@@ -1,11 +1,3 @@
-/**
- * Atlas Editor — Live Dependency Impact Panel
- *
- * Fires computeImpact() on cursor move (debounced).
- * Works with ZERO AI plugin loaded — this is a key differentiator.
- * Uses the IPC bridge via window.atlasAPI.
- */
-
 import { useState, useEffect, useCallback } from "react";
 import type { ImpactResult } from "@atlas/core";
 
@@ -22,17 +14,17 @@ type ImpactState =
   | { status: "no-graph" };
 
 const RISK_COLORS: Record<string, string> = {
-  low: "#a9dc76",
-  medium: "#ffd866",
-  high: "#fc9867",
-  critical: "#ff6188",
+  low: "#4ade80",
+  medium: "#facc15",
+  high: "#fb923c",
+  critical: "#f87171",
 };
 
 const RISK_LABELS: Record<string, string> = {
-  low: "● LOW",
-  medium: "◆ MEDIUM",
-  high: "▲ HIGH",
-  critical: "✖ CRITICAL",
+  low: "[LOW RISK]",
+  medium: "[MEDIUM RISK]",
+  high: "[HIGH RISK]",
+  critical: "[CRITICAL RISK]",
 };
 
 export function ImpactPanel({ filePath, symbolName }: ImpactPanelProps) {
@@ -69,7 +61,6 @@ export function ImpactPanel({ filePath, symbolName }: ImpactPanelProps) {
     }
   }, [filePath, symbolName]);
 
-  // Recompute on file/symbol change (debounced by parent)
   useEffect(() => {
     compute();
   }, [compute]);
@@ -77,56 +68,44 @@ export function ImpactPanel({ filePath, symbolName }: ImpactPanelProps) {
   return (
     <div style={styles.panel}>
       <div style={styles.header}>
-        <span style={styles.headerTitle}>⚡ Impact</span>
-        {state.status === "loading" && (
-          <span style={styles.loadingDot}>●</span>
-        )}
+        <span style={styles.headerTitle}>DEPENDENCY IMPACT</span>
+        {state.status === "loading" && <span style={styles.loadingDot}>...</span>}
       </div>
 
       {state.status === "idle" && (
-        <p style={styles.hint}>Open a file to see dependency impact</p>
+        <p style={styles.hint}>Open a file to inspect dependency impact</p>
       )}
 
       {state.status === "no-graph" && (
         <p style={styles.hint}>Run atlas init to enable impact analysis</p>
       )}
 
-      {state.status === "loading" && (
-        <p style={styles.hint}>Computing...</p>
-      )}
+      {state.status === "loading" && <p style={styles.hint}>Computing impact graph...</p>}
 
       {state.status === "error" && (
-        <p style={{ ...styles.hint, color: "#ff6188" }}>{state.message}</p>
+        <p style={{ ...styles.hint, color: "#f87171" }}>{state.message}</p>
       )}
 
-      {state.status === "ready" && (
-        <ImpactDisplay result={state.result} />
-      )}
+      {state.status === "ready" && <ImpactDisplay result={state.result} />}
     </div>
   );
 }
 
 function ImpactDisplay({ result }: { result: ImpactResult }) {
-  const riskColor = RISK_COLORS[result.riskLevel] ?? "#cdd6f4";
+  const riskColor = RISK_COLORS[result.riskLevel] ?? "#fafafa";
   const riskLabel = RISK_LABELS[result.riskLevel] ?? result.riskLevel.toUpperCase();
 
   return (
     <div>
       {/* Risk badge */}
-      <div style={{ ...styles.riskBadge, color: riskColor }}>
-        {riskLabel}
-      </div>
+      <div style={{ ...styles.riskBadge, color: riskColor }}>{riskLabel}</div>
 
       {/* Metrics */}
       <div style={styles.metrics}>
         <Metric label="Affected files" value={result.affectedFiles.length} />
         <Metric label="Tests affected" value={result.affectedTestFiles.length} />
         <Metric label="API endpoints" value={result.affectedApiEndpoints.length} />
-        <Metric
-          label="Computed in"
-          value={`${result.computedInMs.toFixed(0)}ms`}
-          mono
-        />
+        <Metric label="Computed in" value={`${result.computedInMs.toFixed(0)}ms`} mono />
       </div>
 
       {/* Rationale */}
@@ -144,7 +123,7 @@ function ImpactDisplay({ result }: { result: ImpactResult }) {
                 <span
                   style={{
                     ...styles.fileBadge,
-                    color: isTest ? "#8be9fd" : isApi ? "#bd93f9" : "#6272a4",
+                    color: isTest ? "#38bdf8" : isApi ? "#c084fc" : "#71717a",
                   }}
                 >
                   {isTest ? "test" : isApi ? "api" : "src"}
@@ -178,120 +157,112 @@ function Metric({
   return (
     <div style={styles.metric}>
       <span style={styles.metricValue}>
-        {mono ? (
-          <code style={{ fontFamily: "monospace", fontSize: 12 }}>{value}</code>
-        ) : (
-          value
-        )}
+        {mono ? <code style={{ fontFamily: "monospace", fontSize: 13 }}>{value}</code> : value}
       </span>
       <span style={styles.metricLabel}>{label}</span>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles (inline, no CSS files needed for this panel)
-// ---------------------------------------------------------------------------
-
 const styles: Record<string, React.CSSProperties> = {
   panel: {
-    padding: "12px",
+    padding: "14px",
     height: "100%",
     overflowY: "auto",
-    fontFamily: "'Inter', system-ui, sans-serif",
+    backgroundColor: "#0d0d10",
+    color: "#fafafa",
     fontSize: 12,
-    color: "#cdd6f4",
+    borderRight: "1px solid #27272a",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 14,
   },
   headerTitle: {
     fontWeight: 700,
     fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    color: "#7f849c",
+    letterSpacing: "0.8px",
+    color: "#fafafa",
   },
   loadingDot: {
-    color: "#89b4fa",
-    animation: "pulse 1s infinite",
+    color: "#fafafa",
   },
   hint: {
-    color: "#585b70",
-    fontStyle: "italic",
+    color: "#71717a",
+    fontSize: 12,
     marginTop: 8,
   },
   riskBadge: {
-    fontWeight: 800,
-    fontSize: 13,
-    letterSpacing: "0.05em",
-    marginBottom: 12,
+    fontWeight: 700,
+    fontSize: 12,
+    letterSpacing: "0.5px",
+    marginBottom: 14,
   },
   metrics: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   metric: {
-    background: "#1e1e2e",
+    background: "#18181b",
+    border: "1px solid #27272a",
     borderRadius: 6,
-    padding: "8px 10px",
+    padding: "10px",
     display: "flex",
-    flexDirection: "column" as const,
-    gap: 2,
+    flexDirection: "column",
+    gap: 4,
   },
   metricValue: {
     fontSize: 18,
     fontWeight: 700,
-    color: "#cdd6f4",
+    color: "#fafafa",
   },
   metricLabel: {
     fontSize: 10,
-    color: "#6272a4",
+    color: "#71717a",
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.5px",
   },
   rationale: {
-    color: "#7f849c",
-    marginBottom: 12,
+    color: "#a1a1aa",
+    marginBottom: 14,
     lineHeight: 1.5,
   },
   fileList: {
-    marginTop: 8,
+    marginTop: 10,
   },
   fileListHeader: {
     fontSize: 10,
     fontWeight: 700,
-    color: "#44415a",
-    letterSpacing: "0.1em",
-    marginBottom: 6,
+    color: "#71717a",
+    letterSpacing: "0.8px",
+    marginBottom: 8,
   },
   fileItem: {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    padding: "2px 0",
+    padding: "4px 0",
   },
   fileBadge: {
     fontSize: 9,
     fontWeight: 700,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    letterSpacing: "0.5px",
     minWidth: 28,
   },
   filePath: {
-    color: "#7f849c",
+    color: "#a1a1aa",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
   moreFiles: {
-    color: "#44415a",
-    fontStyle: "italic",
-    marginTop: 4,
+    color: "#71717a",
+    fontSize: 11,
+    marginTop: 6,
   },
 };

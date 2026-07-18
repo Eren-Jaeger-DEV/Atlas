@@ -173,11 +173,14 @@ ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: stri
   if (terminalProcesses.has(termId)) return { success: true };
 
   const targetCwd = cwd || global.__atlasRepoRoot || process.cwd();
-  const defaultShell = process.platform === "win32" ? "powershell.exe" : "bash";
+  const isWin = process.platform === "win32";
+  const defaultShell = isWin ? "cmd.exe" : "bash";
+  const shellArgs = isWin ? ["/k"] : [];
 
-  const proc = spawn(defaultShell, [], {
+  const proc = spawn(defaultShell, shellArgs, {
     cwd: targetCwd,
     env: process.env,
+    shell: true,
   });
 
   terminalProcesses.set(termId, proc);

@@ -12,7 +12,7 @@ export function DiffViewer({ filePath, diffText, onClose }: DiffViewerProps) {
       <div style={styles.header}>
         <span style={styles.title}>Diff: {filePath}</span>
         <button style={styles.closeButton} onClick={onClose}>
-          ✕ Close Diff
+          Close Diff
         </button>
       </div>
       <div style={styles.diffBody}>
@@ -43,29 +43,29 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#101014",
-    color: "#ccc",
-    fontFamily: "Consolas, 'Courier New', monospace",
+    backgroundColor: "#09090b",
+    color: "#fafafa",
+    fontFamily: "'JetBrains Mono', Consolas, monospace",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "8px 12px",
-    backgroundColor: "#16161e",
-    borderBottom: "1px solid #282833",
+    padding: "8px 14px",
+    backgroundColor: "#0d0d10",
+    borderBottom: "1px solid #27272a",
   },
   title: {
     fontSize: "12px",
-    fontWeight: "bold",
-    color: "#61afef",
+    fontWeight: 600,
+    color: "#fafafa",
   },
   closeButton: {
-    background: "#282833",
-    border: "none",
-    color: "#ccc",
-    padding: "4px 8px",
-    borderRadius: "3px",
+    background: "#18181b",
+    border: "1px solid #27272a",
+    color: "#fafafa",
+    padding: "4px 10px",
+    borderRadius: "4px",
     cursor: "pointer",
     fontSize: "11px",
   },
@@ -76,44 +76,44 @@ const styles: Record<string, React.CSSProperties> = {
   },
   lineNormal: {
     display: "flex",
-    padding: "1px 8px",
+    padding: "2px 12px",
     fontSize: "12px",
-    color: "#abb2bf",
+    color: "#a1a1aa",
   },
   lineAdd: {
     display: "flex",
-    padding: "1px 8px",
+    padding: "2px 12px",
     fontSize: "12px",
-    backgroundColor: "#1e3a1e",
-    color: "#98c379",
+    backgroundColor: "rgba(34, 197, 94, 0.15)",
+    color: "#4ade80",
   },
   lineDel: {
     display: "flex",
-    padding: "1px 8px",
+    padding: "2px 12px",
     fontSize: "12px",
-    backgroundColor: "#3a1e1e",
-    color: "#e06c75",
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    color: "#f87171",
   },
   lineHeader: {
     display: "flex",
-    padding: "1px 8px",
+    padding: "2px 12px",
     fontSize: "12px",
-    backgroundColor: "#1e2a3a",
-    color: "#61afef",
+    backgroundColor: "#18181b",
+    color: "#e4e4e7",
   },
   lineNumber: {
     width: "40px",
-    color: "#5c6370",
+    color: "#71717a",
     textAlign: "right",
-    paddingRight: "12px",
+    paddingRight: "14px",
     userSelect: "none",
   },
   lineContent: {
     whiteSpace: "pre-wrap",
   },
   noDiff: {
-    padding: "16px",
-    color: "#5c6370",
+    padding: "20px",
+    color: "#71717a",
     fontSize: "12px",
   },
 };
