@@ -10,7 +10,7 @@
  * which then delegates to the agent runtime subprocess.
  */
 
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net } from "electron";
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Menu } from "electron";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
@@ -75,6 +75,124 @@ function createWindow(): void {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  // Build native application menu
+  buildApplicationMenu();
+}
+
+// ---------------------------------------------------------------------------
+// Native Application Menu
+// ---------------------------------------------------------------------------
+
+function buildApplicationMenu(): void {
+  const sendToRenderer = (channel: string, ...args: unknown[]) => {
+    mainWindow?.webContents.send(channel, ...args);
+  };
+
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: "File",
+      submenu: [
+        { label: "Open Folder...",           accelerator: "CmdOrCtrl+O",         click: () => sendToRenderer("menu:open-folder") },
+        { type: "separator" },
+        { label: "New File",                 accelerator: "CmdOrCtrl+N",         click: () => sendToRenderer("menu:new-file") },
+        { label: "Save",                     accelerator: "CmdOrCtrl+S",         click: () => sendToRenderer("menu:save") },
+        { label: "Save All",                 accelerator: "CmdOrCtrl+Shift+S",   click: () => sendToRenderer("menu:save-all") },
+        { type: "separator" },
+        { label: "Close Editor Tab",         accelerator: "CmdOrCtrl+W",         click: () => sendToRenderer("menu:close-tab") },
+        { type: "separator" },
+        { role: "quit",                      label: "Exit" },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+        { type: "separator" },
+        { label: "Find",                     accelerator: "CmdOrCtrl+F",         click: () => sendToRenderer("menu:find") },
+        { label: "Replace",                  accelerator: "CmdOrCtrl+H",         click: () => sendToRenderer("menu:replace") },
+      ],
+    },
+    {
+      label: "Selection",
+      submenu: [
+        { label: "Select All",               accelerator: "CmdOrCtrl+A",         click: () => sendToRenderer("menu:select-all") },
+        { label: "Expand Selection",         accelerator: "Shift+Alt+Right",     click: () => sendToRenderer("menu:expand-selection") },
+        { label: "Shrink Selection",         accelerator: "Shift+Alt+Left",      click: () => sendToRenderer("menu:shrink-selection") },
+        { type: "separator" },
+        { label: "Add Cursor Above",         accelerator: "CmdOrCtrl+Alt+Up",    click: () => sendToRenderer("menu:cursor-above") },
+        { label: "Add Cursor Below",         accelerator: "CmdOrCtrl+Alt+Down",  click: () => sendToRenderer("menu:cursor-below") },
+      ],
+    },
+    {
+      label: "View",
+      submenu: [
+        { label: "Command Palette",          accelerator: "CmdOrCtrl+Shift+P",   click: () => sendToRenderer("menu:command-palette") },
+        { type: "separator" },
+        { label: "Explorer",                 accelerator: "CmdOrCtrl+Shift+E",   click: () => sendToRenderer("menu:show-explorer") },
+        { label: "Source Control",           accelerator: "CmdOrCtrl+Shift+G",   click: () => sendToRenderer("menu:show-git") },
+        { label: "Impact Graph",             accelerator: "CmdOrCtrl+Shift+I",   click: () => sendToRenderer("menu:show-impact") },
+        { label: "Atlas AI Chat",            accelerator: "CmdOrCtrl+L",         click: () => sendToRenderer("menu:toggle-ai-sidebar") },
+        { type: "separator" },
+        { label: "Settings",                 accelerator: "CmdOrCtrl+Comma",     click: () => sendToRenderer("menu:open-settings") },
+        { type: "separator" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { role: "resetZoom" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+        { label: "Toggle DevTools",          accelerator: "F12",                 click: () => mainWindow?.webContents.toggleDevTools() },
+      ],
+    },
+    {
+      label: "Go",
+      submenu: [
+        { label: "Go to File...",            accelerator: "CmdOrCtrl+P",         click: () => sendToRenderer("menu:goto-file") },
+        { label: "Go to Line...",            accelerator: "CmdOrCtrl+G",         click: () => sendToRenderer("menu:goto-line") },
+        { label: "Go to Symbol...",          accelerator: "CmdOrCtrl+Shift+O",   click: () => sendToRenderer("menu:goto-symbol") },
+        { type: "separator" },
+        { label: "Back",                     accelerator: "Alt+Left",            click: () => sendToRenderer("menu:go-back") },
+        { label: "Forward",                  accelerator: "Alt+Right",           click: () => sendToRenderer("menu:go-forward") },
+      ],
+    },
+    {
+      label: "Run",
+      submenu: [
+        { label: "Run Atlas Agent",          accelerator: "F5",                  click: () => sendToRenderer("menu:run-agent") },
+        { label: "Stop Agent",               accelerator: "Shift+F5",            click: () => sendToRenderer("menu:stop-agent") },
+        { type: "separator" },
+        { label: "Open Terminal",            accelerator: "CmdOrCtrl+Grave",     click: () => sendToRenderer("menu:toggle-terminal") },
+      ],
+    },
+    {
+      label: "Terminal",
+      submenu: [
+        { label: "New Terminal",             accelerator: "CmdOrCtrl+Shift+Grave", click: () => sendToRenderer("menu:new-terminal") },
+        { label: "Toggle Terminal",          accelerator: "CmdOrCtrl+Grave",     click: () => sendToRenderer("menu:toggle-terminal") },
+        { type: "separator" },
+        { label: "Split Terminal",                                               click: () => sendToRenderer("menu:split-terminal") },
+        { label: "Kill Terminal",                                                click: () => sendToRenderer("menu:kill-terminal") },
+      ],
+    },
+    {
+      label: "Help",
+      submenu: [
+        { label: "Atlas Studio Documentation", click: () => shell.openExternal("https://github.com/Eren-Jaeger-DEV/Atlas") },
+        { label: "Report Issue",               click: () => shell.openExternal("https://github.com/Eren-Jaeger-DEV/Atlas/issues") },
+        { type: "separator" },
+        { label: "About Atlas Studio",                                          click: () => sendToRenderer("menu:show-about") },
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(menu);
 }
 
 // ---------------------------------------------------------------------------

@@ -258,41 +258,82 @@ export function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Subscribe to native Electron menu bar actions
+  useEffect(() => {
+    const api = (window as any).atlasAPI;
+    if (!api?.onMenuAction) return;
+    const unsub = api.onMenuAction((action: string) => {
+      switch (action) {
+        case "menu:open-folder":       handleSelectRepo(); break;
+        case "menu:command-palette":   setShowCommandPalette(true); break;
+        case "menu:show-explorer":     setActiveSidebar("explorer"); break;
+        case "menu:show-git":          setActiveSidebar("git"); break;
+        case "menu:show-impact":       setActiveSidebar("impact"); break;
+        case "menu:toggle-ai-sidebar": setShowRightAiSidebar((p) => !p); break;
+        case "menu:open-settings":     setActiveSidebar("settings"); break;
+        case "menu:toggle-terminal":   setShowBottomPanel((p) => !p); break;
+        case "menu:new-terminal":      setShowBottomPanel(true); setBottomTab("terminal"); break;
+        case "menu:close-tab":         setTabs((p) => p.filter((_, i) => i !== activeTabIndex)); break;
+        default: break;
+      }
+    });
+    return unsub;
+  }, [activeTabIndex]);
+
   return (
     <div style={styles.root}>
-      {/* Top Header Bar */}
+      {/* VS Code-style Title Bar */}
       <header style={styles.topBar}>
         <div style={styles.logo}>
           <img src={logoImg} alt="Atlas Studio" style={styles.logoImg} />
           <span style={styles.logoAtlas}>ATLAS</span>
           <span style={styles.logoStudio}>STUDIO</span>
         </div>
-        <div style={styles.workspaceInfo}>
-          <button style={styles.openRepoButton} onClick={handleSelectRepo}>
+
+        <div style={styles.centerBar}>
+          <button style={styles.workspaceBtn} onClick={handleSelectRepo}>
             {repoPath ? repoPath.split(/[/\\]/).pop() : "Open Workspace Folder"}
           </button>
         </div>
+
         <div style={styles.topControls}>
-          <button
-            style={{ ...styles.dockToggle, ...(showRightAiSidebar ? styles.dockToggleActive : {}) }}
-            onClick={() => setShowRightAiSidebar((prev) => !prev)}
-            title="Toggle Atlas AI Chat Panel (Ctrl+L)"
-          >
-            Atlas AI
+          {/* Search */}
+          <button style={styles.iconBtn} title="Search (Ctrl+F)" onClick={() => setShowCommandPalette(true)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
           </button>
-          <button
-            style={styles.commandPaletteBtn}
-            onClick={() => setShowCommandPalette(true)}
-            title="Command Palette (Ctrl+Shift+P)"
-          >
-            Command Palette
+          {/* Source Control */}
+          <button style={styles.iconBtn} title="Source Control (Ctrl+Shift+G)" onClick={() => setActiveSidebar("git")}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
+            </svg>
           </button>
+          {/* Layout panels toggle */}
           <button
-            style={{ ...styles.dockToggle, ...(showBottomPanel ? styles.dockToggleActive : {}) }}
-            onClick={() => setShowBottomPanel((prev) => !prev)}
+            style={{ ...styles.iconBtn, ...(showBottomPanel ? styles.iconBtnActive : {}) }}
             title="Toggle Terminal Panel"
+            onClick={() => setShowBottomPanel((p) => !p)}
           >
-            Terminal
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="15" x2="21" y2="15" />
+            </svg>
+          </button>
+          {/* AI sidebar toggle */}
+          <button
+            style={{ ...styles.iconBtn, ...(showRightAiSidebar ? styles.iconBtnActive : {}) }}
+            title="Toggle Atlas AI Chat (Ctrl+L)"
+            onClick={() => setShowRightAiSidebar((p) => !p)}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" />
+            </svg>
+          </button>
+          {/* Settings */}
+          <button style={styles.iconBtn} title="Settings (Ctrl+,)" onClick={() => setActiveSidebar("settings")}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
           </button>
         </div>
       </header>
@@ -521,10 +562,11 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     height: "38px",
-    padding: "0 14px",
+    padding: "0 10px",
     backgroundColor: "#0d0d10",
     borderBottom: "1px solid #27272a",
     fontSize: "12px",
+    position: "relative" as const,
   },
   logo: {
     display: "flex",
@@ -549,43 +591,47 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#71717a",
     marginLeft: "5px",
   },
-  workspaceInfo: {
+  centerBar: {
     display: "flex",
     alignItems: "center",
+    position: "absolute" as const,
+    left: "50%",
+    transform: "translateX(-50%)",
   },
-  openRepoButton: {
+  workspaceBtn: {
     background: "#18181b",
     border: "1px solid #27272a",
     color: "#e4e4e7",
-    padding: "4px 12px",
+    padding: "4px 16px",
     borderRadius: "4px",
-    fontSize: "11px",
+    fontSize: "12px",
     cursor: "pointer",
     fontWeight: 500,
+    maxWidth: "260px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const,
   },
   topControls: {
     display: "flex",
-    gap: "8px",
+    gap: "2px",
+    alignItems: "center",
   },
-  commandPaletteBtn: {
-    background: "#18181b",
-    border: "1px solid #27272a",
-    color: "#fafafa",
+  iconBtn: {
+    width: "30px",
+    height: "30px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "transparent",
+    border: "none",
     borderRadius: "4px",
-    padding: "4px 10px",
-    fontSize: "11px",
+    color: "#a1a1aa",
     cursor: "pointer",
-    fontWeight: 500,
   },
-  dockToggle: {
-    background: "#18181b",
-    border: "1px solid #27272a",
+  iconBtnActive: {
+    background: "#27272a",
     color: "#fafafa",
-    borderRadius: "4px",
-    padding: "4px 10px",
-    fontSize: "11px",
-    cursor: "pointer",
-    fontWeight: 500,
   },
   dockToggleActive: {
     background: "#27272a",

@@ -83,4 +83,25 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.on("atlas:event", (_ipcEvent, event) => handler(event));
     return () => ipcRenderer.removeAllListeners("atlas:event");
   },
+
+  // Native menu action bridge
+  onMenuAction: (handler: (action: string) => void) => {
+    const channels = [
+      "menu:open-folder", "menu:new-file", "menu:save", "menu:save-all",
+      "menu:close-tab", "menu:find", "menu:replace", "menu:select-all",
+      "menu:command-palette", "menu:show-explorer", "menu:show-git",
+      "menu:show-impact", "menu:toggle-ai-sidebar", "menu:open-settings",
+      "menu:goto-file", "menu:goto-line", "menu:goto-symbol",
+      "menu:go-back", "menu:go-forward", "menu:run-agent", "menu:stop-agent",
+      "menu:toggle-terminal", "menu:new-terminal", "menu:split-terminal",
+      "menu:kill-terminal", "menu:show-about",
+    ];
+    const listeners: Array<() => void> = channels.map((ch) => {
+      const fn = () => handler(ch);
+      ipcRenderer.on(ch, fn);
+      return () => ipcRenderer.removeListener(ch, fn);
+    });
+    return () => listeners.forEach((off) => off());
+  },
 });
+
