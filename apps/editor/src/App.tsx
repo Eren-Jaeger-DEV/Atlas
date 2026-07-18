@@ -16,6 +16,8 @@ interface EditorTab { filePath: string; content: string; language: string; isDir
 type SidebarView = "explorer" | "git" | "impact" | "ai" | "settings";
 type BottomTab = "terminal" | "output" | "ai";
 
+const api = () => (window as any).atlasAPI;
+
 export function App() {
   const [repoPath, setRepoPath] = useState<string | undefined>();
   const [activeSidebar, setActiveSidebar] = useState<SidebarView>("explorer");
@@ -34,18 +36,18 @@ export function App() {
   const activeTab = tabs[activeTabIndex];
 
   const handleSelectRepo = async () => {
-    const api = (window as any).atlasAPI;
-    if (api?.selectDirectory) { const s = await api.selectDirectory(); if (s) setRepoPath(s); }
+    const a = api(); if (!a?.selectDirectory) return;
+    const sel = await a.selectDirectory();
+    if (sel) setRepoPath(sel);
   };
 
   const handleOpenFile = async (filePath: string) => {
     const ei = tabs.findIndex(t => t.filePath === filePath);
     if (ei >= 0) { setActiveDiff(null); setActiveTabIndex(ei); return; }
-    const api = (window as any).atlasAPI;
     let content = "";
-    if (api?.readFile) { try { content = await api.readFile(filePath); } catch { content = "// read error"; } }
-    const ext = filePath.split(".").pop() || "";
-    const lm: Record<string, string> = { ts:"typescript",tsx:"typescript",js:"javascript",jsx:"javascript",json:"json",py:"python",md:"markdown",html:"html",css:"css" };
+    try { content = await api()?.readFile(filePath) ?? ""; } catch { content = "// read error"; }
+    const ext = filePath.split(".").pop() ?? "";
+    const lm: Record<string,string> = {ts:"typescript",tsx:"typescript",js:"javascript",jsx:"javascript",json:"json",py:"python",md:"markdown",html:"html",css:"css"};
     setTabs(p => [...p, { filePath, content, language: lm[ext]||"plaintext", isDirty: false }]);
     setActiveDiff(null); setActiveTabIndex(tabs.length);
   };
@@ -57,20 +59,18 @@ export function App() {
   };
 
   const handleViewDiff = async (filePath: string, staged: boolean) => {
-    const api = (window as any).atlasAPI;
-    if (api?.gitDiff && repoPath) {
-      try { setActiveDiff({ filePath, diffText: await api.gitDiff(repoPath, filePath, staged) }); }
-      catch { setActiveDiff({ filePath, diffText: "Error" }); }
-    }
+    const a = api(); if (!a?.gitDiff || !repoPath) return;
+    try { setActiveDiff({ filePath, diffText: await a.gitDiff(repoPath, filePath, staged) }); }
+    catch { setActiveDiff({ filePath, diffText: "Error loading diff" }); }
   };
 
   const commands: CommandItem[] = [
-    { id:"open-settings", label:"Open Settings", shortcut:"Ctrl+,", action:()=>setActiveSidebar("settings") },
-    { id:"open-folder", label:"Open Workspace Folder", shortcut:"Ctrl+O", action:handleSelectRepo },
-    { id:"toggle-terminal", label:"Toggle Terminal", shortcut:"Ctrl+`", action:()=>setShowBottomPanel(p=>!p) },
-    { id:"show-explorer", label:"Explorer", shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
-    { id:"show-git", label:"Source Control", shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
-    { id:"toggle-ai", label:"Toggle AI Chat", shortcut:"Ctrl+L", action:()=>setShowRightAiSidebar(p=>!p) },
+    { id:"open-settings",   label:"Open Settings",        shortcut:"Ctrl+,",       action:()=>setActiveSidebar("settings") },
+    { id:"open-folder",     label:"Open Workspace Folder",shortcut:"Ctrl+O",       action:handleSelectRepo },
+    { id:"toggle-terminal", label:"Toggle Terminal",       shortcut:"Ctrl+`",       action:()=>setShowBottomPanel(p=>!p) },
+    { id:"show-explorer",   label:"Explorer",              shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
+    { id:"show-git",        label:"Source Control",        shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
+    { id:"toggle-ai",       label:"Toggle AI Chat",        shortcut:"Ctrl+L",       action:()=>setShowRightAiSidebar(p=>!p) },
   ];
 
   useEffect(() => {
@@ -79,42 +79,41 @@ export function App() {
       else if ((e.ctrlKey||e.metaKey)&&e.key===",") { e.preventDefault(); setActiveSidebar("settings"); }
       else if ((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="l") { e.preventDefault(); setShowRightAiSidebar(p=>!p); }
     };
-    window.addEventListener("keydown",h); return ()=>window.removeEventListener("keydown",h);
+    window.addEventListener("keydown",h);
+    return () => window.removeEventListener("keydown",h);
   }, []);
 
   useEffect(() => {
-    const api = (window as any).atlasAPI;
-    if (!api?.onMenuAction) return;
-    return api.onMenuAction((a: string) => {
-      if (a==="menu:open-folder") handleSelectRepo();
-      else if (a==="menu:command-palette") setShowCommandPalette(true);
-      else if (a==="menu:show-explorer") setActiveSidebar("explorer");
-      else if (a==="menu:show-git") setActiveSidebar("git");
-      else if (a==="menu:toggle-ai-sidebar") setShowRightAiSidebar(p=>!p);
-      else if (a==="menu:open-settings") setActiveSidebar("settings");
-      else if (a==="menu:toggle-terminal") setShowBottomPanel(p=>!p);
+    const a = api(); if (!a?.onMenuAction) return;
+    return a.onMenuAction((action: string) => {
+      if (action==="menu:open-folder") handleSelectRepo();
+      else if (action==="menu:command-palette") setShowCommandPalette(true);
+      else if (action==="menu:show-explorer") setActiveSidebar("explorer");
+      else if (action==="menu:show-git") setActiveSidebar("git");
+      else if (action==="menu:toggle-ai-sidebar") setShowRightAiSidebar(p=>!p);
+      else if (action==="menu:open-settings") setActiveSidebar("settings");
+      else if (action==="menu:toggle-terminal") setShowBottomPanel(p=>!p);
     });
   }, []);
 
   const wname = repoPath ? repoPath.split(/[/\\]/).pop() : undefined;
+  const ndrag: React.CSSProperties = { WebkitAppRegion: "no-drag" } as any;
 
   return (
     <div style={s.root}>
+      {/* Single merged titlebar + toolbar — draggable */}
       <header style={s.toolbar}>
-        <div style={s.tleft}>
+
+        {/* Left: logo + nav arrows (no-drag so clickable) */}
+        <div style={{ ...s.tleft, ...ndrag }}>
           <img src={logoImg} alt="Atlas" style={s.logoImg} />
           <span style={s.logoTxt}>ATLAS</span>
-          <div style={s.navGrp}>
-            <button style={s.navBtn} title="Go Back">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <button style={s.navBtn} title="Go Forward">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
+          <button style={s.navBtn} title="Back"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button style={s.navBtn} title="Forward"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg></button>
         </div>
 
-        <div style={s.tcenter}>
+        {/* Center: search bar (no-drag) */}
+        <div style={{ ...s.tcenter, ...ndrag }}>
           <button style={s.searchBar} onClick={()=>setShowCommandPalette(true)}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <span style={s.searchTxt}>{wname ?? "Search"}</span>
@@ -122,24 +121,38 @@ export function App() {
           </button>
         </div>
 
-        <div style={s.tright}>
+        {/* Right: layout toggles + settings + window controls (no-drag) */}
+        <div style={{ ...s.tright, ...ndrag }}>
           <button style={s.tbBtn} title="Toggle Explorer" onClick={()=>setActiveSidebar("explorer")}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
           </button>
           <button style={{...s.tbBtn,...(showBottomPanel?s.tbOn:{})}} title="Toggle Terminal" onClick={()=>setShowBottomPanel(p=>!p)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="3" y1="16" x2="21" y2="16"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="3" y1="16" x2="21" y2="16"/></svg>
           </button>
           <button style={{...s.tbBtn,...(showRightAiSidebar?s.tbOn:{})}} title="Toggle AI Chat (Ctrl+L)" onClick={()=>setShowRightAiSidebar(p=>!p)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
           </button>
-          <div style={s.tbDiv}/>
           <button style={s.tbBtn} title="Settings (Ctrl+,)" onClick={()=>setActiveSidebar("settings")}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
           </button>
+          {/* Window controls */}
+          <div style={s.winCtrlGroup}>
+            <button style={s.winBtn} title="Minimize" onClick={()=>api()?.windowMinimize()}>
+              <svg width="10" height="1" viewBox="0 0 10 1"><line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" strokeWidth="1.2"/></svg>
+            </button>
+            <button style={s.winBtn} title="Maximize" onClick={()=>api()?.windowMaximize()}>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.6" y="0.6" width="8.8" height="8.8" rx="0.5" stroke="currentColor" strokeWidth="1.2"/></svg>
+            </button>
+            <button style={{...s.winBtn,...s.winClose}} title="Close" onClick={()=>api()?.windowClose()}>
+              <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.3"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.3"/></svg>
+            </button>
+          </div>
         </div>
       </header>
 
+      {/* Body */}
       <div style={s.body}>
+        {/* Activity Bar */}
         <nav style={s.actBar}>
           <div style={s.actTop}>
             {([
@@ -161,27 +174,30 @@ export function App() {
           </div>
         </nav>
 
+        {/* Left Sidebar */}
         <aside style={s.sidebar}>
           {activeSidebar==="explorer" && <FileExplorer repoPath={repoPath} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo}/>}
           {activeSidebar==="git" && <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff}/>}
           {activeSidebar==="impact" && <ImpactPanel filePath={activeTab?.filePath} symbolName={cursorSymbol}/>}
           {activeSidebar==="ai" && (
             <div style={s.agentPane}>
-              <div style={s.paneHdr}>ATLAS AI AGENT</div>
+              <p style={s.paneHdr}>ATLAS AI AGENT</p>
               <textarea style={s.agentArea} placeholder="Describe task..." value={aiGoal} onChange={e=>setAiGoal(e.target.value)}/>
-              <button style={s.agentBtn} onClick={async()=>{
+              <button style={s.agentBtn} disabled={aiRunning} onClick={async()=>{
                 if(!aiGoal.trim()||!repoPath) return;
-                const api=(window as any).atlasAPI;
-                if(api?.runAgent){ setAiRunning(true); setAiEvents(["Agent initialized..."]);
-                  try { const r=await api.runAgent(aiGoal,repoPath); setAiEvents(p=>[...p,r.error?`[FAIL] ${r.error}`:"[PASS] Done"]); }
-                  catch(e){ setAiEvents(p=>[...p,`[FAIL] ${e}`]); } finally { setAiRunning(false); } }
-              }} disabled={aiRunning}>{aiRunning?"Running...":"Run Agent"}</button>
+                const a=api(); if(!a?.runAgent) return;
+                setAiRunning(true); setAiEvents(["Agent initialized..."]);
+                try { const r=await a.runAgent(aiGoal,repoPath); setAiEvents(p=>[...p,r.error?`[FAIL] ${r.error}`:"[PASS] Done"]); }
+                catch(e){ setAiEvents(p=>[...p,`[FAIL] ${e}`]); } finally { setAiRunning(false); }
+              }}>{aiRunning?"Running...":"Run Agent"}</button>
             </div>
           )}
           {activeSidebar==="settings" && <SettingsPanel settings={settings} onUpdateSettings={setSettings}/>}
         </aside>
 
+        {/* Center */}
         <div style={s.center}>
+          {/* Tabs */}
           <div style={s.tabBar}>
             {tabs.map((tab,i)=>(
               <div key={tab.filePath} style={{...s.tab,...(i===activeTabIndex&&!activeDiff?s.tabOn:{})}} onClick={()=>{setActiveDiff(null);setActiveTabIndex(i);}}>
@@ -225,7 +241,7 @@ export function App() {
               <div style={s.dockContent}>
                 {bottomTab==="terminal" && <TerminalPanel repoPath={repoPath}/>}
                 {bottomTab==="output" && <div style={s.log}><p style={s.logLine}>[PASS] Ready.{repoPath&&` Workspace: ${repoPath}`}</p></div>}
-                {bottomTab==="ai" && <div style={s.log}>{aiEvents.length===0?<p style={s.logDim}>No agent runs.</p>:aiEvents.map((e,i)=><p key={i} style={s.logLine}>{e}</p>)}</div>}
+                {bottomTab==="ai" && <div style={s.log}>{aiEvents.length===0?<p style={s.logDim}>No runs.</p>:aiEvents.map((e,i)=><p key={i} style={s.logLine}>{e}</p>)}</div>}
               </div>
             </div>
           )}
@@ -241,55 +257,78 @@ export function App() {
 }
 
 const s: Record<string,React.CSSProperties> = {
-  root:{display:"flex",flexDirection:"column",height:"100vh",width:"100vw",backgroundColor:"#09090b",color:"#fafafa",fontFamily:"Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",overflow:"hidden"},
-  toolbar:{display:"flex",alignItems:"center",justifyContent:"space-between",height:"40px",padding:"0 8px",backgroundColor:"#0d0d10",borderBottom:"1px solid #27272a",position:"relative" as const},
+  root:{display:"flex",flexDirection:"column",height:"100vh",width:"100vw",backgroundColor:"#09090b",color:"#fafafa",fontFamily:"Inter,-apple-system,'Segoe UI',sans-serif",overflow:"hidden"},
+
+  // Single toolbar — draggable
+  toolbar:{
+    display:"flex",alignItems:"center",justifyContent:"space-between",
+    height:"40px",padding:"0 0 0 8px",
+    backgroundColor:"#0d0d10",borderBottom:"1px solid #27272a",
+    position:"relative" as const,
+    WebkitAppRegion:"drag",
+    flexShrink:0,
+  } as any,
+
   tleft:{display:"flex",alignItems:"center",gap:"6px",flexShrink:0},
-  logoImg:{width:"20px",height:"20px",objectFit:"contain"},
-  logoTxt:{fontSize:"12px",fontWeight:800,letterSpacing:"1.5px",color:"#fafafa"},
-  navGrp:{display:"flex",gap:"1px",marginLeft:"4px"},
-  navBtn:{width:"26px",height:"26px",display:"flex",alignItems:"center",justifyContent:"center",background:"none",border:"none",borderRadius:"4px",color:"#71717a",cursor:"pointer"},
+  logoImg:{width:"18px",height:"18px",objectFit:"contain",flexShrink:0},
+  logoTxt:{fontSize:"11px",fontWeight:800,letterSpacing:"1.5px",color:"#fafafa",whiteSpace:"nowrap"},
+  navBtn:{width:"24px",height:"24px",display:"flex",alignItems:"center",justifyContent:"center",background:"none",border:"none",borderRadius:"3px",color:"#52525b",cursor:"pointer"},
+
   tcenter:{position:"absolute" as const,left:"50%",transform:"translateX(-50%)"},
-  searchBar:{display:"flex",alignItems:"center",gap:"8px",backgroundColor:"#18181b",border:"1px solid #3f3f46",borderRadius:"6px",padding:"5px 14px",cursor:"pointer",width:"320px",color:"#fafafa"},
-  searchTxt:{flex:1,fontSize:"12px",color:"#a1a1aa",textAlign:"left" as const},
-  kbdHint:{fontSize:"10px",color:"#71717a",backgroundColor:"#27272a",border:"1px solid #3f3f46",borderRadius:"3px",padding:"1px 5px",fontFamily:"inherit"},
-  tright:{display:"flex",alignItems:"center",gap:"2px",flexShrink:0},
-  tbBtn:{width:"30px",height:"30px",display:"flex",alignItems:"center",justifyContent:"center",background:"none",border:"none",borderRadius:"4px",color:"#71717a",cursor:"pointer"},
-  tbOn:{color:"#fafafa",backgroundColor:"#27272a"},
-  tbDiv:{width:"1px",height:"16px",backgroundColor:"#27272a",margin:"0 4px"},
+  searchBar:{display:"flex",alignItems:"center",gap:"8px",backgroundColor:"#18181b",border:"1px solid #3f3f46",borderRadius:"5px",padding:"4px 12px",cursor:"pointer",width:"280px",color:"#fafafa"},
+  searchTxt:{flex:1,fontSize:"12px",color:"#71717a",textAlign:"left" as const,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},
+  kbdHint:{fontSize:"10px",color:"#52525b",backgroundColor:"#27272a",border:"1px solid #3f3f46",borderRadius:"3px",padding:"1px 5px",fontFamily:"inherit",flexShrink:0},
+
+  tright:{display:"flex",alignItems:"center",gap:"1px",flexShrink:0},
+  tbBtn:{width:"28px",height:"28px",display:"flex",alignItems:"center",justifyContent:"center",background:"none",border:"none",borderRadius:"3px",color:"#71717a",cursor:"pointer"},
+  tbOn:{color:"#fafafa",backgroundColor:"rgba(255,255,255,0.08)"},
+
+  // Window controls
+  winCtrlGroup:{display:"flex",marginLeft:"8px"},
+  winBtn:{width:"46px",height:"40px",display:"flex",alignItems:"center",justifyContent:"center",background:"none",border:"none",color:"#71717a",cursor:"pointer"},
+  winClose:{"&:hover":{backgroundColor:"#c42b1c"}} as any,
+
   body:{display:"flex",flex:1,overflow:"hidden"},
-  actBar:{width:"56px",backgroundColor:"#09090b",borderRight:"1px solid #27272a",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"6px",paddingBottom:"6px"},
-  actTop:{display:"flex",flexDirection:"column",gap:"2px",alignItems:"center"},
+
+  actBar:{width:"52px",backgroundColor:"#09090b",borderRight:"1px solid #27272a",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"4px",paddingBottom:"4px"},
+  actTop:{display:"flex",flexDirection:"column",gap:"1px",alignItems:"center"},
   actBot:{display:"flex",flexDirection:"column",alignItems:"center"},
-  actBtn:{width:"52px",padding:"8px 0",border:"none",background:"transparent",color:"#71717a",cursor:"pointer",display:"flex",flexDirection:"column" as const,alignItems:"center",gap:"3px",borderRadius:"4px"},
+  actBtn:{width:"52px",padding:"7px 0",border:"none",background:"transparent",color:"#52525b",cursor:"pointer",display:"flex",flexDirection:"column" as const,alignItems:"center",gap:"3px",borderRadius:"0"},
   actOn:{color:"#fafafa",borderLeft:"2px solid #fafafa"},
-  actLbl:{fontSize:"9px",fontWeight:600,letterSpacing:"0.3px",textAlign:"center" as const},
-  sidebar:{width:"260px",backgroundColor:"#0d0d10",display:"flex",flexDirection:"column",borderRight:"1px solid #27272a"},
+  actLbl:{fontSize:"9px",fontWeight:600,letterSpacing:"0.2px",textAlign:"center" as const},
+
+  sidebar:{width:"260px",backgroundColor:"#0d0d10",display:"flex",flexDirection:"column",borderRight:"1px solid #27272a",overflow:"hidden"},
   center:{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",backgroundColor:"#121215"},
-  tabBar:{display:"flex",height:"35px",backgroundColor:"#09090b",borderBottom:"1px solid #27272a",overflowX:"auto"},
-  tab:{display:"flex",alignItems:"center",gap:"6px",padding:"0 12px",minWidth:"100px",maxWidth:"180px",backgroundColor:"#0d0d10",borderRight:"1px solid #27272a",color:"#71717a",fontSize:"12px",cursor:"pointer",borderTop:"2px solid transparent",userSelect:"none"},
+
+  tabBar:{display:"flex",height:"35px",backgroundColor:"#09090b",borderBottom:"1px solid #27272a",overflowX:"auto" as const},
+  tab:{display:"flex",alignItems:"center",gap:"5px",padding:"0 12px",minWidth:"90px",maxWidth:"180px",backgroundColor:"#0d0d10",borderRight:"1px solid #27272a",color:"#71717a",fontSize:"12px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0},
   tabOn:{backgroundColor:"#121215",color:"#fafafa",borderTop:"2px solid #fafafa"},
   tabName:{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:500},
-  tabDot:{color:"#e4e4e7",fontSize:"14px"},
-  tabX:{fontSize:"14px",opacity:0.5,padding:"0 2px"},
+  tabDot:{color:"#e4e4e7",fontSize:"13px"},
+  tabX:{fontSize:"13px",opacity:0.4,padding:"0 2px",lineHeight:1},
+
   editorArea:{flex:1,overflow:"hidden",position:"relative" as const},
+
   welcome:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",backgroundColor:"#09090b"},
   welcomeCard:{display:"flex",flexDirection:"column",alignItems:"center",padding:"48px 64px",borderRadius:"12px",backgroundColor:"#0d0d10",border:"1px solid #27272a",boxShadow:"0 20px 60px rgba(0,0,0,0.5)"},
-  welcomeLogo:{width:"90px",height:"90px",objectFit:"contain",marginBottom:"20px",filter:"drop-shadow(0 8px 20px rgba(0,0,0,0.6))"},
-  welcomeH2:{margin:"0 0 6px",fontSize:"22px",fontWeight:800,color:"#fafafa"},
-  welcomeP:{margin:"0 0 28px",fontSize:"13px",color:"#71717a"},
+  welcomeLogo:{width:"80px",height:"80px",objectFit:"contain",marginBottom:"18px",filter:"drop-shadow(0 8px 20px rgba(0,0,0,0.6))"},
+  welcomeH2:{margin:"0 0 6px",fontSize:"20px",fontWeight:800,color:"#fafafa"},
+  welcomeP:{margin:"0 0 24px",fontSize:"13px",color:"#71717a"},
   welcomeRow:{display:"flex",gap:"12px"},
-  wBtn:{backgroundColor:"#fafafa",color:"#09090b",border:"none",padding:"10px 20px",borderRadius:"6px",fontWeight:700,fontSize:"13px",cursor:"pointer"},
-  wBtnO:{backgroundColor:"transparent",color:"#fafafa",border:"1px solid #3f3f46",padding:"10px 20px",borderRadius:"6px",fontWeight:600,fontSize:"13px",cursor:"pointer"},
-  dock:{height:"230px",backgroundColor:"#09090b",borderTop:"1px solid #27272a",display:"flex",flexDirection:"column"},
-  dockTabs:{display:"flex",height:"32px",backgroundColor:"#0d0d10",borderBottom:"1px solid #27272a"},
-  dockTab:{background:"none",border:"none",borderBottom:"2px solid transparent",borderRight:"1px solid #27272a",color:"#71717a",padding:"0 18px",fontSize:"11px",fontWeight:700,cursor:"pointer",letterSpacing:"0.5px"},
+  wBtn:{backgroundColor:"#fafafa",color:"#09090b",border:"none",padding:"9px 20px",borderRadius:"6px",fontWeight:700,fontSize:"13px",cursor:"pointer"},
+  wBtnO:{backgroundColor:"transparent",color:"#fafafa",border:"1px solid #3f3f46",padding:"9px 20px",borderRadius:"6px",fontWeight:600,fontSize:"13px",cursor:"pointer"},
+
+  dock:{height:"220px",backgroundColor:"#09090b",borderTop:"1px solid #27272a",display:"flex",flexDirection:"column"},
+  dockTabs:{display:"flex",height:"30px",backgroundColor:"#0d0d10",borderBottom:"1px solid #27272a"},
+  dockTab:{background:"none",border:"none",borderBottom:"2px solid transparent",borderRight:"1px solid #27272a",color:"#71717a",padding:"0 16px",fontSize:"11px",fontWeight:700,cursor:"pointer",letterSpacing:"0.4px"},
   dockOn:{color:"#fafafa",borderBottom:"2px solid #fafafa"},
   dockContent:{flex:1,overflow:"hidden"},
-  log:{padding:"10px 14px",fontFamily:"'JetBrains Mono',Consolas,monospace",fontSize:"12px",overflowY:"auto",height:"100%"},
+  log:{padding:"8px 12px",fontFamily:"'JetBrains Mono',Consolas,monospace",fontSize:"12px",overflowY:"auto" as const,height:"100%"},
   logLine:{color:"#e4e4e7",lineHeight:"1.6"},
   logDim:{color:"#71717a"},
+
   agentPane:{display:"flex",flexDirection:"column",height:"100%",padding:"12px",gap:"10px"},
-  paneHdr:{fontSize:"11px",fontWeight:700,letterSpacing:"0.8px",color:"#fafafa"},
+  paneHdr:{fontSize:"11px",fontWeight:700,letterSpacing:"0.8px",color:"#fafafa",margin:0},
   agentArea:{flex:1,maxHeight:"100px",backgroundColor:"#18181b",border:"1px solid #27272a",color:"#fafafa",borderRadius:"6px",padding:"8px",fontSize:"12px",resize:"none",fontFamily:"inherit"},
   agentBtn:{backgroundColor:"#fafafa",color:"#09090b",border:"none",borderRadius:"6px",padding:"8px",fontWeight:700,fontSize:"12px",cursor:"pointer"},
 };

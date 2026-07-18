@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Electron Preload Script
  *
  * Exposes a safe, typed API to the renderer process via contextBridge.
- * The renderer ONLY gets what is explicitly listed here — no full Node access.
+ * The renderer ONLY gets what is explicitly listed here â€” no full Node access.
  */
 
 import { contextBridge, ipcRenderer } from "electron";
@@ -84,6 +84,11 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     return () => ipcRenderer.removeAllListeners("atlas:event");
   },
 
+  // Window controls
+  windowMinimize:    () => ipcRenderer.invoke("window:minimize"),
+  windowMaximize:    () => ipcRenderer.invoke("window:maximize"),
+  windowClose:       () => ipcRenderer.invoke("window:close"),
+  windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke("window:is-maximized"),
   // Native menu action bridge
   onMenuAction: (handler: (action: string) => void) => {
     const channels = [

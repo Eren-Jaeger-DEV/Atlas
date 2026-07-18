@@ -1,5 +1,5 @@
-/**
- * Atlas Editor — Electron Main Process
+﻿/**
+ * Atlas Editor â€” Electron Main Process
  *
  * Architectural rule enforced here:
  * The main process spawns the agent runtime as a separate process
@@ -44,7 +44,14 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    show: true,
+    frame: false,
+    show: false,
+    titleBarStyle: 'hidden',
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow!.show();
+    mainWindow!.focus();
   });
 
   // Load URL
@@ -62,9 +69,6 @@ function createWindow(): void {
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
     console.error(`[DID FAIL LOAD] ${errorCode}: ${errorDescription}`);
   });
-
-  mainWindow.show();
-  mainWindow.focus();
 
   // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -196,10 +200,10 @@ function buildApplicationMenu(): void {
 }
 
 // ---------------------------------------------------------------------------
-// IPC handlers — bridge between renderer and agent runtime
+// IPC handlers â€” bridge between renderer and agent runtime
 // ---------------------------------------------------------------------------
 
-// Impact query — can run in-process since it's zero-AI
+// Impact query â€” can run in-process since it's zero-AI
 ipcMain.handle("atlas:impact", async (_event, filePath: string, symbolName?: string) => {
   try {
     // Lazy-import MemoryEngine (only the main process does this)
@@ -384,7 +388,7 @@ ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
   return { success: true, repoPath };
 });
 
-// Agent run — delegates to agent runtime subprocess
+// Agent run â€” delegates to agent runtime subprocess
 ipcMain.handle("atlas:run", async (event, goal: string) => {
   try {
     const { MemoryEngine } = await import("@atlas/graph");
@@ -416,7 +420,13 @@ ipcMain.handle("atlas:run", async (event, goal: string) => {
 // ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
-
+// Window controls IPC
+// ---------------------------------------------------------------------------
+ipcMain.handle("window:minimize",     () => mainWindow?.minimize());
+ipcMain.handle("window:maximize",     () => { if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize(); });
+ipcMain.handle("window:close",        () => mainWindow?.close());
+ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
+// ---------------------------------------------------------------------------
 declare global {
   var __atlasRepoRoot: string | undefined;
 }
