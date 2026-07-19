@@ -1,13 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { AccountService } from "@atlas/core/cloud/AccountService.js";
+import { CloudSyncEngine } from "@atlas/core/cloud/CloudSyncEngine.js";
 
 const api = () => (window as any).atlasAPI;
 
 export function AccountPanel() {
+  const accountService = useMemo(() => new AccountService(), []);
+  const cloudSyncEngine = useMemo(() => new CloudSyncEngine(), []);
+
   const [userName, setUserName] = useState("Developer");
   const [userEmail, setUserEmail] = useState("developer@local");
-  const [signedIn, setSignedIn] = useState(true);
-  const [activeProfile, setActiveProfile] = useState("Personal");
-  const [syncEnabled, setSyncEnabled] = useState(true);
+  const [signedIn, setSignedIn] = useState(accountService.isAuthenticated());
+  const [syncEnabled, setSyncEnabled] = useState(cloudSyncEngine.isSyncEnabled());
   const [activities, setActivities] = useState<Array<{ author: string; action: string; time: string }>>([]);
 
   useEffect(() => {
@@ -48,11 +52,28 @@ export function AccountPanel() {
     loadIdentity();
   }, []);
 
+  const handleAuthToggle = async () => {
+    if (signedIn) {
+      accountService.signOut();
+      setSignedIn(false);
+    } else {
+      await accountService.signIn(userEmail, userName);
+      setSignedIn(true);
+    }
+  };
+
+  const handleSyncToggle = (checked: boolean) => {
+    cloudSyncEngine.setSyncEnabled(checked);
+    setSyncEnabled(checked);
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.title}>ACCOUNT & TEAM COLLABORATION</span>
-        <span style={styles.subtext}>{signedIn ? "[PASS] Online & Synced" : "[WARN] Offline"}</span>
+        <span style={styles.subtext}>
+          {signedIn && syncEnabled ? "[PASS] Online & Synced" : signedIn ? "[PASS] Online (Sync Disabled)" : "[WARN] Offline"}
+        </span>
       </div>
 
       <div style={styles.content}>
@@ -62,15 +83,15 @@ export function AccountPanel() {
           <div style={styles.userMeta}>
             <p style={styles.userName}>{userName}</p>
             <p style={styles.userEmail}>{userEmail}</p>
-            <span style={styles.planBadge}>Pro Developer</span>
+            <span style={styles.planBadge}>Local Developer</span>
           </div>
 
-          <button style={styles.authBtn} onClick={() => setSignedIn(p => !p)}>
+          <button style={styles.authBtn} onClick={handleAuthToggle}>
             {signedIn ? "Sign Out" : "Sign In"}
           </button>
         </div>
 
-        {/* Sync & Profile Selector */}
+        {/* Sync Selector */}
         <div style={styles.section}>
           <p style={styles.secHdr}>WORKSPACE PROFILES & SYNC</p>
 
@@ -79,22 +100,8 @@ export function AccountPanel() {
             <input
               type="checkbox"
               checked={syncEnabled}
-              onChange={e => setSyncEnabled(e.target.checked)}
+              onChange={e => handleSyncToggle(e.target.checked)}
             />
-          </div>
-
-          <div style={styles.row}>
-            <span>Active Profile</span>
-            <select
-              style={styles.select}
-              value={activeProfile}
-              onChange={e => setActiveProfile(e.target.value)}
-            >
-              <option value="Personal">Personal</option>
-              <option value="Work">Work Enterprise</option>
-              <option value="Open Source">Open Source</option>
-              <option value="Research">Research Sandbox</option>
-            </select>
           </div>
         </div>
 

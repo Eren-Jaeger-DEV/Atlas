@@ -1,3 +1,4 @@
+// STUB - This component is a visual mockup. It does not integrate with atlasAPI to read or write real conflict markers.
 import { useState } from "react";
 
 interface MergeConflictBlock {

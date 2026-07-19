@@ -106,6 +106,7 @@ async function scanWorkspacePackages(repoRoot: string): Promise<Record<string, s
         if (typeof content.exports === "string") {
           testPaths.push(content.exports);
         } else if (typeof content.exports === "object") {
+          console.warn(`[Indexer] ⚠ Failed to parse ${p}`);
           const dotEntry = content.exports["."] || content.exports["import"] || content.exports["require"];
           if (dotEntry) {
             if (typeof dotEntry === "string") {

@@ -1,3 +1,5 @@
+// WARN - The AST Graph Index status and the info text below are currently hardcoded/simulated. 
+// The file count and TODO count are real, but the deep AST dependency analysis is pending implementation.
 import { useState, useEffect } from "react";
 
 const api = () => (window as any).atlasAPI;

@@ -1,3 +1,4 @@
+// STUB - This overlay uses a hardcoded code snippet and does not perform real LSP symbol lookups via atlasAPI.
 interface PeekOverlayProps {
   symbolName: string;
   filePath?: string;

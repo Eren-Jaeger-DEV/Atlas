@@ -1,7 +1,8 @@
 /**
  * AccountService
  *
- * Manages user accounts, authentication session, device tokens, and offline detection.
+ * Manages the local developer profile and offline detection.
+ * Note: This is not an authentication system.
  */
 
 import { LocalTokenStore } from "./LocalTokenStore.js";
@@ -12,7 +13,7 @@ export interface UserProfile {
   name: string;
   email: string;
   avatarUrl?: string;
-  plan: "Free" | "Pro" | "Enterprise";
+  plan: "Free" | "Local" | "Enterprise";
 }
 
 export class AccountService {
@@ -34,7 +35,7 @@ export class AccountService {
         id: `usr_${Date.now()}`,
         name: storedName,
         email: storedEmail,
-        plan: "Pro",
+        plan: "Local",
       };
     }
   }
@@ -51,7 +52,7 @@ export class AccountService {
       id: "usr_" + Math.random().toString(36).substring(2, 9),
       name: userName,
       email,
-      plan: "Pro",
+      plan: "Local",
     };
 
     this.currentUser = user;

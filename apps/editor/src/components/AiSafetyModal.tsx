@@ -1,3 +1,4 @@
+// STUB - This modal is a visual mockup and does not actually invoke the PermissionEngine.
 interface AiSafetyModalProps {
   filePath: string;
   proposedCode: string;

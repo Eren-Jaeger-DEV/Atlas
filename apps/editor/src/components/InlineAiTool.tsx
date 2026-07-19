@@ -1,3 +1,4 @@
+// STUB - This component uses hardcoded explanations and does not actually route requests to the agent runtime.
 import { useState } from "react";
 
 interface InlineAiToolProps {

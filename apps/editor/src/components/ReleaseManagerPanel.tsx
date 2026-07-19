@@ -1,3 +1,6 @@
+// STUB — update checking and diagnostics export are simulated
+// (setTimeout + hardcoded values). No real update server exists yet.
+// Two of three performance metrics are hardcoded, not measured.
 import { useState, useEffect } from "react";
 
 export function ReleaseManagerPanel() {
@@ -14,10 +17,9 @@ export function ReleaseManagerPanel() {
 
   const handleCheckUpdates = () => {
     setChecking(true);
-    setUpdateMsg("Querying update server...");
+    setUpdateMsg("Coming Soon");
     setTimeout(() => {
       setChecking(false);
-      setUpdateMsg(`Atlas Studio is up to date (v0.1.0 — ${channel.toUpperCase()} Channel).`);
     }, 800);
   };
 
@@ -28,8 +30,6 @@ export function ReleaseManagerPanel() {
 
   const metrics = [
     { name: "Cold Start (Live)", target: "< 2000ms", current: `${coldStart}ms`, status: coldStart < 2000 ? "PASS" : "WARN" },
-    { name: "Command Palette Response", target: "< 100ms", current: "18ms", status: "PASS" },
-    { name: "Symbol Search Latency", target: "< 50ms", current: "12ms", status: "PASS" },
   ];
 
   return (
@@ -56,8 +56,8 @@ export function ReleaseManagerPanel() {
             </select>
           </div>
 
-          <button style={styles.updateBtn} disabled={checking} onClick={handleCheckUpdates}>
-            {checking ? "Checking..." : "Check for Updates"}
+          <button style={styles.updateBtn} disabled={true} onClick={handleCheckUpdates}>
+            {checking ? "Checking..." : "Coming Soon"}
           </button>
 
           {updateMsg && <p style={styles.msg}>{updateMsg}</p>}

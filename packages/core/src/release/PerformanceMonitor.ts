@@ -1,3 +1,5 @@
+// WARN - The warmStartMs, commandPaletteMs, symbolSearchMs, and extensionActivationMs metrics 
+// are permanently hardcoded to 0. Only coldStartMs reflects a real measurement.
 /**
  * PerformanceMonitor
  *

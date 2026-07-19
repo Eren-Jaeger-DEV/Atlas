@@ -1,3 +1,6 @@
+// WARN - The symbol data is populated from a real graph search via atlasAPI,
+// however, the visual layout (circleLayout) is a mock layout that artificially draws edges from the center node to all others.
+// It does not reflect true topological dependency edges.
 import { useState, useEffect, useRef } from "react";
 
 const api = () => (window as any).atlasAPI;
