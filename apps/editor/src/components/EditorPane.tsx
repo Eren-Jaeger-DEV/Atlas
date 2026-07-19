@@ -2,16 +2,20 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import MonacoEditor, { OnMount, OnChange, loader } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import * as monaco from "monaco-editor";
+import { dapClient, DAPEvent } from "../dap/DAPClient.js";
 
 // Configure Monaco to bundle locally rather than from CDN
 loader.config({ monaco });
 
 interface EditorPaneProps {
   filePath?: string;
+  repoPath?: string;
   content?: string;
   language?: string;
+  targetLine?: number;
+  targetColumn?: number;
   onChange?: (content: string) => void;
-  onCursorChange?: (lineContent: string) => void;
+  onCursorChange?: (lineContent: string, line: number, col: number) => void;
 }
 
 function inferLanguage(filePath?: string, hint?: string): string {
@@ -37,8 +41,11 @@ function inferLanguage(filePath?: string, hint?: string): string {
 
 export function EditorPane({
   filePath,
+  repoPath,
   content = "",
   language = "typescript",
+  targetLine,
+  targetColumn,
   onChange,
   onCursorChange,
 }: EditorPaneProps) {
@@ -50,11 +57,19 @@ export function EditorPane({
   const [showReplace, setShowReplace] = useState(false);
   const [replaceText, setReplaceText] = useState("");
 
+  const breakpointsRef = useRef<Set<number>>(new Set());
+  const decorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+  const activeLineDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+
   const resolvedLang = inferLanguage(filePath, language);
 
   const handleMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+
+    if (repoPath) {
+      import("../lsp/LSPClient.js").then(m => m.initLSPClient(repoPath)).catch(console.error);
+    }
 
     // Atlas dark theme — matches the rest of the UI
     monaco.editor.defineTheme("atlas-dark", {
@@ -72,26 +87,26 @@ export function EditorPane({
         { token: "operator", foreground: "e4e4e7" },
       ],
       colors: {
-        "editor.background": "#09090b",
+        "editor.background": "#000000",
         "editor.foreground": "#e4e4e7",
-        "editorLineNumber.foreground": "#3f3f46",
-        "editorLineNumber.activeForeground": "#71717a",
-        "editor.lineHighlightBackground": "#18181b",
-        "editor.selectionBackground": "#38bdf820",
-        "editor.inactiveSelectionBackground": "#38bdf810",
+        "editorLineNumber.foreground": "#475569",
+        "editorLineNumber.activeForeground": "#38bdf8",
+        "editor.lineHighlightBackground": "#38bdf810",
+        "editor.selectionBackground": "#38bdf830",
+        "editor.inactiveSelectionBackground": "#38bdf815",
         "editorCursor.foreground": "#38bdf8",
-        "editorGutter.background": "#09090b",
-        "editorWidget.background": "#18181b",
-        "editorWidget.border": "#27272a",
-        "editorSuggestWidget.background": "#18181b",
-        "editorSuggestWidget.border": "#27272a",
-        "editorSuggestWidget.selectedBackground": "#27272a",
-        "editorIndentGuide.background1": "#27272a",
-        "editorIndentGuide.activeBackground1": "#3f3f46",
+        "editorGutter.background": "#000000",
+        "editorWidget.background": "#050505",
+        "editorWidget.border": "#38bdf8",
+        "editorSuggestWidget.background": "#050505",
+        "editorSuggestWidget.border": "#38bdf8",
+        "editorSuggestWidget.selectedBackground": "#38bdf830",
+        "editorIndentGuide.background1": "#38bdf830",
+        "editorIndentGuide.activeBackground1": "#38bdf8",
         "scrollbar.shadow": "#00000000",
-        "scrollbarSlider.background": "#27272a80",
-        "scrollbarSlider.hoverBackground": "#3f3f46",
-        "scrollbarSlider.activeBackground": "#52525b",
+        "scrollbarSlider.background": "#38bdf830",
+        "scrollbarSlider.hoverBackground": "#38bdf850",
+        "scrollbarSlider.activeBackground": "#38bdf880",
       },
     });
 
@@ -112,8 +127,10 @@ export function EditorPane({
     editor.onDidChangeCursorPosition(() => {
       const model = editor.getModel();
       if (!model || !onCursorChange) return;
-      const lineNum = editor.getPosition()?.lineNumber ?? 1;
-      onCursorChange(model.getLineContent(lineNum));
+      const pos = editor.getPosition();
+      const lineNum = pos?.lineNumber ?? 1;
+      const colNum = pos?.column ?? 1;
+      onCursorChange(model.getLineContent(lineNum), lineNum, colNum);
     });
 
     // Keybindings
@@ -131,8 +148,68 @@ export function EditorPane({
     );
     editor.addCommand(monaco.KeyCode.Escape, () => setShowFind(false));
 
+    decorationsRef.current = editor.createDecorationsCollection([]);
+    activeLineDecoRef.current = editor.createDecorationsCollection([]);
+
+    editor.onMouseDown((e) => {
+      if (
+        e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN ||
+        e.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
+      ) {
+        const line = e.target.position?.lineNumber;
+        if (line && filePath) {
+          const bps = breakpointsRef.current;
+          if (bps.has(line)) bps.delete(line);
+          else bps.add(line);
+          
+          const newDecos = Array.from(bps).map(l => ({
+            range: new monaco.Range(l, 1, l, 1),
+            options: {
+              isWholeLine: false,
+              glyphMarginClassName: "breakpoint-glyph",
+            }
+          }));
+          decorationsRef.current?.set(newDecos);
+
+          // Tell DAP about the updated breakpoints for this file
+          dapClient.sendRequest("setBreakpoints", {
+            source: { path: filePath },
+            breakpoints: Array.from(bps).map(l => ({ line: l }))
+          });
+        }
+      }
+    });
+
     editor.focus();
-  }, [onCursorChange]);
+  }, [onCursorChange, filePath]);
+
+  // Listen for DAP paused events to show active line
+  useEffect(() => {
+    const unsub = dapClient.onEvent((e: DAPEvent) => {
+      if (e.event === "stopped" && activeLineDecoRef.current) {
+        const frames = e.body?.callFrames;
+        if (frames && frames.length > 0) {
+           const topFrame = frames[0];
+           // If the paused file is the currently open file
+           if (filePath && topFrame.url && filePath.endsWith(topFrame.url.split("/").pop()!)) {
+             const line = topFrame.location.lineNumber + 1;
+             activeLineDecoRef.current.set([{
+               range: new monaco.Range(line, 1, line, 1),
+               options: {
+                 isWholeLine: true,
+                 className: "debug-active-line",
+                 glyphMarginClassName: "debug-active-glyph"
+               }
+             }]);
+             editorRef.current?.revealLineInCenter(line);
+           }
+        }
+      } else if ((e.event === "continued" || e.event === "terminated") && activeLineDecoRef.current) {
+        activeLineDecoRef.current.clear();
+      }
+    });
+    return unsub;
+  }, [filePath]);
 
   const handleChange: OnChange = useCallback((value) => {
     onChange?.(value ?? "");
@@ -171,6 +248,14 @@ export function EditorPane({
   const doReplaceAll = useCallback(() => {
     editorRef.current?.getAction("editor.action.replaceAll")?.run();
   }, []);
+
+  useEffect(() => {
+    if (editorRef.current && targetLine) {
+      editorRef.current.revealLineInCenter(targetLine);
+      editorRef.current.setPosition({ lineNumber: targetLine, column: targetColumn || 1 });
+      editorRef.current.focus();
+    }
+  }, [targetLine, targetColumn, filePath]);
 
   return (
     <div style={s.wrapper}>
@@ -239,6 +324,7 @@ export function EditorPane({
       <div style={s.monacoContainer}>
         <MonacoEditor
           height="100%"
+          path={filePath ? (filePath.startsWith("/") || filePath.match(/^[a-zA-Z]:/) ? monaco.Uri.file(filePath).toString() : filePath) : undefined}
           language={resolvedLang}
           value={content}
           theme="atlas-dark"
@@ -249,6 +335,7 @@ export function EditorPane({
             fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace",
             fontLigatures: true,
             lineNumbers: "on",
+            glyphMargin: true,
             minimap: { enabled: true, scale: 1, renderCharacters: false },
             wordWrap: "off",
             scrollBeyondLastLine: false,

@@ -14,9 +14,12 @@ import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Menu, clipbo
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
-import { execFile } from "node:child_process";
+import cp, { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as pty from "node-pty";
+import WebSocket from "ws";
+import vm from "node:vm";
+import { cp as fsCp } from "node:fs/promises";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
@@ -28,8 +31,10 @@ const isDev = process.env["NODE_ENV"] === "development";
 let mainWindow: BrowserWindow | null = null;
 const terminalProcesses = new Map<string, pty.IPty>();
 
-
 // ---------------------------------------------------------------------------
+// Extension Runtime State
+// ---------------------------------------------------------------------------
+const extensionCommands = new Map<string, (...args: any[]) => any>();
 // Window creation
 // ---------------------------------------------------------------------------
 
@@ -82,8 +87,8 @@ function createWindow(): void {
     mainWindow = null;
   });
 
-  // Build native application menu
-  buildApplicationMenu();
+  // Disable native application menu to prevent it from showing on Alt press
+  Menu.setApplicationMenu(null);
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +303,269 @@ ipcMain.handle("atlas:get-graph-data", async (_event, repoPath: string) => {
   } catch (err) {
     console.error("Failed to get graph data:", err);
     return { nodes: [], edges: [] };
+  }
+});
+
+// Global Search Data
+ipcMain.handle("atlas:global-search", async (_event, repoPath: string, query: string, options: any) => {
+  try {
+    const { rgPath } = require("@vscode/ripgrep");
+    const args = [
+      "--json",
+      "--ignore-case",
+    ];
+
+    if (options?.isRegex) args.push("--regexp", query);
+    else args.push("--fixed-strings", query);
+    
+    if (options?.include) args.push("-g", options.include);
+    if (options?.exclude) args.push("-g", "!" + options.exclude);
+    
+    // Default ignores
+    args.push("-g", "!node_modules", "-g", "!.git");
+    args.push(repoPath);
+
+    return new Promise((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+      
+      const child = cp.spawn(rgPath, args, { cwd: repoPath });
+
+      child.stdout.on("data", (chunk: Buffer) => stdout += chunk.toString());
+      child.stderr.on("data", (chunk: Buffer) => stderr += chunk.toString());
+
+      child.on("close", (code: number | null) => {
+        if (code !== 0 && code !== 1) { // 1 means no match in ripgrep
+          return reject(new Error(`ripgrep exited with code ${code}: ${stderr}`));
+        }
+
+        const lines = stdout.split("\n").filter(Boolean);
+        const results = [];
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === "match") {
+              results.push({
+                file: parsed.data.path.text,
+                line: parsed.data.line_number,
+                column: parsed.data.submatches[0]?.start,
+                matchText: parsed.data.lines.text.trim(),
+                submatches: parsed.data.submatches,
+              });
+            }
+          } catch (e) {
+            // ignore JSON parse errors for non-json output
+          }
+        }
+        resolve(results);
+      });
+    });
+  } catch (err) {
+    console.error("Failed to perform global search:", err);
+    return [];
+  }
+});
+
+// Format Code
+ipcMain.handle("atlas:format-code", async (_event, repoPath: string, filePath: string, content: string) => {
+  try {
+    // Try to resolve workspace prettier, fallback to our bundled one
+    let prettier;
+    try {
+      const prettierPath = require.resolve("prettier", { paths: [repoPath] });
+      prettier = require(prettierPath);
+    } catch {
+      prettier = require("prettier");
+    }
+
+    const options = await prettier.resolveConfig(filePath) || {};
+    options.filepath = filePath;
+
+    return await prettier.format(content, options);
+  } catch (err) {
+    console.error("Formatting failed:", err);
+    return content; // Return unformatted on error
+  }
+});
+
+// LSP Support
+let tsLanguageServer: cp.ChildProcess | null = null;
+
+ipcMain.handle("atlas:lsp-start", async (event, repoPath: string) => {
+  if (tsLanguageServer) {
+    return "already_running";
+  }
+
+  try {
+    const tsserverPath = require.resolve("typescript-language-server/lib/cli.mjs");
+    tsLanguageServer = cp.spawn("node", [tsserverPath, "--stdio"], { cwd: repoPath });
+
+    tsLanguageServer.stdout?.on("data", (data: Buffer) => {
+      event.sender.send("atlas:lsp-server-to-client", data.toString("utf-8"));
+    });
+
+    tsLanguageServer.stderr?.on("data", (data: Buffer) => {
+      console.error("[LSP Server Error]:", data.toString("utf-8"));
+    });
+
+    tsLanguageServer.on("close", () => {
+      tsLanguageServer = null;
+    });
+
+    return "started";
+  } catch (err) {
+    console.error("Failed to start TS LSP:", err);
+    return "error";
+  }
+});
+
+ipcMain.on("atlas:lsp-client-to-server", (_event, message: string) => {
+  if (tsLanguageServer && tsLanguageServer.stdin) {
+    tsLanguageServer.stdin.write(message);
+  }
+});
+
+// DAP Support
+let dapProcess: cp.ChildProcess | null = null;
+let dapWs: WebSocket | null = null;
+let dapPendingRequests = new Map<number, (res: any) => void>();
+let latestCallFrames: any[] = [];
+
+ipcMain.handle("atlas:dap-start", async (event, filePath: string) => {
+  if (dapProcess) {
+    return "already_running";
+  }
+
+  return new Promise((resolve) => {
+    dapProcess = cp.spawn("node", ["--inspect-brk", filePath]);
+    let resolved = false;
+
+    dapProcess.stderr?.on("data", (data: Buffer) => {
+      const output = data.toString("utf-8");
+      const match = output.match(/ws:\/\/[^\s]+/);
+      if (match && !resolved) {
+        resolved = true;
+        const wsUrl = match[0];
+        dapWs = new WebSocket(wsUrl);
+        
+        dapWs.on("open", () => {
+          resolve("started");
+          let msgId = 9000;
+          dapWs?.send(JSON.stringify({ id: msgId++, method: "Runtime.enable" }));
+          dapWs?.send(JSON.stringify({ id: msgId++, method: "Debugger.enable" }));
+          dapWs?.send(JSON.stringify({ id: msgId++, method: "Debugger.runIfWaitingForDebugger" }));
+        });
+
+        dapWs.on("message", (msg) => {
+          const m = JSON.parse(msg.toString());
+          if (m.method === "Debugger.paused") {
+            latestCallFrames = m.params.callFrames || [];
+            event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+              type: "event", event: "stopped", body: { reason: "pause", threadId: 1, allThreadsStopped: true }
+            }));
+          } else if (m.method === "Debugger.resumed") {
+            event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+              type: "event", event: "continued", body: { threadId: 1, allThreadsContinued: true }
+            }));
+          }
+          if (m.id && dapPendingRequests.has(m.id)) {
+            dapPendingRequests.get(m.id)!(m);
+            dapPendingRequests.delete(m.id);
+          }
+        });
+
+        dapWs.on("close", () => {
+          event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
+        });
+      }
+    });
+
+    dapProcess.on("close", () => {
+      dapProcess = null;
+      dapWs = null;
+      event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
+    });
+  });
+});
+
+ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
+  if (!dapWs) return;
+  try {
+    const msg = JSON.parse(message);
+    const id = msg.seq;
+    
+    const sendDapResponse = (body: any) => {
+      event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+        type: "response", request_seq: id, success: true, command: msg.command, body
+      }));
+    };
+
+    const cdpSend = (method: string, params: any = {}) => {
+      dapWs!.send(JSON.stringify({ id, method, params }));
+      dapPendingRequests.set(id, (res) => sendDapResponse(res.result));
+    };
+
+    if (["initialize", "launch", "attach"].includes(msg.command)) {
+      return sendDapResponse({});
+    }
+
+    switch (msg.command) {
+      case "setBreakpoints":
+        const url = msg.arguments.source.path;
+        const line = msg.arguments.breakpoints[0]?.line;
+        if (line !== undefined) {
+          dapWs.send(JSON.stringify({ id, method: "Debugger.setBreakpointByUrl", params: {
+             urlRegex: ".*" + path.basename(url).replace(/\./g, "\\."),
+             lineNumber: line - 1
+          }}));
+          dapPendingRequests.set(id, () => sendDapResponse({ breakpoints: [{ verified: true, line }] }));
+        } else {
+          sendDapResponse({ breakpoints: [] });
+        }
+        break;
+      case "continue": cdpSend("Debugger.resume"); break;
+      case "next": cdpSend("Debugger.stepOver"); break;
+      case "stepIn": cdpSend("Debugger.stepInto"); break;
+      case "stepOut": cdpSend("Debugger.stepOut"); break;
+      case "threads": sendDapResponse({ threads: [{ id: 1, name: "Main Thread" }] }); break;
+      case "stackTrace":
+        sendDapResponse({
+          stackFrames: latestCallFrames.map((f: any, i: number) => ({
+            id: i, name: f.functionName || "anonymous",
+            source: { name: "script", path: f.url },
+            line: f.location.lineNumber + 1, column: f.location.columnNumber + 1
+          }))
+        });
+        break;
+      case "scopes":
+        const frame = latestCallFrames[msg.arguments.frameId];
+        const scopes = frame?.scopeChain.map((s: any, i: number) => ({
+          name: s.type, variablesReference: s.object.objectId, expensive: false
+        })) || [];
+        sendDapResponse({ scopes });
+        break;
+      case "variables":
+        dapWs.send(JSON.stringify({ id, method: "Runtime.getProperties", params: { objectId: msg.arguments.variablesReference, ownProperties: true }}));
+        dapPendingRequests.set(id, (res) => {
+          const props = res.result?.result || [];
+          sendDapResponse({
+            variables: props.map((p: any) => ({
+               name: p.name,
+               value: p.value?.value !== undefined ? String(p.value.value) : p.value?.description ?? "undefined",
+               variablesReference: p.value?.objectId ? p.value.objectId : 0
+            }))
+          });
+        });
+        break;
+      case "disconnect":
+        dapWs.close();
+        if (dapProcess) dapProcess.kill();
+        sendDapResponse({});
+        break;
+      default: sendDapResponse({});
+    }
+  } catch (e) {
+    console.error("DAP proxy error", e);
   }
 });
 
@@ -621,6 +889,98 @@ ipcMain.handle("atlas:list-extensions", async () => {
   } catch {
     return []; // Extensions directory doesn't exist yet — no extensions installed
   }
+});
+
+ipcMain.handle("atlas:extension-install", async (_event, sourcePath: string) => {
+  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
+  const manifestPath = path.join(sourcePath, "manifest.json");
+  
+  try {
+    const raw = await readFile(manifestPath, "utf-8");
+    const manifest = JSON.parse(raw);
+    const targetPath = path.join(extDir, manifest.id || manifest.name);
+    
+    await mkdir(targetPath, { recursive: true });
+    await fsCp(sourcePath, targetPath, { recursive: true });
+    
+    // Attempt to load it immediately
+    await loadExtension(targetPath, manifest);
+    return true;
+  } catch (e) {
+    console.error("[ExtensionRuntime] Failed to install extension:", e);
+    throw e;
+  }
+});
+
+ipcMain.handle("atlas:extension-execute-command", async (_event, id: string, ...args: any[]) => {
+  const handler = extensionCommands.get(id);
+  if (handler) {
+    try {
+      return await handler(...args);
+    } catch (e) {
+      console.error(`[ExtensionRuntime] Command ${id} failed:`, e);
+      throw e;
+    }
+  } else {
+    throw new Error(`Command not found in ExtensionRuntime: ${id}`);
+  }
+});
+
+async function loadExtension(extPath: string, manifest: any) {
+  if (!manifest.main) return; // No code to run
+  
+  const mainScriptPath = path.join(extPath, manifest.main);
+  try {
+    const code = await readFile(mainScriptPath, "utf-8");
+    
+    const sandbox = {
+      console,
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval,
+      atlas: {
+        commands: {
+          registerCommand: (id: string, handler: (...args: any[]) => any) => {
+            extensionCommands.set(id, handler);
+            // Notify frontend to add it to Command Palette
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("atlas:extension-registered-command", { id, label: id });
+            }
+          }
+        }
+      }
+    };
+    
+    vm.createContext(sandbox);
+    const script = new vm.Script(code, { filename: manifest.main });
+    script.runInContext(sandbox);
+    
+    // If it exports an activate function, we need to call it.
+    // However, a simple script execution is enough for Phase 5 basic isolation.
+    // To support exports, we'd need a CommonJS wrapper (module.exports), 
+    // but we can just require them to call atlas.commands.registerCommand globally for now.
+    
+    console.log(`[ExtensionRuntime] Loaded extension: ${manifest.name}`);
+  } catch (e) {
+    console.error(`[ExtensionRuntime] Failed to load extension ${manifest.name}:`, e);
+  }
+}
+
+// Auto-load installed extensions on startup
+app.whenReady().then(async () => {
+  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
+  try {
+    const entries = await readdir(extDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const mPath = path.join(extDir, entry.name, "manifest.json");
+      try {
+        const raw = await readFile(mPath, "utf-8");
+        await loadExtension(path.join(extDir, entry.name), JSON.parse(raw));
+      } catch { /* skip */ }
+    }
+  } catch { /* skip */ }
 });
 
 

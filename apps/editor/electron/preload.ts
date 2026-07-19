@@ -159,6 +159,18 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   listExtensions: (): Promise<Record<string, unknown>[]> =>
     ipcRenderer.invoke("atlas:list-extensions"),
 
+  installExtension: (sourcePath: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:extension-install", sourcePath),
+
+  executeExtensionCommand: (id: string, ...args: any[]): Promise<any> =>
+    ipcRenderer.invoke("atlas:extension-execute-command", id, ...args),
+
+  onExtensionRegisteredCommand: (handler: (payload: { id: string, label: string }) => void) => {
+    const listener = (_ipcEvent: any, payload: { id: string, label: string }) => handler(payload);
+    ipcRenderer.on("atlas:extension-registered-command", listener);
+    return () => ipcRenderer.off("atlas:extension-registered-command", listener);
+  },
+
   // SBOM generation
   generateSbom: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke("atlas:generate-sbom"),
@@ -177,8 +189,32 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   // Graph Data
   getGraphData: (repoPath: string): Promise<{ nodes: any[], edges: any[] }> =>
     ipcRenderer.invoke("atlas:get-graph-data", repoPath),
+
+  // Search
+  globalSearch: (repoPath: string, query: string, options?: any): Promise<any[]> =>
+    ipcRenderer.invoke("atlas:global-search", repoPath, query, options),
+
+  // Formatting
+  formatCode: (repoPath: string, filePath: string, content: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:format-code", repoPath, filePath, content),
+
+  // LSP
+  startLsp: (repoPath: string) =>
+    ipcRenderer.invoke("atlas:lsp-start", repoPath),
+  sendLspMessage: (message: string) =>
+    ipcRenderer.send("atlas:lsp-client-to-server", message),
+  onLspMessage: (handler: (event: any, message: string) => void) => {
+    ipcRenderer.on("atlas:lsp-server-to-client", handler);
+    return () => ipcRenderer.off("atlas:lsp-server-to-client", handler);
+  },
+
+  // DAP
+  startDap: (filePath: string) =>
+    ipcRenderer.invoke("atlas:dap-start", filePath),
+  sendDapMessage: (message: string) =>
+    ipcRenderer.send("atlas:dap-client-to-server", message),
+  onDapMessage: (handler: (event: any, message: string) => void) => {
+    ipcRenderer.on("atlas:dap-server-to-client", handler);
+    return () => ipcRenderer.off("atlas:dap-server-to-client", handler);
+  },
 });
-
-
-
-

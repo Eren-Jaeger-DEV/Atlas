@@ -17,7 +17,7 @@ export function ExtensionGallery() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const loadExtensions = () => {
     setLoading(true);
     api()
       .listExtensions()
@@ -26,7 +26,25 @@ export function ExtensionGallery() {
       })
       .catch(() => setExtensions([]))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadExtensions();
   }, []);
+
+  const handleInstall = async () => {
+    try {
+      const dir = await api().selectDirectory();
+      if (dir) {
+        setLoading(true);
+        await api().installExtension(dir);
+        loadExtensions();
+      }
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+    }
+  };
 
   const filtered = extensions.filter(ext => {
     const q = search.toLowerCase();
@@ -40,10 +58,17 @@ export function ExtensionGallery() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.title}>EXTENSIONS MARKETPLACE</span>
-        <span style={styles.subtext}>
-          {loading ? "Scanning..." : `${extensions.length} Installed`}
-        </span>
+        <div style={styles.headerLeft}>
+          <span style={styles.title}>EXTENSIONS MARKETPLACE</span>
+          <span style={styles.subtext}>
+            {loading ? "Scanning..." : `${extensions.length} Installed`}
+          </span>
+        </div>
+        <button style={styles.installBtn} onClick={handleInstall} title="Install Local Extension...">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+        </button>
       </div>
 
       <div style={styles.searchBox}>
@@ -112,8 +137,14 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "8px 12px", backgroundColor: "#09090b", borderBottom: "1px solid #27272a",
   },
+  headerLeft: { display: "flex", flexDirection: "column", gap: "2px" },
   title: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.8px" },
   subtext: { fontSize: "11px", color: "#71717a" },
+  installBtn: {
+    backgroundColor: "transparent", border: "none", color: "#a1a1aa",
+    cursor: "pointer", padding: "4px", borderRadius: "4px",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  },
   searchBox: { padding: "10px 12px", borderBottom: "1px solid #27272a" },
   searchInput: {
     width: "100%", backgroundColor: "#18181b", border: "1px solid #27272a",

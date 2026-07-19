@@ -24,45 +24,45 @@ export function FileIcon({ fileName, isDirectory, isOpen }: FileIconProps) {
     case "ts":
     case "tsx":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", backgroundColor: "#3178c6", color: "#ffffff", borderRadius: "3px", fontSize: "9px", fontWeight: 800, marginRight: "6px", fontFamily: "sans-serif" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "#3178c6", fontSize: "11px", fontWeight: 600, marginRight: "6px", fontFamily: "sans-serif" }}>
           TS
         </span>
       );
     case "js":
     case "jsx":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", backgroundColor: "#f7df1e", color: "#000000", borderRadius: "3px", fontSize: "9px", fontWeight: 800, marginRight: "6px", fontFamily: "sans-serif" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "#f7df1e", fontSize: "11px", fontWeight: 600, marginRight: "6px", fontFamily: "sans-serif" }}>
           JS
         </span>
       );
     case "json":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", backgroundColor: "#f59e0b", color: "#000000", borderRadius: "3px", fontSize: "10px", fontWeight: 800, marginRight: "6px", fontFamily: "monospace" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "#f59e0b", fontSize: "12px", fontWeight: 600, marginRight: "6px", fontFamily: "monospace" }}>
           {"{}"}
         </span>
       );
     case "md":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", backgroundColor: "#38bdf8", color: "#09090b", borderRadius: "3px", fontSize: "9px", fontWeight: 800, marginRight: "6px", fontFamily: "sans-serif" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "#38bdf8", fontSize: "11px", fontWeight: 600, marginRight: "6px", fontFamily: "sans-serif" }}>
           MD
         </span>
       );
     case "py":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", backgroundColor: "#3b82f6", color: "#facc15", borderRadius: "3px", fontSize: "9px", fontWeight: 800, marginRight: "6px", fontFamily: "sans-serif" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "#3b82f6", fontSize: "11px", fontWeight: 600, marginRight: "6px", fontFamily: "sans-serif" }}>
           PY
         </span>
       );
     case "css":
     case "scss":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", backgroundColor: "#ec4899", color: "#ffffff", borderRadius: "3px", fontSize: "10px", fontWeight: 800, marginRight: "6px", fontFamily: "sans-serif" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "#ec4899", fontSize: "12px", fontWeight: 600, marginRight: "6px", fontFamily: "sans-serif" }}>
           #
         </span>
       );
     case "html":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", backgroundColor: "#ea580c", color: "#ffffff", borderRadius: "3px", fontSize: "9px", fontWeight: 800, marginRight: "6px", fontFamily: "monospace" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "#ea580c", fontSize: "11px", fontWeight: 600, marginRight: "6px", fontFamily: "monospace" }}>
           &lt;&gt;
         </span>
       );
