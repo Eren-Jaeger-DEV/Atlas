@@ -10,7 +10,7 @@
  * which then delegates to the agent runtime subprocess.
  */
 
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Menu, clipboard } from "electron";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
@@ -338,6 +338,13 @@ ipcMain.handle("atlas:terminal-resize", async (_event, termId: string, cols: num
   return { success: true };
 });
 
+ipcMain.handle("atlas:clipboard-read", () => {
+  return clipboard.readText();
+});
+
+ipcMain.handle("atlas:clipboard-write", (_event, text: string) => {
+  clipboard.writeText(text);
+});
 
 // Git Source Control
 ipcMain.handle("atlas:git-status", async (_event, repoPath: string) => {

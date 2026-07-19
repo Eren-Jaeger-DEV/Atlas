@@ -99,6 +99,35 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
           api.onTerminalData((payload: { termId: string; data: string }) => {
             if (payload.termId === tab.id) term.write(payload.data);
           });
+
+          // Copy text automatically when selected
+          term.onSelectionChange(() => {
+            const sel = term.getSelection();
+            if (sel) api.clipboardWriteText(sel);
+          });
+
+          // Handle keybinds for paste and explicit copy
+          term.attachCustomKeyEventHandler((e) => {
+            if (e.type === 'keydown') {
+              const isMac = navigator.userAgent.includes('Mac');
+              const isPaste = isMac ? (e.metaKey && e.code === 'KeyV') : (e.ctrlKey && e.shiftKey && e.code === 'KeyV');
+              
+              if (isPaste) {
+                api.clipboardReadText().then((text: string) => {
+                  if (text) api.terminalInput(tab.id, text);
+                });
+                return false;
+              }
+
+              const isCopy = (isMac ? e.metaKey : e.ctrlKey) && e.code === 'KeyC';
+              if (isCopy && term.hasSelection()) {
+                api.clipboardWriteText(term.getSelection());
+                term.clearSelection();
+                return false;
+              }
+            }
+            return true;
+          });
         } else {
           term.writeln(`Terminal ${tab.name} (${tab.shell}) ready.`);
         }

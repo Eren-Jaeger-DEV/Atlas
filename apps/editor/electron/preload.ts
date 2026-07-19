@@ -58,6 +58,13 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     return () => ipcRenderer.removeListener("atlas:terminal-data", listener);
   },
 
+  // Clipboard
+  clipboardReadText: (): Promise<string> =>
+    ipcRenderer.invoke("atlas:clipboard-read"),
+  
+  clipboardWriteText: (text: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:clipboard-write", text),
+
   // Git Source Control
   gitStatus: (repoPath: string): Promise<Array<{ path: string; status: string; staged: boolean }>> =>
     ipcRenderer.invoke("atlas:git-status", repoPath),
