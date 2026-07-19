@@ -162,6 +162,21 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   // SBOM generation
   generateSbom: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke("atlas:generate-sbom"),
+
+  // Permissions
+  grantPermission: (extensionId: string, permissions: string[]): Promise<void> =>
+    ipcRenderer.invoke("atlas:grant-permission", extensionId, permissions),
+
+  revokePermission: (extensionId: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:revoke-permission", extensionId),
+
+  // AI
+  inlineAgentAction: (action: string, text: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:agent-inline-action", action, text),
+
+  // Graph Data
+  getGraphData: (repoPath: string): Promise<{ nodes: any[], edges: any[] }> =>
+    ipcRenderer.invoke("atlas:get-graph-data", repoPath),
 });
 
 

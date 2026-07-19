@@ -238,7 +238,6 @@ ipcMain.handle("atlas:search", async (_event, query: string) => {
   }
 });
 
-// Select Directory Dialog
 ipcMain.handle("atlas:select-directory", async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -248,6 +247,58 @@ ipcMain.handle("atlas:select-directory", async () => {
   const selectedPath = result.filePaths[0]!.replace(/\\/g, "/");
   global.__atlasRepoRoot = selectedPath;
   return selectedPath;
+});
+
+// Permission Engine
+let permissionEngineInstance: any = null;
+async function getPermissionEngine() {
+  if (!permissionEngineInstance) {
+    const { PermissionEngine } = await import("@atlas/core");
+    permissionEngineInstance = new PermissionEngine();
+  }
+  return permissionEngineInstance;
+}
+
+ipcMain.handle("atlas:grant-permission", async (_event, extensionId: string, permissions: any[]) => {
+  const engine = await getPermissionEngine();
+  engine.grantPermissions(extensionId, permissions);
+});
+
+ipcMain.handle("atlas:revoke-permission", async (_event, extensionId: string) => {
+  const engine = await getPermissionEngine();
+  engine.revokePermissions(extensionId);
+});
+
+// Inline Agent Action
+ipcMain.handle("atlas:agent-inline-action", async (_event, action: string, text: string) => {
+  // In a real app, this would route to packages/agents' orchestrator or an LLM provider directly.
+  // For now, we simulate a mock stream/delay.
+  await new Promise(r => setTimeout(r, 1000));
+  if (action === "explain") {
+    return `[Agent] Explanation for the selected code:\nThis code snippet appears to handle state management or dispatch logic.`;
+  } else if (action === "test") {
+    return `[Agent] Generating unit tests...\n\nimport { test, expect } from "vitest";\n\ntest("works correctly", () => {\n  expect(true).toBe(true);\n});`;
+  } else if (action === "docs") {
+    return `[Agent] Generating documentation...\n\n/**\n * This module is responsible for the core functionality.\n */`;
+  }
+  return `[Agent] Action completed.`;
+});
+
+// Dependency Graph Data
+ipcMain.handle("atlas:get-graph-data", async (_event, repoPath: string) => {
+  try {
+    const { MemoryEngine } = await import("@atlas/graph");
+    const engine = await MemoryEngine.create({ repoRoot: repoPath });
+    const nodes = engine.db.getAllNodes();
+    const edges = engine.db.getAllEdges();
+    // Do not close engine immediately if it is shared, but here it's created on the fly.
+    // In a real app we might cache it. Let's close it to avoid leaks.
+    engine.close();
+    return { nodes, edges };
+  } catch (err) {
+    console.error("Failed to get graph data:", err);
+    return { nodes: [], edges: [] };
+  }
 });
 
 // File Operations

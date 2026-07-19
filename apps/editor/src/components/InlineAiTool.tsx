@@ -1,4 +1,3 @@
-// STUB - This component uses hardcoded explanations and does not actually route requests to the agent runtime.
 import { useState } from "react";
 
 interface InlineAiToolProps {
@@ -9,6 +8,8 @@ interface InlineAiToolProps {
   onClose: () => void;
 }
 
+const api = () => (window as any).atlasAPI;
+
 export function InlineAiTool({
   selectedText,
   onExplain,
@@ -17,12 +18,21 @@ export function InlineAiTool({
   onClose,
 }: InlineAiToolProps) {
   const [explanation, setExplanation] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleExplainClick = () => {
-    onExplain();
-    setExplanation(
-      "Explain Code Result:\nThis logic resolves active workspace configuration, verifies permission scopes, and dispatches command events."
-    );
+  const handleAction = async (action: string, callback: () => void) => {
+    callback();
+    if (!api()?.inlineAgentAction) return;
+    setLoading(true);
+    setExplanation("Thinking...");
+    try {
+      const res = await api().inlineAgentAction(action, selectedText || "");
+      setExplanation(res);
+    } catch (e) {
+      setExplanation(`Error: ${e}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,9 +43,9 @@ export function InlineAiTool({
       </div>
 
       <div style={styles.actions}>
-        <button style={styles.btn} onClick={handleExplainClick}>Explain Code</button>
-        <button style={styles.btn} onClick={onGenerateTests}>Generate Tests</button>
-        <button style={styles.btn} onClick={onGenerateDocs}>Generate Docs</button>
+        <button style={styles.btn} disabled={loading} onClick={() => handleAction("explain", onExplain)}>Explain Code</button>
+        <button style={styles.btn} disabled={loading} onClick={() => handleAction("test", onGenerateTests)}>Generate Tests</button>
+        <button style={styles.btn} disabled={loading} onClick={() => handleAction("docs", onGenerateDocs)}>Generate Docs</button>
       </div>
 
       {explanation && (

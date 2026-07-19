@@ -1,6 +1,3 @@
-// WARN - The symbol data is populated from a real graph search via atlasAPI,
-// however, the visual layout (circleLayout) is a mock layout that artificially draws edges from the center node to all others.
-// It does not reflect true topological dependency edges.
 import { useState, useEffect, useRef } from "react";
 
 const api = () => (window as any).atlasAPI;
@@ -10,6 +7,12 @@ interface GraphNode {
   label?: string;
   kind?: string;
   filePath?: string;
+}
+
+interface GraphEdge {
+  fromId: string;
+  toId: string;
+  kind: string;
 }
 
 interface LayoutNode {
@@ -40,6 +43,7 @@ function circleLayout(nodes: GraphNode[], cx: number, cy: number, r: number): La
 
 export function DependencyGraph({ repoPath }: DependencyGraphProps) {
   const [nodes, setNodes] = useState<LayoutNode[]>([]);
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<LayoutNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +54,19 @@ export function DependencyGraph({ repoPath }: DependencyGraphProps) {
     setLoading(true);
     setError(null);
 
-    api()
-      .search("*")
-      .then((results: GraphNode[]) => {
-        const topN = (Array.isArray(results) ? results : []).slice(0, 30);
-        setNodes(circleLayout(topN, 300, 220, 180));
-      })
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setLoading(false));
+    if (api()?.getGraphData) {
+      api()
+        .getGraphData(repoPath)
+        .then((data: { nodes: GraphNode[]; edges: GraphEdge[] }) => {
+          const topN = data.nodes.slice(0, 30);
+          setNodes(circleLayout(topN, 300, 220, 180));
+          setEdges(data.edges);
+        })
+        .catch((e: Error) => setError(e.message))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, [repoPath]);
 
   const kindColor = (kind: string) => {
@@ -90,15 +99,16 @@ export function DependencyGraph({ repoPath }: DependencyGraphProps) {
 
         {nodes.length > 0 && (
           <svg ref={svgRef} width="100%" height="100%" viewBox="0 0 600 440" style={styles.svg}>
-            {/* Draw edges from center to all outer nodes */}
-            {nodes.map((n, i) => {
-              const center = nodes[0];
-              if (i === 0) return null;
+            {/* Draw true edges */}
+            {edges.map((edge, i) => {
+              const source = nodes.find(n => n.id === edge.fromId);
+              const target = nodes.find(n => n.id === edge.toId);
+              if (!source || !target) return null;
               return (
                 <line
-                  key={`edge-${n.id}`}
-                  x1={center.x} y1={center.y}
-                  x2={n.x} y2={n.y}
+                  key={`edge-${i}-${edge.fromId}-${edge.toId}`}
+                  x1={source.x} y1={source.y}
+                  x2={target.x} y2={target.y}
                   stroke="#27272a" strokeWidth="1"
                 />
               );

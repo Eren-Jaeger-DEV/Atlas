@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { EditorPane } from "./components/EditorPane.js";
 import { FileExplorer } from "./components/FileExplorer.js";
 import { GitPanel } from "./components/GitPanel.js";
@@ -21,6 +21,7 @@ import { AccountPanel } from "./components/AccountPanel.js";
 import { ReleaseManagerPanel } from "./components/ReleaseManagerPanel.js";
 import { AboutAtlasModal } from "./components/AboutAtlasModal.js";
 import logoImg from "./assets/logo.png";
+import { CommandService } from "@atlas/core";
 
 interface EditorTab { filePath: string; content: string; language: string; isDirty: boolean; }
 type SidebarView = "explorer" | "git" | "history" | "impact" | "graph" | "health" | "extensions" | "account" | "release" | "ai" | "settings";
@@ -204,25 +205,31 @@ export function App() {
     ],
   };
 
-  const commands: CommandItem[] = [
-    { id:"about-atlas",     label:"About Atlas Studio v1.0", shortcut:"",             action:()=>setShowAboutModal(true) },
-    { id:"open-settings",   label:"Open Settings",         shortcut:"Ctrl+,",       action:()=>setActiveSidebar("settings") },
-    { id:"open-folder",     label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
-    { id:"split-editor",    label:"Toggle Split Editor",   shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
-    { id:"show-account",    label:"Account & Cloud Sync",  shortcut:"",             action:()=>setActiveSidebar("account") },
-    { id:"show-release",    label:"Release Engineering & Updates",shortcut:"",      action:()=>setActiveSidebar("release") },
-    { id:"inline-ai",       label:"Inline AI Assistant",   shortcut:"Ctrl+I",       action:()=>setShowInlineAi(p=>!p) },
-    { id:"ai-safety",       label:"AI Proposed Edit Preview",shortcut:"",           action:()=>setShowAiSafety(true) },
-    { id:"show-history",    label:"Git History & Graph",   shortcut:"",             action:()=>setActiveSidebar("history") },
-    { id:"merge-resolver",  label:"3-Way Merge Conflict Resolver",shortcut:"",     action:()=>setShowMergeConflict(p=>!p) },
-    { id:"show-graph",      label:"Dependency Graph",      shortcut:"",             action:()=>setActiveSidebar("graph") },
-    { id:"show-health",     label:"Project Health",        shortcut:"",             action:()=>setActiveSidebar("health") },
-    { id:"show-extensions", label:"Extensions Marketplace",shortcut:"Ctrl+Shift+X", action:()=>setActiveSidebar("extensions") },
-    { id:"toggle-terminal", label:"Toggle Terminal",        shortcut:"Ctrl+`",       action:()=>setShowBottomPanel(p=>!p) },
-    { id:"show-explorer",   label:"Explorer",               shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
-    { id:"show-git",        label:"Source Control",         shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
-    { id:"toggle-ai",       label:"Toggle AI Chat",         shortcut:"Ctrl+L",       action:()=>setShowRightAiSidebar(p=>!p) },
-  ];
+  // Initialize CommandService
+  const commandService = React.useMemo(() => new CommandService(), []);
+
+  useEffect(() => {
+    const unregisters = [
+      commandService.registerCommand("about-atlas", "About Atlas Studio v1.0", () => setShowAboutModal(true)),
+      commandService.registerCommand("open-settings", "Open Settings", () => setActiveSidebar("settings"), "Ctrl+,"),
+      commandService.registerCommand("open-folder", "Open Workspace Folder", handleSelectRepo, "Ctrl+O"),
+      commandService.registerCommand("split-editor", "Toggle Split Editor", () => setIsSplit(p=>!p), "Ctrl+\\"),
+      commandService.registerCommand("show-account", "Account & Cloud Sync", () => setActiveSidebar("account")),
+      commandService.registerCommand("show-release", "Release Engineering & Updates", () => setActiveSidebar("release")),
+      commandService.registerCommand("inline-ai", "Inline AI Assistant", () => setShowInlineAi(p=>!p), "Ctrl+I"),
+      commandService.registerCommand("ai-safety", "AI Proposed Edit Preview", () => setShowAiSafety(true)),
+      commandService.registerCommand("show-history", "Git History & Graph", () => setActiveSidebar("history")),
+      commandService.registerCommand("merge-resolver", "3-Way Merge Conflict Resolver", () => setShowMergeConflict(p=>!p)),
+      commandService.registerCommand("show-graph", "Dependency Graph", () => setActiveSidebar("graph")),
+      commandService.registerCommand("show-health", "Project Health", () => setActiveSidebar("health")),
+      commandService.registerCommand("show-extensions", "Extensions Marketplace", () => setActiveSidebar("extensions"), "Ctrl+Shift+X"),
+      commandService.registerCommand("toggle-terminal", "Toggle Terminal", () => setShowBottomPanel(p=>!p), "Ctrl+`"),
+      commandService.registerCommand("show-explorer", "Explorer", () => setActiveSidebar("explorer"), "Ctrl+Shift+E"),
+      commandService.registerCommand("show-git", "Source Control", () => setActiveSidebar("git"), "Ctrl+Shift+G"),
+      commandService.registerCommand("toggle-ai", "Toggle AI Chat", () => setShowRightAiSidebar(p=>!p), "Ctrl+L"),
+    ];
+    return () => unregisters.forEach(fn => fn());
+  }, [commandService, handleSelectRepo]);
 
   const wname = repoPath ? repoPath.split(/[/\\]/).pop() : "Atlas Studio";
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
@@ -476,13 +483,19 @@ export function App() {
         <AiSafetyModal
           filePath={activeTab?.filePath || "src/index.ts"}
           proposedCode="// Proposed AI modification\nexport function example() { return true; }"
-          onApprove={() => setShowAiSafety(false)}
-          onReject={() => setShowAiSafety(false)}
+          onApprove={() => {
+            api()?.grantPermission("atlas-agent", ["workspace.write"]);
+            setShowAiSafety(false);
+          }}
+          onReject={() => {
+            api()?.revokePermission("atlas-agent");
+            setShowAiSafety(false);
+          }}
         />
       )}
 
       <StatusBar repoPath={repoPath} activeLanguage={activeTab?.language} cursorSymbol={cursorSymbol}/>
-      <CommandPalette isOpen={showCommandPalette} commands={commands} onClose={()=>setShowCommandPalette(false)}/>
+      <CommandPalette isOpen={showCommandPalette} commandService={commandService} onClose={()=>setShowCommandPalette(false)}/>
     </div>
   );
 }

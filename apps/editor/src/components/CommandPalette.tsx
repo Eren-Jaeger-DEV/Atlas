@@ -1,20 +1,14 @@
 import { useState, useEffect } from "react";
 
-export interface CommandItem {
-  id: string;
-  label: string;
-  category?: string;
-  shortcut?: string;
-  action: () => void;
-}
+import type { CommandService, CommandDescriptor } from "@atlas/core";
 
 interface CommandPaletteProps {
-  commands: CommandItem[];
+  commandService: CommandService;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function CommandPalette({ commands, isOpen, onClose }: CommandPaletteProps) {
+export function CommandPalette({ commandService, isOpen, onClose }: CommandPaletteProps) {
   const [search, setSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -27,6 +21,7 @@ export function CommandPalette({ commands, isOpen, onClose }: CommandPaletteProp
 
   if (!isOpen) return null;
 
+  const commands = commandService.getCommands();
   const filtered = commands.filter(
     (cmd) =>
       cmd.label.toLowerCase().includes(search.toLowerCase()) ||
@@ -46,7 +41,7 @@ export function CommandPalette({ commands, isOpen, onClose }: CommandPaletteProp
       e.preventDefault();
       const target = filtered[selectedIndex];
       if (target) {
-        target.action();
+        commandService.executeCommand(target.id).catch(console.error);
         onClose();
       }
     }
@@ -78,7 +73,7 @@ export function CommandPalette({ commands, isOpen, onClose }: CommandPaletteProp
                   ...(idx === selectedIndex ? styles.itemSelected : {}),
                 }}
                 onClick={() => {
-                  cmd.action();
+                  commandService.executeCommand(cmd.id).catch(console.error);
                   onClose();
                 }}
               >

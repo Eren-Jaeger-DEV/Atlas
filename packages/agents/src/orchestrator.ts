@@ -35,6 +35,7 @@ import { runPlanner } from "./planner.js";
 import { runCoder } from "./coder.js";
 import { runTester } from "./tester.js";
 import { runReviewer } from "./reviewer.js";
+import { ContextEngine } from "./context/ContextEngine.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -93,7 +94,10 @@ export class Orchestrator {
       // ─── PLANNING ───────────────────────────────────────────────────────
       this.emit({ type: "state_change", state: "PLANNING", runId });
 
-      plan = await runPlanner(goal, commonOpts);
+      const ctx = ContextEngine.assembleContext({ maxTokens: 4000 });
+      const enrichedGoal = `[System Context]\n${ctx.promptContext}\n\nUser Goal: ${goal}`;
+
+      plan = await runPlanner(enrichedGoal, commonOpts);
       this.emit({ type: "plan_ready", plan, runId });
 
       // ─── CODING + TESTING (per step) ────────────────────────────────────

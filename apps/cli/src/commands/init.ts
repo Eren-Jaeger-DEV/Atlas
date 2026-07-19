@@ -70,6 +70,9 @@ export async function initCommand(targetPath: string): Promise<void> {
     console.log(
       chalk.yellow(`\n  ⚠ ${result.errors.length} file(s) failed to parse`)
     );
+    for (const err of result.errors) {
+      console.log(chalk.dim(`    ${err.filePath}: ${err.error}`));
+    }
   }
 
   console.log(chalk.dim(`\n  Graph stored at: ${repoRoot}/.atlas/graph.db\n`));

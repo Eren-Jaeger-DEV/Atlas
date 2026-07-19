@@ -1,7 +1,7 @@
-// STUB - This component is a visual mockup. It does not integrate with atlasAPI to read or write real conflict markers.
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface MergeConflictBlock {
+  type: "conflict";
   id: number;
   currentChange: string;
   incomingChange: string;
@@ -9,26 +9,117 @@ interface MergeConflictBlock {
   chosen?: "current" | "incoming" | "both";
 }
 
+interface TextBlock {
+  type: "text";
+  content: string;
+}
+
+type Chunk = TextBlock | MergeConflictBlock;
+
 interface MergeConflictEditorProps {
   filePath: string;
-  conflictBlocks?: MergeConflictBlock[];
   onComplete: () => void;
 }
 
+const api = () => (window as any).atlasAPI;
+
 export function MergeConflictEditor({
   filePath,
-  conflictBlocks = [],
   onComplete,
 }: MergeConflictEditorProps) {
-  const [blocks, setBlocks] = useState<MergeConflictBlock[]>(conflictBlocks);
+  const [chunks, setChunks] = useState<Chunk[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      if (!api()?.readFile) return;
+      try {
+        const text = await api().readFile(filePath);
+        const lines = text.split("\n");
+        const parsedChunks: Chunk[] = [];
+        let currentText: string[] = [];
+        let state = "normal";
+        let conflictId = 0;
+        let currentChange: string[] = [];
+        let incomingChange: string[] = [];
+        
+        for (const line of lines) {
+          if (state === "normal") {
+            if (line.startsWith("<<<<<<<")) {
+              if (currentText.length > 0) {
+                parsedChunks.push({ type: "text", content: currentText.join("\n") });
+                currentText = [];
+              }
+              state = "in-current";
+              currentChange = [];
+            } else {
+              currentText.push(line);
+            }
+          } else if (state === "in-current") {
+            if (line.startsWith("=======")) {
+              state = "in-incoming";
+              incomingChange = [];
+            } else {
+              currentChange.push(line);
+            }
+          } else if (state === "in-incoming") {
+            if (line.startsWith(">>>>>>>")) {
+              conflictId++;
+              parsedChunks.push({
+                type: "conflict",
+                id: conflictId,
+                currentChange: currentChange.join("\n"),
+                incomingChange: incomingChange.join("\n"),
+                resolved: false
+              });
+              state = "normal";
+            } else {
+              incomingChange.push(line);
+            }
+          }
+        }
+        if (currentText.length > 0) {
+          parsedChunks.push({ type: "text", content: currentText.join("\n") });
+        }
+        setChunks(parsedChunks);
+      } catch (err) {
+        console.error("Failed to load conflicts", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [filePath]);
 
   const resolveBlock = (id: number, choice: "current" | "incoming" | "both") => {
-    setBlocks(prev =>
-      prev.map(b => (b.id === id ? { ...b, resolved: true, chosen: choice } : b))
+    setChunks(prev =>
+      prev.map(c => (c.type === "conflict" && c.id === id ? { ...c, resolved: true, chosen: choice } : c))
     );
   };
 
-  const unresolvedCount = blocks.filter(b => !b.resolved).length;
+  const handleComplete = async () => {
+    const newLines = [];
+    for (const chunk of chunks) {
+      if (chunk.type === "text") {
+        newLines.push(chunk.content);
+      } else if (chunk.type === "conflict") {
+        if (chunk.chosen === "current") {
+          if (chunk.currentChange) newLines.push(chunk.currentChange);
+        } else if (chunk.chosen === "incoming") {
+          if (chunk.incomingChange) newLines.push(chunk.incomingChange);
+        } else if (chunk.chosen === "both") {
+          if (chunk.currentChange) newLines.push(chunk.currentChange);
+          if (chunk.incomingChange) newLines.push(chunk.incomingChange);
+        }
+      }
+    }
+    const finalContent = newLines.join("\n");
+    await api().writeFile(filePath, finalContent);
+    onComplete();
+  };
+
+  const conflicts = chunks.filter((c): c is MergeConflictBlock => c.type === "conflict");
+  const unresolvedCount = conflicts.filter(b => !b.resolved).length;
 
   return (
     <div style={styles.container}>
@@ -44,7 +135,7 @@ export function MergeConflictEditor({
           <button
             style={{ ...styles.completeBtn, opacity: unresolvedCount === 0 ? 1 : 0.6 }}
             disabled={unresolvedCount > 0}
-            onClick={onComplete}
+            onClick={handleComplete}
           >
             Mark Conflict Resolved
           </button>
@@ -52,57 +143,63 @@ export function MergeConflictEditor({
       </div>
 
       <div style={styles.body}>
-        {blocks.map((block, idx) => (
-          <div key={block.id} style={styles.conflictCard}>
-            <div style={styles.cardHeader}>
-              <span style={styles.conflictLabel}>Conflict #{idx + 1}</span>
-              <div style={styles.actionRow}>
-                <button
-                  style={{
-                    ...styles.actionBtn,
-                    backgroundColor: block.chosen === "current" ? "#1e3a8a" : "#18181b",
-                    color: "#60a5fa",
-                  }}
-                  onClick={() => resolveBlock(block.id, "current")}
-                >
-                  Accept Current (Ours)
-                </button>
-                <button
-                  style={{
-                    ...styles.actionBtn,
-                    backgroundColor: block.chosen === "incoming" ? "#14532d" : "#18181b",
-                    color: "#4ade80",
-                  }}
-                  onClick={() => resolveBlock(block.id, "incoming")}
-                >
-                  Accept Incoming (Theirs)
-                </button>
-                <button
-                  style={{
-                    ...styles.actionBtn,
-                    backgroundColor: block.chosen === "both" ? "#3f3f46" : "#18181b",
-                    color: "#fafafa",
-                  }}
-                  onClick={() => resolveBlock(block.id, "both")}
-                >
-                  Accept Both
-                </button>
+        {loading ? (
+          <div style={{ color: "#71717a", textAlign: "center", marginTop: "20px" }}>Loading file...</div>
+        ) : conflicts.length === 0 ? (
+          <div style={{ color: "#71717a", textAlign: "center", marginTop: "20px" }}>No conflicts found.</div>
+        ) : (
+          conflicts.map((block, idx) => (
+            <div key={block.id} style={styles.conflictCard}>
+              <div style={styles.cardHeader}>
+                <span style={styles.conflictLabel}>Conflict #{idx + 1}</span>
+                <div style={styles.actionRow}>
+                  <button
+                    style={{
+                      ...styles.actionBtn,
+                      backgroundColor: block.chosen === "current" ? "#1e3a8a" : "#18181b",
+                      color: "#60a5fa",
+                    }}
+                    onClick={() => resolveBlock(block.id, "current")}
+                  >
+                    Accept Current (Ours)
+                  </button>
+                  <button
+                    style={{
+                      ...styles.actionBtn,
+                      backgroundColor: block.chosen === "incoming" ? "#14532d" : "#18181b",
+                      color: "#4ade80",
+                    }}
+                    onClick={() => resolveBlock(block.id, "incoming")}
+                  >
+                    Accept Incoming (Theirs)
+                  </button>
+                  <button
+                    style={{
+                      ...styles.actionBtn,
+                      backgroundColor: block.chosen === "both" ? "#3f3f46" : "#18181b",
+                      color: "#fafafa",
+                    }}
+                    onClick={() => resolveBlock(block.id, "both")}
+                  >
+                    Accept Both
+                  </button>
+                </div>
+              </div>
+
+              <div style={styles.diffSplit}>
+                <div style={styles.diffPane}>
+                  <p style={styles.paneHdr}>CURRENT CHANGE (OURS)</p>
+                  <pre style={styles.codeText}>{block.currentChange || "(empty)"}</pre>
+                </div>
+
+                <div style={styles.diffPane}>
+                  <p style={styles.paneHdr}>INCOMING CHANGE (THEIRS)</p>
+                  <pre style={styles.codeText}>{block.incomingChange || "(empty)"}</pre>
+                </div>
               </div>
             </div>
-
-            <div style={styles.diffSplit}>
-              <div style={styles.diffPane}>
-                <p style={styles.paneHdr}>CURRENT CHANGE (OURS)</p>
-                <pre style={styles.codeText}>{block.currentChange}</pre>
-              </div>
-
-              <div style={styles.diffPane}>
-                <p style={styles.paneHdr}>INCOMING CHANGE (THEIRS)</p>
-                <pre style={styles.codeText}>{block.incomingChange}</pre>
-              </div>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
