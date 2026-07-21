@@ -1,9 +1,10 @@
 interface BreadcrumbProps {
   filePath?: string;
   repoPath?: string;
+  cursorSymbol?: string;
 }
 
-export function Breadcrumb({ filePath, repoPath }: BreadcrumbProps) {
+export function Breadcrumb({ filePath, repoPath, cursorSymbol }: BreadcrumbProps) {
   if (!filePath) return null;
 
   let relPath = filePath;
@@ -18,9 +19,16 @@ export function Breadcrumb({ filePath, repoPath }: BreadcrumbProps) {
       {parts.map((part, i) => (
         <span key={i} style={styles.item}>
           {i > 0 && <span style={styles.separator}>&gt;</span>}
-          <span style={i === parts.length - 1 ? styles.activePart : styles.part}>{part}</span>
+          <span style={(i === parts.length - 1 && !cursorSymbol) ? styles.activePart : styles.part}>{part}</span>
         </span>
       ))}
+      
+      {cursorSymbol && (
+        <span style={styles.item}>
+          <span style={styles.separator}>&gt;</span>
+          <span style={styles.activePart}>{cursorSymbol}</span>
+        </span>
+      )}
     </div>
   );
 }

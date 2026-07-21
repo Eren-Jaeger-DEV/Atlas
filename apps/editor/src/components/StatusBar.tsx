@@ -6,9 +6,11 @@ interface StatusBarProps {
   cursorSymbol?: string;
   cursorLine?: number;
   cursorCol?: number;
+  lsStatus?: "loading" | "ready" | "error";
+  healthScore?: number | null;
 }
 
-export function StatusBar({ repoPath, activeLanguage, cursorSymbol, cursorLine = 1, cursorCol = 1 }: StatusBarProps) {
+export function StatusBar({ repoPath, activeLanguage, cursorSymbol, cursorLine = 1, cursorCol = 1, lsStatus = "ready", healthScore }: StatusBarProps) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   const StatusItem = ({ id, children, isBlue, noPad, leftPad, rightPad }: { id: string; children: React.ReactNode; isBlue?: boolean, noPad?: boolean, leftPad?: string, rightPad?: string }) => {
@@ -117,8 +119,24 @@ export function StatusBar({ repoPath, activeLanguage, cursorSymbol, cursorLine =
           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             <span style={{ fontSize: "12px", fontWeight: "bold", fontFamily: "monospace" }}>{"{}"}</span>
             <span style={{ fontSize: "11px", marginTop: "1px" }}>{activeLanguage ? activeLanguage.toUpperCase() : "TYPESCRIPT JSX"}</span>
+            {lsStatus === "ready" && <div className="status-live-indicator" style={{ marginLeft: "4px" }} title="Language Server Ready" />}
+            {lsStatus === "loading" && <div className="status-warn-indicator" style={{ marginLeft: "4px", backgroundColor: "#38bdf8" }} title="Language Server Loading..." />}
+            {lsStatus === "error" && <div className="status-warn-indicator" style={{ marginLeft: "4px", backgroundColor: "#f87171" }} title="Language Server Error" />}
           </div>
         </StatusItem>
+
+        {healthScore !== undefined && (
+          <StatusItem id="health">
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+              <span style={{ fontSize: "11px", marginTop: "1px" }}>
+                {healthScore !== null ? `Health: ${healthScore}%` : "Health: --"}
+              </span>
+            </div>
+          </StatusItem>
+        )}
 
         <StatusItem id="prettier">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

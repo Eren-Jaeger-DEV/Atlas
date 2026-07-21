@@ -10,12 +10,13 @@ export interface FileItem {
 }
 
 interface FileExplorerProps {
-  repoPath?: string;
+  workspaceRoots?: string[];
   onOpenFile: (filePath: string) => void;
   onSelectRepo: () => void;
+  onAddFolder?: () => void;
 }
 
-export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplorerProps) {
+export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFolder }: FileExplorerProps) {
   const [tree, setTree] = useState<FileItem[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
 
@@ -33,10 +34,24 @@ export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplore
   }, []);
 
   const refreshWorkspace = useCallback(async () => {
-    if (!repoPath) return;
-    const items = await loadDirectory(repoPath);
-    setTree(items);
-  }, [repoPath, loadDirectory]);
+    if (!workspaceRoots || workspaceRoots.length === 0) {
+      setTree([]);
+      return;
+    }
+    setTree(prevTree => {
+      return workspaceRoots.map(root => {
+        const existing = prevTree.find(n => n.path === root);
+        if (existing) return existing;
+        return {
+          name: root.split(/[/\\]/).pop() || root,
+          path: root,
+          isDirectory: true,
+          children: undefined,
+          isOpen: false,
+        };
+      });
+    });
+  }, [workspaceRoots]);
 
   useEffect(() => {
     refreshWorkspace();
@@ -69,8 +84,8 @@ export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplore
 
   const handleCreateFile = async () => {
     const filename = prompt("Enter file name (e.g. index.ts):");
-    if (!filename || !repoPath) return;
-    const targetDir = selectedPath && !selectedPath.endsWith("/") ? selectedPath : repoPath;
+    if (!filename || !workspaceRoots || workspaceRoots.length === 0) return;
+    const targetDir = selectedPath && !selectedPath.endsWith("/") ? selectedPath : workspaceRoots[0];
     const targetPath = `${targetDir}/${filename}`.replace(/\/+/g, "/");
 
     const api = (window as any).atlasAPI;
@@ -134,6 +149,11 @@ export function FileExplorer({ repoPath, onOpenFile, onSelectRepo }: FileExplore
           <button style={styles.actionButton} onClick={handleCreateFile} title="New File">
             + File
           </button>
+          {onAddFolder && (
+            <button style={styles.actionButton} onClick={onAddFolder} title="Add Workspace Folder">
+              + Folder
+            </button>
+          )}
           <button style={styles.actionButton} onClick={onSelectRepo} title="Open Workspace">
             Open
           </button>

@@ -1,3 +1,4 @@
+import "./global.css";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { EditorPane } from "./components/EditorPane.js";
 import { FileExplorer } from "./components/FileExplorer.js";
@@ -8,7 +9,7 @@ import { ProblemsPanel } from "./components/ProblemsPanel.js";
 import { OutputPanel } from "./components/OutputPanel.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { DiffViewer } from "./components/DiffViewer.js";
-import { CommandPalette, CommandItem } from "./components/CommandPalette.js";
+import { CommandPalette } from "./components/CommandPalette.js";
 import { SettingsPanel, EditorSettings, DEFAULT_SETTINGS } from "./components/SettingsPanel.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { StatusBar } from "./components/StatusBar.js";
@@ -17,13 +18,16 @@ import { AiSidebar } from "./components/AiSidebar.js";
 import { DependencyGraph } from "./components/DependencyGraph.js";
 import { ProjectHealth } from "./components/ProjectHealth.js";
 import { ExtensionGallery } from "./components/ExtensionGallery.js";
+import { onLspStatusChange, LSPStatus } from "./lsp/LSPClient.js";
 import { GitHistoryPanel } from "./components/GitHistoryPanel.js";
+import { TimelinePanel } from "./components/TimelinePanel.js";
 import { MergeConflictEditor } from "./components/MergeConflictEditor.js";
 import { AiSafetyModal } from "./components/AiSafetyModal.js";
 import { InlineAiTool } from "./components/InlineAiTool.js";
 import { AccountPanel } from "./components/AccountPanel.js";
 import { ReleaseManagerPanel } from "./components/ReleaseManagerPanel.js";
 import { AboutAtlasModal } from "./components/AboutAtlasModal.js";
+import { OutlinePanel, DocumentSymbol } from "./components/OutlinePanel.js";
 import logoImg from "./assets/logo.png";
 import { CommandService } from "@atlas/core";
 
@@ -35,7 +39,7 @@ interface EditorTab {
   targetLine?: number;
   targetColumn?: number;
 }
-type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "impact" | "graph" | "health" | "extensions" | "account" | "release" | "ai" | "settings";
+type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "impact" | "graph" | "health" | "extensions" | "account" | "release" | "ai" | "settings" | "outline";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
 interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; }
@@ -44,11 +48,23 @@ const api = () => (window as any).atlasAPI;
 
 export function App() {
   const [repoPath, setRepoPath]             = useState<string | undefined>(() => localStorage.getItem("atlas_last_repo") || undefined);
+  const [workspaceRoots, setWorkspaceRoots] = useState<string[]>(() => {
+    try { 
+      const stored = JSON.parse(localStorage.getItem("atlas_workspace_roots") || "[]");
+      if (Array.isArray(stored) && stored.length > 0) return stored;
+      const lastRepo = localStorage.getItem("atlas_last_repo");
+      return lastRepo ? [lastRepo] : [];
+    } catch { return []; }
+  });
   const [recentProjects, setRecentProjects] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("atlas_recent_projects") || "[]"); } catch { return []; }
   });
   const [activeSidebar, setActiveSidebar]   = useState<SidebarView>("explorer");
   const [bottomTab, setBottomTab]           = useState<BottomTab>("terminal");
+  const [lsStatus, setLsStatus]             = useState<LSPStatus>("ready");
+  const [healthScore, setHealthScore]       = useState<number | null>(null);
+
+
   const [showBottomPanel, setShowBottomPanel]       = useState(true);
   const [showRightAiSidebar, setShowRightAiSidebar] = useState(true);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -69,6 +85,7 @@ export function App() {
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [activeDiff, setActiveDiff]   = useState<{ filePath: string; diffText: string } | null>(null);
   const [cursorSymbol, setCursorSymbol] = useState<string | undefined>();
+  const [activeSymbols, setActiveSymbols] = useState<DocumentSymbol[]>([]);
   const [aiGoal, setAiGoal]           = useState("");
   const [aiRunning, setAiRunning]     = useState(false);
   const [aiEvents, setAiEvents]       = useState<string[]>([]);
@@ -76,6 +93,29 @@ export function App() {
   const menuRef = useRef<HTMLDivElement>(null);
   const activeTab = tabs[activeTabIndex];
   const splitTab = tabs[splitTabIndex];
+
+  useEffect(() => {
+    if (!repoPath) return;
+    const fetchHealth = async () => {
+      try {
+        const todos = await (api().scanTodos ? api().scanTodos(repoPath) : Promise.resolve({ total: 0 }));
+        const deps = await (api().scanDeps ? api().scanDeps(repoPath) : Promise.resolve({ deps: 0, outdated: 0 }));
+        let score = 100;
+        if (todos.total > 0) score -= Math.min(todos.total * 2, 30);
+        if (deps.outdated > 0) score -= Math.min((deps.outdated / Math.max(deps.deps, 1)) * 100, 50);
+        setHealthScore(Math.max(0, Math.floor(score)));
+      } catch (e) {
+        setHealthScore(null);
+      }
+    };
+    fetchHealth();
+    
+    const unsubscribe = onLspStatusChange((status) => {
+      setLsStatus(status);
+    });
+    
+    return () => unsubscribe();
+  }, [repoPath, activeTab?.language]);
 
   const determineLanguage = (filePath: string) => {
     const ext = filePath.split(".").pop() ?? "";
@@ -92,7 +132,7 @@ export function App() {
         const idx = prev.findIndex(t => t.filePath === filePath);
         if (idx >= 0) {
           const updated = [...prev];
-          updated[idx] = { ...updated[idx], targetLine, targetColumn };
+          updated[idx] = { ...updated[idx], targetLine, targetColumn } as EditorTab;
           setActiveTabIndex(idx);
           return updated;
         }
@@ -118,12 +158,33 @@ export function App() {
     const sel = await a.selectDirectory();
     if (sel) {
       setRepoPath(sel);
+      setWorkspaceRoots([sel]);
+      localStorage.setItem("atlas_workspace_roots", JSON.stringify([sel]));
       saveRecentProject(sel);
     }
   }, [saveRecentProject]);
 
+  const handleAddFolder = useCallback(async () => {
+    const a = api(); if (!a?.addDirectory) return;
+    const sel = await a.addDirectory();
+    if (sel) {
+      setWorkspaceRoots(prev => {
+        if (prev.includes(sel)) return prev;
+        const next = [...prev, sel];
+        localStorage.setItem("atlas_workspace_roots", JSON.stringify(next));
+        return next;
+      });
+      if (!repoPath) {
+        setRepoPath(sel);
+        saveRecentProject(sel);
+      }
+    }
+  }, [repoPath, saveRecentProject]);
+
   const handleOpenRecent = (path: string) => {
     setRepoPath(path);
+    setWorkspaceRoots([path]);
+    localStorage.setItem("atlas_workspace_roots", JSON.stringify([path]));
     saveRecentProject(path);
   };
 
@@ -179,6 +240,20 @@ export function App() {
       if ((file as any).path) handleOpenFile((file as any).path);
     }
   };
+
+  const handleUpdateSettings = (newSettings: EditorSettings) => {
+    setSettings(newSettings);
+    api()?.updateSettings?.(newSettings);
+  };
+
+  useEffect(() => {
+    const a = api();
+    if (a?.getSettings) {
+      a.getSettings().then((s: any) => {
+        if (s) setSettings(s);
+      });
+    }
+  }, []);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -238,6 +313,7 @@ export function App() {
     const a = api(); if (!a?.onMenuAction) return;
     return a.onMenuAction((action: string) => {
       if (action==="menu:open-folder")       handleSelectRepo();
+      else if (action==="menu:add-folder")   handleAddFolder();
       else if (action==="menu:command-palette")   setShowCommandPalette(true);
       else if (action==="menu:show-explorer")     setActiveSidebar("explorer");
       else if (action==="menu:show-git")          setActiveSidebar("git");
@@ -251,6 +327,7 @@ export function App() {
     File: [
       { label:"New File",              shortcut:"Ctrl+N",       action:()=>{} },
       { label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
+      { label:"Add Folder to Workspace...",                     action:handleAddFolder },
       { label:"separator", separator:true },
       { label:"Save",                  shortcut:"Ctrl+S",       action:handleSave },
       { label:"Save All",              shortcut:"Ctrl+Shift+S", action:handleSave },
@@ -310,6 +387,7 @@ export function App() {
       commandService.registerCommand("about-atlas", "About Atlas Studio v1.0", () => setShowAboutModal(true)),
       commandService.registerCommand("open-settings", "Open Settings", () => setActiveSidebar("settings"), "Ctrl+,"),
       commandService.registerCommand("open-folder", "Open Workspace Folder", handleSelectRepo, "Ctrl+O"),
+      commandService.registerCommand("add-folder", "Add Folder to Workspace", handleAddFolder),
       commandService.registerCommand("split-editor", "Toggle Split Editor", () => setIsSplit(p=>!p), "Ctrl+\\"),
       commandService.registerCommand("show-account", "Account & Cloud Sync", () => setActiveSidebar("account")),
       commandService.registerCommand("show-release", "Release Engineering & Updates", () => setActiveSidebar("release")),
@@ -338,6 +416,31 @@ export function App() {
     return () => unreg?.();
   }, [commandService]);
 
+  // Tasks registration
+  useEffect(() => {
+    if (!repoPath) return;
+    const a = api();
+    if (a?.getTasks) {
+      let unregisters: Array<() => void> = [];
+      a.getTasks(repoPath).then((tasks: any[]) => {
+        unregisters = tasks.map((task) => 
+          commandService.registerCommand(
+            `task:${task.id}`,
+            `Task: ${task.name}`,
+            () => {
+              // Open bottom panel if closed
+              setShowBottomPanel(true);
+              setBottomTab("terminal");
+              // Run in terminal
+              a.terminalInput("term-1", task.command + "\r");
+            }
+          )
+        );
+      });
+      return () => unregisters.forEach((fn) => fn());
+    }
+  }, [repoPath, commandService]);
+
   const wname = repoPath ? repoPath.split(/[/\\]/).pop() : "Atlas Studio";
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
 
@@ -359,7 +462,7 @@ export function App() {
               </button>
               {openMenu === name && (
                 <div style={s.dropdown}>
-                  {menus[name].map((item, i) => (
+                  {menus[name]!.map((item, i) => (
                     item.separator
                       ? <div key={i} style={s.dropSep} />
                       : <button
@@ -423,8 +526,9 @@ export function App() {
               {id:"search",    lbl:"Search",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>},
               {id:"git",       lbl:"Git",     icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>},
               {id:"debug",     lbl:"Debug",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>},
-              {id:"history",   lbl:"History", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>},
-              {id:"impact",    lbl:"Impact",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
+              {id:"history",   lbl:"History", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
+              {id:"timeline",  lbl:"Timeline",icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
+              {id:"impact",    lbl:"Impact",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>},
               {id:"graph",     lbl:"Graph",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>},
               {id:"health",    lbl:"Health",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>},
               {id:"account",   lbl:"Account", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>},
@@ -445,13 +549,15 @@ export function App() {
         </nav>
 
         <aside style={{ ...s.sidebar, width: `${sidebarWidth}px` }}>
-          {activeSidebar==="explorer"   && <FileExplorer repoPath={repoPath} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo}/>}
+          {activeSidebar==="explorer"   && <FileExplorer workspaceRoots={workspaceRoots} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo} onAddFolder={handleAddFolder}/>}
           {activeSidebar==="search"     && <GlobalSearchPanel workspaceRoot={repoPath!} onFileSelect={(f, l) => handleOpenFile(f, l)} />}
           {activeSidebar==="git"        && <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff}/>}
           {activeSidebar==="debug"      && <DebugPanel />}
           {activeSidebar==="history"    && <GitHistoryPanel repoPath={repoPath}/>}
+          {activeSidebar==="timeline"   && <TimelinePanel repoPath={repoPath}/>}
           {activeSidebar==="impact"     && <ImpactPanel filePath={activeTab?.filePath} symbolName={cursorSymbol}/>}
           {activeSidebar==="graph"      && <DependencyGraph repoPath={repoPath}/>}
+          {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
           {activeSidebar==="health"     && <ProjectHealth repoPath={repoPath}/>}
           {activeSidebar==="account"    && <AccountPanel />}
           {activeSidebar==="release"    && <ReleaseManagerPanel />}
@@ -469,7 +575,7 @@ export function App() {
               }}>{aiRunning?"Running...":"Run Agent"}</button>
             </div>
           )}
-          {activeSidebar==="settings"   && <SettingsPanel settings={settings} onUpdateSettings={setSettings}/>}
+          {activeSidebar==="settings"   && <SettingsPanel settings={settings} onUpdateSettings={handleUpdateSettings}/>}
         </aside>
 
         <div style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} />
@@ -485,7 +591,7 @@ export function App() {
             ))}
           </div>
 
-          {activeTab && <Breadcrumb filePath={activeTab.filePath} repoPath={repoPath}/>}
+          {activeTab && <Breadcrumb filePath={activeTab.filePath} repoPath={repoPath} cursorSymbol={cursorSymbol} />}
 
           <div style={s.editorArea}>
             {showInlineAi && (
@@ -526,6 +632,11 @@ export function App() {
                         const m=l.match(/\b([A-Za-z_]\w*)\b/); 
                         if(m) setCursorSymbol(m[1]); 
                       }}
+                      onSymbolsChange={(symbols, currentSymbol) => {
+                        setActiveSymbols(symbols);
+                        if(currentSymbol) setCursorSymbol(currentSymbol);
+                      }}
+                      settings={settings}
                     />
                   )}
                 </div>
@@ -541,6 +652,7 @@ export function App() {
                         targetLine={splitTab.targetLine}
                         targetColumn={splitTab.targetColumn}
                         onChange={c=>setTabs(p=>p.map((t,i)=>i===splitTabIndex?{...t,content:c,isDirty:true}:t))}
+                        settings={settings}
                       />
                     ) : (
                       <div style={s.splitPlaceholder}>Select tab to view in split pane</div>
@@ -625,7 +737,15 @@ export function App() {
         />
       )}
 
-      <StatusBar repoPath={repoPath} activeLanguage={activeTab?.language} cursorSymbol={cursorSymbol} cursorLine={activeCursorPos.line} cursorCol={activeCursorPos.col} />
+      <StatusBar 
+        repoPath={repoPath} 
+        activeLanguage={activeTab?.language} 
+        cursorSymbol={cursorSymbol} 
+        cursorLine={activeCursorPos.line} 
+        cursorCol={activeCursorPos.col} 
+        lsStatus={lsStatus}
+        healthScore={healthScore}
+      />
       <CommandPalette isOpen={showCommandPalette} commandService={commandService} onClose={()=>setShowCommandPalette(false)}/>
     </div>
   );

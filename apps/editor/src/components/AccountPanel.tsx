@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { AccountService } from "@atlas/core/cloud/AccountService.js";
-import { CloudSyncEngine } from "@atlas/core/cloud/CloudSyncEngine.js";
+import { AccountService, CloudSyncEngine } from "@atlas/core";
 
 const api = () => (window as any).atlasAPI;
 
@@ -37,7 +36,7 @@ export function AccountPanel() {
           const logs = await a.gitLog(localStorage.getItem("atlas_last_repo") || "", 5);
           if (logs && logs.length > 0) {
             setActivities(
-              logs.map(l => ({
+              logs.map((l: any) => ({
                 author: l.author || "Developer",
                 action: l.message,
                 time: l.date,

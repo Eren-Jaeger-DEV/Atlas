@@ -44,6 +44,29 @@
         background-color: rgba(251, 191, 36, 0.15) !important;
       }
 
+      /* Git Diff Gutters */
+      .git-gutter-add {
+        border-left: 3px solid #10b981; /* emerald-500 */
+        margin-left: 5px;
+      }
+      .git-gutter-mod {
+        border-left: 3px solid #3b82f6; /* blue-500 */
+        margin-left: 5px;
+      }
+      .git-gutter-del {
+        border-left: 3px solid #ef4444; /* red-500 */
+        margin-left: 5px;
+      }
+
+      /* Git Blame Ghost Text */
+      .git-blame-ghost {
+        color: #71717a !important;
+        font-size: 12px;
+        font-style: italic;
+        padding-left: 16px;
+        pointer-events: none;
+      }
+
       /* Global Hover States for Custom UI */
       button { outline: none; }
       button:not(:disabled):hover { filter: brightness(1.2); }

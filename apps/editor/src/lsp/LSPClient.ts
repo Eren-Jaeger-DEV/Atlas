@@ -1,32 +1,11 @@
 import * as monaco from "monaco-editor";
-import { MonacoLanguageClient, MessageTransports } from "monaco-languageclient";
-import { AbstractMessageReader, AbstractMessageWriter, DataCallback, Message } from "vscode-jsonrpc";
+import { MonacoLanguageClient } from "monaco-languageclient";
+import { AbstractMessageReader } from "vscode-jsonrpc/lib/messageReader.js";
+import { AbstractMessageWriter } from "vscode-jsonrpc/lib/messageWriter.js";
+import { DataCallback, Message } from "vscode-jsonrpc";
 import { logToOutput } from "../components/OutputPanel.js";
 
 const api = () => (window as any).atlasAPI;
-
-// A custom reader that listens to IPC events
-class IpcMessageReader extends AbstractMessageReader {
-  private disposeCallback?: () => void;
-  private callback?: DataCallback;
-
-  listen(callback: DataCallback): monaco.IDisposable {
-    this.callback = callback;
-    this.disposeCallback = api()?.onLspMessage((message: string) => {
-      try {
-        // The LSP message from stdio may contain multiple messages separated by Content-Length headers.
-        // Wait, standard stdio from TS Language Server uses HTTP headers like "Content-Length: 123\r\n\r\n{...}"
-        // But our IPC is just forwarding the raw buffer strings.
-        // monaco-languageclient's default reader/writer might expect to parse this.
-        // Actually, if we just pass the raw chunks, it won't work easily unless we use the StreamMessageReader
-        // But let's assume we can just pass the string to a parser, or we can use the reader that vscode-jsonrpc provides!
-      } catch (e) {
-        console.error(e);
-      }
-    });
-    return { dispose: () => this.disposeCallback?.() };
-  }
-}
 
 class IpcMessageWriter extends AbstractMessageWriter {
   async write(msg: Message): Promise<void> {
@@ -38,19 +17,38 @@ class IpcMessageWriter extends AbstractMessageWriter {
   end(): void {}
 }
 
+export type LSPStatus = "loading" | "ready" | "error";
+
 let client: MonacoLanguageClient | null = null;
 let isInitialized = false;
 let isInitializing = false;
+let currentStatus: LSPStatus = "ready";
+const statusListeners = new Set<(status: LSPStatus) => void>();
 
-export async function initLSPClient(repoPath: string) {
+export function onLspStatusChange(callback: (status: LSPStatus) => void) {
+  statusListeners.add(callback);
+  callback(currentStatus);
+  return () => statusListeners.delete(callback);
+}
+
+function updateStatus(status: LSPStatus) {
+  currentStatus = status;
+  for (const listener of statusListeners) {
+    listener(status);
+  }
+}
+
+export async function initLSPClient(repoPath: string, language: string = "typescript") {
   if (isInitialized || isInitializing) return;
   isInitializing = true;
-  logToOutput("LSP", `Starting TypeScript Language Server for ${repoPath}...`);
+  updateStatus("loading");
+  logToOutput("LSP", `Starting ${language} Language Server for ${repoPath}...`);
 
-  const status = await api()?.startLsp(repoPath);
+  const status = await api()?.startLsp(repoPath, language);
   if (status !== "started" && status !== "already_running") {
     logToOutput("LSP", "Failed to start TS LSP.");
     isInitializing = false;
+    updateStatus("error");
     return;
   }
 
@@ -68,7 +66,7 @@ export async function initLSPClient(repoPath: string) {
         while (true) {
           const match = this.buffer.match(/Content-Length:\s*(\d+)\r\n\r\n/);
           if (!match) break;
-          const length = parseInt(match[1], 10);
+          const length = parseInt(match[1]!, 10);
           const headerLength = match[0].length;
           if (this.buffer.length < headerLength + length) {
             break; // not enough data yet
@@ -89,18 +87,63 @@ export async function initLSPClient(repoPath: string) {
 
   const reader = new ManualIpcReader();
   const writer = new IpcMessageWriter();
-  const transports: MessageTransports = { reader, writer };
+  const transports = { reader, writer };
 
   client = new MonacoLanguageClient({
-    name: "TypeScript Language Client",
+    name: "Language Client",
     clientOptions: {
-      documentSelector: ["typescript", "javascript", "typescriptreact", "javascriptreact"]
+      documentSelector: ["typescript", "javascript", "typescriptreact", "javascriptreact", "python"]
     },
-    connectionProvider: {
-      get: async () => transports
+    messageTransports: transports
+  });
+
+  client.onRequest("workspace/applyEdit", async (params: any) => {
+    try {
+      const editsByFile: Record<string, any[]> = {};
+      if (params.edit.changes) {
+        for (const [uri, edits] of Object.entries(params.edit.changes)) {
+          const fsPath = monaco.Uri.parse(uri).fsPath;
+          const filePath = fsPath ? fsPath : monaco.Uri.parse(uri).path;
+          editsByFile[filePath] = edits as any[];
+        }
+      }
+      if (params.edit.documentChanges) {
+        for (const change of params.edit.documentChanges) {
+          if (change.textDocument && change.edits) {
+            const fsPath = monaco.Uri.parse(change.textDocument.uri).fsPath;
+            const filePath = fsPath ? fsPath : monaco.Uri.parse(change.textDocument.uri).path;
+            if (!editsByFile[filePath]) editsByFile[filePath] = [];
+            editsByFile[filePath].push(...change.edits);
+          }
+        }
+      }
+
+      await api()?.applyWorkspaceEdit(editsByFile);
+      return { applied: true };
+    } catch (e) {
+      console.error("Failed to apply workspace edit:", e);
+      return { applied: false };
     }
   });
 
   client.start();
   console.log("LSP Client Started!");
+}
+
+export function getLSPClient() {
+  return client;
+}
+
+export async function fetchDocumentSymbols(filePath: string): Promise<any[]> {
+  if (!client) return [];
+  try {
+    const uri = monaco.Uri.file(filePath).toString();
+    const result = await client.sendRequest("textDocument/documentSymbol", {
+      textDocument: { uri }
+    });
+    return (result as any[]) || [];
+  } catch (err) {
+    console.error("Failed to fetch document symbols:", err);
+    return [];
+  }
 }

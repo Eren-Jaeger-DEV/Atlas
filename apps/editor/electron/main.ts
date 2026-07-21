@@ -16,10 +16,10 @@ import { pathToFileURL } from "node:url";
 import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
 import cp, { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import * as pty from "node-pty";
 import WebSocket from "ws";
 import vm from "node:vm";
 import { cp as fsCp } from "node:fs/promises";
+import os from "node:os";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
@@ -29,6 +29,7 @@ const execFileAsync = promisify(execFile);
 const isDev = process.env["NODE_ENV"] === "development";
 
 let mainWindow: BrowserWindow | null = null;
+import type * as pty from "node-pty";
 const terminalProcesses = new Map<string, pty.IPty>();
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: "#0f0f13",
+    icon: path.join(__dirname, "../build/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -105,6 +107,7 @@ function buildApplicationMenu(): void {
       label: "File",
       submenu: [
         { label: "Open Folder...",           accelerator: "CmdOrCtrl+O",         click: () => sendToRenderer("menu:open-folder") },
+        { label: "Add Folder to Workspace...",                                   click: () => sendToRenderer("menu:add-folder") },
         { type: "separator" },
         { label: "New File",                 accelerator: "CmdOrCtrl+N",         click: () => sendToRenderer("menu:new-file") },
         { label: "Save",                     accelerator: "CmdOrCtrl+S",         click: () => sendToRenderer("menu:save") },
@@ -251,6 +254,21 @@ ipcMain.handle("atlas:select-directory", async () => {
   if (result.canceled || result.filePaths.length === 0) return null;
   const selectedPath = result.filePaths[0]!.replace(/\\/g, "/");
   global.__atlasRepoRoot = selectedPath;
+  global.__atlasWorkspaceRoots = [selectedPath];
+  return selectedPath;
+});
+
+ipcMain.handle("atlas:add-directory", async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory"],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const selectedPath = result.filePaths[0]!.replace(/\\/g, "/");
+  if (!global.__atlasWorkspaceRoots) global.__atlasWorkspaceRoots = [];
+  if (!global.__atlasWorkspaceRoots.includes(selectedPath)) {
+    global.__atlasWorkspaceRoots.push(selectedPath);
+  }
   return selectedPath;
 });
 
@@ -303,6 +321,121 @@ ipcMain.handle("atlas:get-graph-data", async (_event, repoPath: string) => {
   } catch (err) {
     console.error("Failed to get graph data:", err);
     return { nodes: [], edges: [] };
+  }
+});
+
+// Tasks
+ipcMain.handle("atlas:get-tasks", async (_event, repoPath: string) => {
+  const tasks: Array<{ id: string; name: string; command: string; source: string }> = [];
+  if (!repoPath) return tasks;
+  
+  try {
+    const pkgPath = path.join(repoPath, "package.json");
+    if (await stat(pkgPath).catch(() => null)) {
+      const pkg = JSON.parse(await readFile(pkgPath, "utf-8"));
+      if (pkg.scripts) {
+        for (const [name, command] of Object.entries(pkg.scripts)) {
+          tasks.push({
+            id: `npm:${name}`,
+            name: `npm: ${name}`,
+            command: `npx ${name}`,
+            source: "npm"
+          });
+        }
+      }
+    }
+    const tasksPath = path.join(repoPath, ".atlas", "tasks.json");
+    if (await stat(tasksPath).catch(() => null)) {
+      const custom = JSON.parse(await readFile(tasksPath, "utf-8"));
+      if (custom.tasks && Array.isArray(custom.tasks)) {
+        for (const t of custom.tasks) {
+          tasks.push({
+            id: `workspace:${t.label}`,
+            name: t.label,
+            command: t.command,
+            source: "workspace"
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to parse tasks:", err);
+  }
+  return tasks;
+});
+
+// Snippets
+ipcMain.handle("atlas:get-snippets", async () => {
+  try {
+    const userSnippetsPath = path.join(app.getPath("userData"), "..", "atlas", "snippets.json");
+    let userSnippets = {};
+    if (await stat(userSnippetsPath).catch(() => null)) {
+      userSnippets = JSON.parse(await readFile(userSnippetsPath, "utf-8"));
+    }
+    
+    let workspaceSnippets = {};
+    if (global.__atlasRepoRoot) {
+      const wsSnippetsPath = path.join(global.__atlasRepoRoot, ".atlas", "snippets.json");
+      if (await stat(wsSnippetsPath).catch(() => null)) {
+        workspaceSnippets = JSON.parse(await readFile(wsSnippetsPath, "utf-8"));
+      }
+    }
+    
+    return { ...userSnippets, ...workspaceSnippets };
+  } catch (err) {
+    console.error("[get-snippets] error:", err);
+    return {};
+  }
+});
+
+// Settings
+async function getMergedSettings() {
+  try {
+    const userSettingsPath = path.join(app.getPath("userData"), "..", "atlas", "settings.json");
+    let userSettings = {};
+    if (await stat(userSettingsPath).catch(() => null)) {
+      userSettings = JSON.parse(await readFile(userSettingsPath, "utf-8"));
+    }
+    
+    let workspaceSettings = {};
+    if (global.__atlasRepoRoot) {
+      const wsSettingsPath = path.join(global.__atlasRepoRoot, ".atlas", "settings.json");
+      if (await stat(wsSettingsPath).catch(() => null)) {
+        workspaceSettings = JSON.parse(await readFile(wsSettingsPath, "utf-8"));
+      }
+    }
+    
+    const { DEFAULT_SETTINGS_SCHEMA } = await import("@atlas/core");
+    return {
+      ...DEFAULT_SETTINGS_SCHEMA,
+      ...userSettings,
+      ...workspaceSettings
+    };
+  } catch (err) {
+    console.error("Failed to read settings:", err);
+    return {};
+  }
+}
+
+ipcMain.handle("atlas:get-settings", async () => {
+  return await getMergedSettings();
+});
+
+ipcMain.handle("atlas:update-settings", async (_event, newSettings: any) => {
+  try {
+    const userSettingsPath = path.join(app.getPath("userData"), "..", "atlas", "settings.json");
+    const dir = path.dirname(userSettingsPath);
+    await mkdir(dir, { recursive: true });
+    
+    let userSettings = {};
+    if (await stat(userSettingsPath).catch(() => null)) {
+      userSettings = JSON.parse(await readFile(userSettingsPath, "utf-8"));
+    }
+    
+    userSettings = { ...userSettings, ...newSettings };
+    await writeFile(userSettingsPath, JSON.stringify(userSettings, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Failed to update settings:", err);
   }
 });
 
@@ -389,110 +522,200 @@ ipcMain.handle("atlas:format-code", async (_event, repoPath: string, filePath: s
 });
 
 // LSP Support
-let tsLanguageServer: cp.ChildProcess | null = null;
+let activeLanguageServer: cp.ChildProcess | null = null;
+let activeLanguageServerType: string | null = null;
 
-ipcMain.handle("atlas:lsp-start", async (event, repoPath: string) => {
-  if (tsLanguageServer) {
+ipcMain.handle("atlas:lsp-start", async (event, repoPath: string, language: string = "typescript") => {
+  if (activeLanguageServerType === language && activeLanguageServer) {
     return "already_running";
   }
+  if (activeLanguageServer) {
+    activeLanguageServer.kill();
+    activeLanguageServer = null;
+  }
+  activeLanguageServerType = language;
 
   try {
-    const tsserverPath = require.resolve("typescript-language-server/lib/cli.mjs");
-    tsLanguageServer = cp.spawn("node", [tsserverPath, "--stdio"], { cwd: repoPath });
+    if (language === "python") {
+      activeLanguageServer = cp.spawn("npx", ["-y", "--package=pyright", "pyright-langserver", "--stdio"], { cwd: repoPath, shell: process.platform === "win32" });
+    } else {
+      let tsserverPath = require.resolve("typescript-language-server/lib/cli.mjs");
+      if (tsserverPath.includes("app.asar")) {
+        tsserverPath = tsserverPath.replace("app.asar", "app.asar.unpacked");
+      }
+      activeLanguageServer = cp.spawn("node", [tsserverPath, "--stdio"], { cwd: repoPath });
+    }
 
-    tsLanguageServer.stdout?.on("data", (data: Buffer) => {
+    activeLanguageServer.stdout?.on("data", (data: Buffer) => {
       event.sender.send("atlas:lsp-server-to-client", data.toString("utf-8"));
     });
 
-    tsLanguageServer.stderr?.on("data", (data: Buffer) => {
-      console.error("[LSP Server Error]:", data.toString("utf-8"));
+    activeLanguageServer.stderr?.on("data", (data: Buffer) => {
+      console.error(`[LSP Server Error - ${language}]:`, data.toString("utf-8"));
     });
 
-    tsLanguageServer.on("close", () => {
-      tsLanguageServer = null;
+    activeLanguageServer.on("close", () => {
+      if (activeLanguageServerType === language) {
+        activeLanguageServer = null;
+        activeLanguageServerType = null;
+      }
     });
 
     return "started";
   } catch (err) {
-    console.error("Failed to start TS LSP:", err);
+    console.error(`Failed to start ${language} LSP:`, err);
     return "error";
   }
 });
 
 ipcMain.on("atlas:lsp-client-to-server", (_event, message: string) => {
-  if (tsLanguageServer && tsLanguageServer.stdin) {
-    tsLanguageServer.stdin.write(message);
+  if (activeLanguageServer && activeLanguageServer.stdin) {
+    activeLanguageServer.stdin.write(message);
   }
 });
 
 // DAP Support
 let dapProcess: cp.ChildProcess | null = null;
 let dapWs: WebSocket | null = null;
+let dapSocket: any = null; // node:net.Socket
 let dapPendingRequests = new Map<number, (res: any) => void>();
 let latestCallFrames: any[] = [];
+let dapProtocol: "cdp" | "dap" = "cdp";
 
-ipcMain.handle("atlas:dap-start", async (event, filePath: string) => {
+ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: string = "typescript") => {
   if (dapProcess) {
     return "already_running";
   }
 
   return new Promise((resolve) => {
-    dapProcess = cp.spawn("node", ["--inspect-brk", filePath]);
-    let resolved = false;
+    let isPython = language === "python" || filePath.endsWith(".py");
+    dapProtocol = isPython ? "dap" : "cdp";
 
-    dapProcess.stderr?.on("data", (data: Buffer) => {
-      const output = data.toString("utf-8");
-      const match = output.match(/ws:\/\/[^\s]+/);
-      if (match && !resolved) {
-        resolved = true;
-        const wsUrl = match[0];
-        dapWs = new WebSocket(wsUrl);
-        
-        dapWs.on("open", () => {
+    if (isPython) {
+      // Start debugpy for Python
+      dapProcess = cp.spawn("python3", ["-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", filePath]);
+      
+      const nodeNet = require("node:net");
+      let retries = 0;
+      
+      const tryConnect = () => {
+        dapSocket = nodeNet.connect(5678, "127.0.0.1", () => {
           resolve("started");
-          let msgId = 9000;
-          dapWs?.send(JSON.stringify({ id: msgId++, method: "Runtime.enable" }));
-          dapWs?.send(JSON.stringify({ id: msgId++, method: "Debugger.enable" }));
-          dapWs?.send(JSON.stringify({ id: msgId++, method: "Debugger.runIfWaitingForDebugger" }));
+          
+          let buffer = "";
+          dapSocket.on("data", (data: Buffer) => {
+            buffer += data.toString("utf-8");
+            while (true) {
+              const match = buffer.match(/Content-Length:\s*(\d+)\r\n\r\n/);
+              if (!match) break;
+              const length = parseInt(match[1]!, 10);
+              const headerLength = match[0].length;
+              if (buffer.length < headerLength + length) break;
+              
+              const body = buffer.slice(headerLength, headerLength + length);
+              buffer = buffer.slice(headerLength + length);
+              
+              try {
+                const msg = JSON.parse(body);
+                event.sender.send("atlas:dap-server-to-client", JSON.stringify(msg));
+                if (msg.type === "response" && msg.request_seq) {
+                   if (dapPendingRequests.has(msg.request_seq)) {
+                     dapPendingRequests.get(msg.request_seq)!(msg);
+                     dapPendingRequests.delete(msg.request_seq);
+                   }
+                }
+              } catch (e) {
+                console.error("Failed to parse DAP TCP message", e, body);
+              }
+            }
+          });
+        });
+        
+        dapSocket.on("error", (err: any) => {
+          if (retries < 20 && dapProcess) {
+            retries++;
+            setTimeout(tryConnect, 500);
+          } else {
+            console.error("Failed to connect to debugpy:", err);
+            resolve("error");
+          }
         });
 
-        dapWs.on("message", (msg) => {
-          const m = JSON.parse(msg.toString());
-          if (m.method === "Debugger.paused") {
-            latestCallFrames = m.params.callFrames || [];
-            event.sender.send("atlas:dap-server-to-client", JSON.stringify({
-              type: "event", event: "stopped", body: { reason: "pause", threadId: 1, allThreadsStopped: true }
-            }));
-          } else if (m.method === "Debugger.resumed") {
-            event.sender.send("atlas:dap-server-to-client", JSON.stringify({
-              type: "event", event: "continued", body: { threadId: 1, allThreadsContinued: true }
-            }));
-          }
-          if (m.id && dapPendingRequests.has(m.id)) {
-            dapPendingRequests.get(m.id)!(m);
-            dapPendingRequests.delete(m.id);
-          }
-        });
-
-        dapWs.on("close", () => {
+        dapSocket.on("close", () => {
           event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
         });
-      }
-    });
+      };
+      
+      setTimeout(tryConnect, 1000);
+    } else {
+      // Node.js inspector
+      dapProcess = cp.spawn("node", ["--inspect-brk", filePath]);
+      let resolved = false;
+
+      dapProcess.stderr?.on("data", (data: Buffer) => {
+        const output = data.toString("utf-8");
+        const match = output.match(/ws:\/\/[^\s]+/);
+        if (match && !resolved) {
+          resolved = true;
+          const wsUrl = match[0];
+          dapWs = new WebSocket(wsUrl);
+          
+          dapWs.on("open", () => {
+            resolve("started");
+            let msgId = 9000;
+            dapWs?.send(JSON.stringify({ id: msgId++, method: "Runtime.enable" }));
+            dapWs?.send(JSON.stringify({ id: msgId++, method: "Debugger.enable" }));
+            dapWs?.send(JSON.stringify({ id: msgId++, method: "Debugger.runIfWaitingForDebugger" }));
+          });
+
+          dapWs.on("message", (msg) => {
+            const m = JSON.parse(msg.toString());
+            if (m.method === "Debugger.paused") {
+              latestCallFrames = m.params.callFrames || [];
+              event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+                type: "event", event: "stopped", body: { reason: "pause", threadId: 1, allThreadsStopped: true }
+              }));
+            } else if (m.method === "Debugger.resumed") {
+              event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+                type: "event", event: "continued", body: { threadId: 1, allThreadsContinued: true }
+              }));
+            }
+            if (m.id && dapPendingRequests.has(m.id)) {
+              dapPendingRequests.get(m.id)!(m);
+              dapPendingRequests.delete(m.id);
+            }
+          });
+
+          dapWs.on("close", () => {
+            event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
+          });
+        }
+      });
+    }
 
     dapProcess.on("close", () => {
       dapProcess = null;
-      dapWs = null;
+      if (dapWs) { dapWs.close(); dapWs = null; }
+      if (dapSocket) { dapSocket.destroy(); dapSocket = null; }
       event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
     });
   });
 });
 
 ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
-  if (!dapWs) return;
   try {
     const msg = JSON.parse(message);
     const id = msg.seq;
+
+    if (dapProtocol === "dap") {
+      if (!dapSocket) return;
+      const json = JSON.stringify(msg);
+      const length = Buffer.byteLength(json, 'utf-8');
+      dapSocket.write(`Content-Length: ${length}\r\n\r\n${json}`);
+      return;
+    }
+
+    if (!dapWs) return;
     
     const sendDapResponse = (body: any) => {
       event.sender.send("atlas:dap-server-to-client", JSON.stringify({
@@ -594,6 +817,45 @@ ipcMain.handle("atlas:write-file", async (_event, filePath: string, content: str
   await writeFile(filePath, content, "utf-8");
 });
 
+ipcMain.handle("atlas:apply-workspace-edit", async (_event, editsByFile: Record<string, any[]>) => {
+  try {
+    for (const [filePath, edits] of Object.entries(editsByFile)) {
+      let content = "";
+      try {
+        content = await readFile(filePath, "utf-8");
+      } catch (e) {
+        continue;
+      }
+      
+      edits.sort((a, b) => {
+        if (a.range.start.line !== b.range.start.line) {
+          return b.range.start.line - a.range.start.line;
+        }
+        return b.range.start.character - a.range.start.character;
+      });
+
+      const lines = content.split("\n");
+      for (const edit of edits) {
+        const startLine = edit.range.start.line;
+        const startChar = edit.range.start.character;
+        const endLine = edit.range.end.line;
+        const endChar = edit.range.end.character;
+
+        const before = lines[startLine]!.substring(0, startChar);
+        const after = lines[endLine]!.substring(endChar);
+
+        lines.splice(startLine, endLine - startLine + 1, before + edit.newText + after);
+      }
+      
+      await writeFile(filePath, lines.join("\n"), "utf-8");
+    }
+    return true;
+  } catch (err) {
+    console.error("Failed to apply workspace edit:", err);
+    return false;
+  }
+});
+
 ipcMain.handle("atlas:create-file", async (_event, filePath: string, isDirectory: boolean) => {
   if (isDirectory) {
     await mkdir(filePath, { recursive: true });
@@ -612,14 +874,27 @@ ipcMain.handle("atlas:rename-file", async (_event, oldPath: string, newPath: str
 });
 
 // Integrated Terminal - real PTY via node-pty (ANSI colors, interactive programs, real resize)
+import type * as IPty from "node-pty";
+
 ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: string) => {
   if (terminalProcesses.has(termId)) return { success: true };
 
   const targetCwd = cwd || global.__atlasRepoRoot || process.cwd();
+  
+  const settings = await getMergedSettings() as any;
   const isWin = process.platform === "win32";
-  const shell = isWin
+  
+  let shell = isWin
     ? (process.env["COMSPEC"] || "cmd.exe")
     : (process.env["SHELL"] || "/bin/bash");
+    
+  if (settings.terminalShell) {
+    if (settings.terminalShell === "bash") shell = isWin ? "bash.exe" : "/bin/bash";
+    else if (settings.terminalShell === "cmd") shell = isWin ? "cmd.exe" : shell;
+    else if (settings.terminalShell === "powershell") shell = isWin ? "powershell.exe" : shell;
+  }
+
+  const pty = await import("node-pty");
 
   const proc = pty.spawn(shell, [], {
     name: "xterm-256color",
@@ -773,6 +1048,44 @@ ipcMain.handle("atlas:git-blame", async (_event, repoPath: string, filePath: str
   }
 });
 
+ipcMain.handle("atlas:git-blame-content", async (_event, repoPath: string, filePath: string, content: string) => {
+  let tempPath = "";
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    tempPath = path.join(os.tmpdir(), `atlas-blame-${Date.now()}-${Math.floor(Math.random()*10000)}.tmp`);
+    await writeFile(tempPath, content);
+    const { stdout } = await execFileAsync("git", ["blame", "--contents", tempPath, filePath], { cwd });
+    return stdout;
+  } catch {
+    return "";
+  } finally {
+    if (tempPath) {
+      rm(tempPath, { force: true }).catch(() => {});
+    }
+  }
+});
+
+ipcMain.handle("atlas:git-diff-content", async (_event, repoPath: string, filePath: string, content: string) => {
+  let tempPath = "";
+  try {
+    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
+    tempPath = path.join(os.tmpdir(), `atlas-diff-${Date.now()}-${Math.floor(Math.random()*10000)}.tmp`);
+    await writeFile(tempPath, content);
+    const { stdout } = await execFileAsync("git", ["diff", "-U0", `HEAD:${filePath}`, tempPath], { cwd });
+    return stdout;
+  } catch (err: any) {
+    // If diff fails, it might be because the file is not in HEAD (untracked), we can just return stdout if it exists
+    if (err && err.stdout) {
+       return err.stdout.toString();
+    }
+    return "";
+  } finally {
+    if (tempPath) {
+      rm(tempPath, { force: true }).catch(() => {});
+    }
+  }
+});
+
 ipcMain.handle("atlas:git-stash-list", async (_event, repoPath: string) => {
   try {
     const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
@@ -806,6 +1119,15 @@ ipcMain.handle("atlas:scan-todos", async (_event, repoPath: string) => {
 // Open repo (sets the active repo root)
 ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
   global.__atlasRepoRoot = repoPath;
+  global.__atlasWorkspaceRoots = [repoPath];
+  return { success: true, repoPath };
+});
+
+ipcMain.handle("atlas:add-repo", async (_event, repoPath: string) => {
+  if (!global.__atlasWorkspaceRoots) global.__atlasWorkspaceRoots = [];
+  if (!global.__atlasWorkspaceRoots.includes(repoPath)) {
+    global.__atlasWorkspaceRoots.push(repoPath);
+  }
   return { success: true, repoPath };
 });
 
@@ -949,18 +1271,23 @@ async function loadExtension(extPath: string, manifest: any) {
             }
           }
         }
-      }
+      },
+      require,
+      module: { exports: {} as any },
+      exports: {} as any
     };
+    sandbox.exports = sandbox.module.exports;
     
     vm.createContext(sandbox);
     const script = new vm.Script(code, { filename: manifest.main });
     script.runInContext(sandbox);
     
-    // If it exports an activate function, we need to call it.
-    // However, a simple script execution is enough for Phase 5 basic isolation.
-    // To support exports, we'd need a CommonJS wrapper (module.exports), 
-    // but we can just require them to call atlas.commands.registerCommand globally for now.
-    
+    // Support exports.activate
+    if (typeof sandbox.module.exports.activate === "function") {
+      await sandbox.module.exports.activate(sandbox.atlas);
+    } else if (typeof sandbox.exports.activate === "function") {
+      await sandbox.exports.activate(sandbox.atlas);
+    }
     console.log(`[ExtensionRuntime] Loaded extension: ${manifest.name}`);
   } catch (e) {
     console.error(`[ExtensionRuntime] Failed to load extension ${manifest.name}:`, e);
@@ -1021,6 +1348,7 @@ ipcMain.handle("system:get-git-config", async (_event, repoPath?: string) => {
 // ---------------------------------------------------------------------------
 declare global {
   var __atlasRepoRoot: string | undefined;
+  var __atlasWorkspaceRoots: string[] | undefined;
 }
 
 app.whenReady().then(() => {
@@ -1066,4 +1394,35 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+
+ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const pkgPath = path.join(repoPath, "package.json");
+    if (!fs.existsSync(pkgPath)) return { deps: 0, outdated: 0 };
+    
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    const depsCount = Object.keys(pkg.dependencies || {}).length + Object.keys(pkg.devDependencies || {}).length;
+    
+    const { execSync } = require("child_process");
+    try {
+      const output = execSync('npm outdated --json', { cwd: repoPath, encoding: 'utf-8' });
+      const outdated = JSON.parse(output);
+      return { deps: depsCount, outdated: Object.keys(outdated).length };
+    } catch (e: any) {
+      // npm outdated exits with 1 if there are outdated deps
+      if (e.stdout) {
+        try {
+          const outdated = JSON.parse(e.stdout);
+          return { deps: depsCount, outdated: Object.keys(outdated).length };
+        } catch (parseErr) { }
+      }
+      return { deps: depsCount, outdated: 0 };
+    }
+  } catch (e) {
+    return { deps: 0, outdated: 0 };
+  }
 });

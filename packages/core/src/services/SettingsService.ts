@@ -9,23 +9,33 @@ import { EventBus } from "../events/EventBus.js";
 export interface SettingsSchema {
   theme: string;
   fontSize: number;
+  fontFamily: string;
   tabSize: number;
   wordWrap: "on" | "off";
   formatOnSave: boolean;
+  autoSave: "off" | "afterDelay" | "onFocusChange";
   minimap: boolean;
   lineNumbers: boolean;
+  terminalShell: "cmd" | "powershell" | "bash";
   aiModel: string;
+  gitBlameEnabled: boolean;
+  gitDiffGuttersEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS_SCHEMA: SettingsSchema = {
-  theme: "dark",
-  fontSize: 13,
+  theme: "obsidian",
+  fontSize: 14,
+  fontFamily: "'JetBrains Mono', Consolas, monospace",
   tabSize: 2,
   wordWrap: "on",
   formatOnSave: false,
+  autoSave: "off",
   minimap: true,
   lineNumbers: true,
+  terminalShell: "cmd",
   aiModel: "gemini-2.0-flash",
+  gitBlameEnabled: true,
+  gitDiffGuttersEnabled: true,
 };
 
 export class SettingsService {

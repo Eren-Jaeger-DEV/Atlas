@@ -5,9 +5,15 @@ export interface EditorSettings {
   fontSize: number;
   fontFamily: string;
   tabSize: number;
+  wordWrap: "on" | "off";
+  formatOnSave: boolean;
+  minimap: boolean;
+  lineNumbers: boolean;
   autoSave: "off" | "afterDelay" | "onFocusChange";
   terminalShell: "cmd" | "powershell" | "bash";
   aiModel: "gemini-2.0-flash" | "gpt-4o" | "claude-3-5-sonnet" | "ollama-local";
+  gitBlameEnabled: boolean;
+  gitDiffGuttersEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: EditorSettings = {
@@ -15,9 +21,15 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   fontSize: 14,
   fontFamily: "'JetBrains Mono', Consolas, monospace",
   tabSize: 2,
+  wordWrap: "on",
+  formatOnSave: false,
+  minimap: true,
+  lineNumbers: true,
   autoSave: "off",
   terminalShell: "cmd",
   aiModel: "gemini-2.0-flash",
+  gitBlameEnabled: true,
+  gitDiffGuttersEnabled: true,
 };
 
 interface SettingsPanelProps {
@@ -27,6 +39,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps) {
   const [localSettings, setLocalSettings] = useState<EditorSettings>(settings);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setLocalSettings(settings);
@@ -38,18 +51,36 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
     onUpdateSettings(updated);
   };
 
+  const matches = (keywords: string[]) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return keywords.some(k => k.toLowerCase().includes(q));
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.title}>SETTINGS</span>
-        <span style={styles.subtext}>Preferences & Configuration</span>
+        <span style={styles.subtext}>Preferences</span>
+      </div>
+
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid #27272a" }}>
+        <input 
+          type="text" 
+          placeholder="Search settings..." 
+          style={styles.searchInput}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
       <div style={styles.body}>
         {/* Section: Appearance */}
+        {(matches(["appearance", "theme", "color"]) || matches(["appearance", "font", "size"]) || matches(["appearance", "font", "family"])) && (
         <div style={styles.section}>
           <div style={styles.sectionHeader}>APPEARANCE</div>
 
+          {matches(["appearance", "theme", "color"]) && (
           <div style={styles.settingItem}>
             <label style={styles.label}>Theme</label>
             <select
@@ -63,7 +94,9 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               <option value="light">Minimalist Light</option>
             </select>
           </div>
+          )}
 
+          {matches(["appearance", "font", "size"]) && (
           <div style={styles.settingItem}>
             <label style={styles.label}>Editor Font Size</label>
             <select
@@ -78,7 +111,9 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               <option value={18}>18 px</option>
             </select>
           </div>
+          )}
 
+          {matches(["appearance", "font", "family", "jetbrains", "fira", "consolas"]) && (
           <div style={styles.settingItem}>
             <label style={styles.label}>Font Family</label>
             <select
@@ -91,12 +126,16 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               <option value="Consolas, monospace">Consolas</option>
             </select>
           </div>
+          )}
         </div>
+        )}
 
         {/* Section: Editor Behavior */}
+        {(matches(["editor", "behavior", "tab", "size", "spaces"]) || matches(["editor", "behavior", "auto", "save"]) || matches(["editor", "behavior", "format", "save"]) || matches(["editor", "behavior", "git", "blame", "diff", "gutters", "source", "control"])) && (
         <div style={styles.section}>
           <div style={styles.sectionHeader}>EDITOR BEHAVIOR</div>
 
+          {matches(["editor", "behavior", "tab", "size", "spaces"]) && (
           <div style={styles.settingItem}>
             <label style={styles.label}>Tab Size</label>
             <select
@@ -108,7 +147,9 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               <option value={4}>4 Spaces</option>
             </select>
           </div>
+          )}
 
+          {matches(["editor", "behavior", "auto", "save", "delay"]) && (
           <div style={styles.settingItem}>
             <label style={styles.label}>Auto Save</label>
             <select
@@ -121,12 +162,58 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               <option value="onFocusChange">On Window Focus Change</option>
             </select>
           </div>
+          )}
+
+          {matches(["editor", "behavior", "format", "save"]) && (
+          <div style={styles.settingItem}>
+            <label style={styles.label}>Format On Save</label>
+            <select
+              style={styles.select}
+              value={localSettings.formatOnSave ? "true" : "false"}
+              onChange={(e) => handleChange("formatOnSave", e.target.value === "true")}
+            >
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          )}
+
+          {matches(["editor", "behavior", "git", "blame"]) && (
+          <div style={styles.settingItem}>
+            <label style={styles.label}>Inline Git Blame</label>
+            <select
+              style={styles.select}
+              value={localSettings.gitBlameEnabled ? "true" : "false"}
+              onChange={(e) => handleChange("gitBlameEnabled", e.target.value === "true")}
+            >
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          )}
+
+          {matches(["editor", "behavior", "git", "diff", "gutters", "source", "control"]) && (
+          <div style={styles.settingItem}>
+            <label style={styles.label}>Git Diff Gutters</label>
+            <select
+              style={styles.select}
+              value={localSettings.gitDiffGuttersEnabled ? "true" : "false"}
+              onChange={(e) => handleChange("gitDiffGuttersEnabled", e.target.value === "true")}
+            >
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          )}
         </div>
+        )}
 
         {/* Section: Terminal & Execution */}
+        {(matches(["terminal", "shell", "cmd", "bash", "powershell"]) || matches(["ai", "agent", "model", "gemini", "gpt", "claude", "ollama"])) && (
         <div style={styles.section}>
           <div style={styles.sectionHeader}>TERMINAL & AI AGENT</div>
 
+          {matches(["terminal", "shell", "cmd", "bash", "powershell"]) && (
           <div style={styles.settingItem}>
             <label style={styles.label}>Default Terminal Shell</label>
             <select
@@ -139,7 +226,9 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               <option value="bash">Git Bash / Unix Shell</option>
             </select>
           </div>
+          )}
 
+          {matches(["ai", "agent", "model", "gemini", "gpt", "claude", "ollama"]) && (
           <div style={styles.settingItem}>
             <label style={styles.label}>Autonomous AI Model</label>
             <select
@@ -153,7 +242,9 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               <option value="ollama-local">Ollama (100% Offline Local Model)</option>
             </select>
           </div>
+          )}
         </div>
+        )}
       </div>
     </div>
   );
@@ -227,4 +318,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "inherit",
     cursor: "pointer",
   },
+  searchInput: {
+    width: "100%",
+    backgroundColor: "#18181b",
+    border: "1px solid #3f3f46",
+    color: "#fafafa",
+    borderRadius: "4px",
+    padding: "6px 8px",
+    fontSize: "12px",
+    outline: "none",
+    boxSizing: "border-box",
+  }
 };

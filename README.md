@@ -61,6 +61,20 @@ pnpm --filter @atlas/editor dev
 
 ---
 
+## 🗺️ Roadmap Status
+
+We are systematically building features to match and exceed standard editor capabilities, organized in tiers:
+* **Tier 1 — Finish What's Already Started**: Core LSP (WorkspaceEdit multi-file rewrite), Python DAP & Node CDP Debugging, and Extension system features (Completed).
+* **Tier 2 — Match VS Code's Breadth**:
+  - [x] **Task Runner (2.2):** Standard npm scripts and `.atlas/tasks.json` runner integrated directly in the Command Palette and panel terminal.
+  - [x] **Settings UI & disk persistence (2.3):** Full preferences editor with search filtering, disk storage (`~/.config/atlas/settings.json`), and dynamic editor live-sync (themes, font size/family, tab size, line numbers, word wrap, minimap).
+  - [x] **2.4 Snippets & Auto-completion:** Language-specific snippet insertion.
+  - [x] **2.5 Outline View & Breadcrumbs:** Document symbol tree and cursor-tracking breadcrumbs.
+  - [x] **2.6 Inline Git Blame & Diff Gutters:** Visual source-control feedback.
+* **Tier 3 — Beyond VS Code**: Live Blast-radius Dependency Impact, AI Timeline logs, unique design elements, and project metrics dashboard.
+
+---
+
 ## 📖 Architecture & RFC Documentation
 
 Engineering decisions and architectural evolutions are formally documented as RFCs under [`docs/architecture/`](file:///f:/projects/Atlas/docs/architecture/):

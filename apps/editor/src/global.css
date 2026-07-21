@@ -1,0 +1,79 @@
+/* Global Visual Identity for Atlas Studio */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #09090b;
+  color: #fafafa;
+}
+
+/* Base button transitions */
+button {
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* Sidebar action buttons hover states */
+.sidebar-action-btn:hover {
+  background-color: #27272a !important;
+  color: #fafafa !important;
+}
+
+/* Tab hover states */
+.editor-tab {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.editor-tab:hover {
+  background-color: #141417 !important;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Command palette fuzzy match highlighting */
+.fuzzy-match {
+  color: #38bdf8;
+  font-weight: bold;
+}
+
+/* Subtle pulse for live status indicators */
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0.5; }
+}
+
+.status-live-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #4ade80;
+  display: inline-block;
+  animation: pulse-ring 2s infinite ease-in-out;
+  margin-right: 6px;
+}
+
+.status-warn-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #fbbf24;
+  display: inline-block;
+  margin-right: 6px;
+}

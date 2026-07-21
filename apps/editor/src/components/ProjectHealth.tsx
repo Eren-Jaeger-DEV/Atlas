@@ -11,25 +11,22 @@ interface ProjectHealthProps {
 export function ProjectHealth({ repoPath }: ProjectHealthProps) {
   const [todoCount, setTodoCount] = useState<number | null>(null);
   const [fileCount, setFileCount] = useState<number | null>(null);
+  const [depsStats, setDepsStats] = useState<{deps: number, outdated: number} | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!repoPath) return;
     setLoading(true);
 
-    const scanTodos = api().scanTodos
-      ? api().scanTodos(repoPath)
-      : fetch("noop").catch(() => ({ total: null }));
-
     Promise.all([
       api().readDir ? api().readDir(repoPath) : Promise.resolve([]),
-      (window as any).atlasAPI?.scanTodos
-        ? (window as any).atlasAPI.scanTodos(repoPath)
-        : Promise.resolve({ total: null }),
+      api().scanTodos ? api().scanTodos(repoPath) : Promise.resolve({ total: null }),
+      api().scanDeps ? api().scanDeps(repoPath) : Promise.resolve({ deps: 0, outdated: 0 })
     ])
-      .then(([files, todos]) => {
+      .then(([files, todos, deps]) => {
         setFileCount(Array.isArray(files) ? files.length : null);
         setTodoCount(todos?.total ?? null);
+        setDepsStats(deps);
       })
       .finally(() => setLoading(false));
   }, [repoPath]);
@@ -61,6 +58,13 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
 
               <div style={styles.metricCard}>
                 <span style={styles.metricVal}>
+                  {loading ? "..." : depsStats?.deps !== undefined ? `${depsStats.outdated} / ${depsStats.deps}` : "N/A"}
+                </span>
+                <span style={styles.metricLbl}>Outdated / Total Deps</span>
+              </div>
+
+              <div style={styles.metricCard}>
+                <span style={styles.metricVal}>
                   {loading ? "..." : fileCount !== null ? fileCount : "N/A"}
                 </span>
                 <span style={styles.metricLbl}>Root Entries</span>
@@ -78,6 +82,12 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
                 <span>TODO / FIXME Scan</span>
                 <span style={{ color: todoCount !== null ? "#4ade80" : "#71717a" }}>
                   {todoCount !== null ? "[PASS]" : loading ? "[SCAN]" : "[SKIP]"}
+                </span>
+              </div>
+              <div style={styles.bdRow}>
+                <span>Dependency Freshness</span>
+                <span style={{ color: depsStats?.outdated === 0 ? "#4ade80" : depsStats?.outdated! > 0 ? "#f87171" : "#71717a" }}>
+                  {depsStats ? (depsStats.outdated === 0 ? "[PASS]" : "[WARN]") : "[SKIP]"}
                 </span>
               </div>
               <div style={styles.bdRow}>

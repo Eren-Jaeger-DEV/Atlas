@@ -23,6 +23,12 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   selectDirectory: (): Promise<string | null> =>
     ipcRenderer.invoke("atlas:select-directory"),
 
+  addDirectory: (): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:add-directory"),
+
+  addRepo: (repoPath: string): Promise<any> =>
+    ipcRenderer.invoke("atlas:add-repo", repoPath),
+
   // File Operations
   readDir: (dirPath: string): Promise<Array<{ name: string; path: string; isDirectory: boolean }>> =>
     ipcRenderer.invoke("atlas:read-dir", dirPath),
@@ -41,6 +47,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
 
   renameFile: (oldPath: string, newPath: string): Promise<void> =>
     ipcRenderer.invoke("atlas:rename-file", oldPath, newPath),
+
+  getSnippets: (): Promise<Record<string, any>> =>
+    ipcRenderer.invoke("atlas:get-snippets"),
 
   // Integrated Terminal
   terminalCreate: (termId: string, cwd?: string) =>
@@ -80,6 +89,12 @@ contextBridge.exposeInMainWorld("atlasAPI", {
 
   gitDiff: (repoPath: string, filePath: string, staged: boolean): Promise<string> =>
     ipcRenderer.invoke("atlas:git-diff", repoPath, filePath, staged),
+
+  gitBlameContent: (repoPath: string, filePath: string, content: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:git-blame-content", repoPath, filePath, content),
+
+  gitDiffContent: (repoPath: string, filePath: string, content: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:git-diff-content", repoPath, filePath, content),
 
   gitInit: (repoPath: string): Promise<boolean> =>
     ipcRenderer.invoke("atlas:git-init", repoPath),
@@ -123,7 +138,7 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   // Native menu action bridge
   onMenuAction: (handler: (action: string) => void) => {
     const channels = [
-      "menu:open-folder", "menu:new-file", "menu:save", "menu:save-all",
+      "menu:open-folder", "menu:add-folder", "menu:new-file", "menu:save", "menu:save-all",
       "menu:close-tab", "menu:find", "menu:replace", "menu:select-all",
       "menu:command-palette", "menu:show-explorer", "menu:show-git",
       "menu:show-impact", "menu:toggle-ai-sidebar", "menu:open-settings",
@@ -175,6 +190,16 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   generateSbom: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke("atlas:generate-sbom"),
 
+  // Tasks
+  getTasks: (repoPath: string): Promise<Array<{ id: string; name: string; command: string; source: string }>> =>
+    ipcRenderer.invoke("atlas:get-tasks", repoPath),
+
+  // Settings
+  getSettings: (): Promise<any> =>
+    ipcRenderer.invoke("atlas:get-settings"),
+  updateSettings: (settings: any): Promise<void> =>
+    ipcRenderer.invoke("atlas:update-settings", settings),
+
   // Permissions
   grantPermission: (extensionId: string, permissions: string[]): Promise<void> =>
     ipcRenderer.invoke("atlas:grant-permission", extensionId, permissions),
@@ -199,22 +224,28 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.invoke("atlas:format-code", repoPath, filePath, content),
 
   // LSP
-  startLsp: (repoPath: string) =>
-    ipcRenderer.invoke("atlas:lsp-start", repoPath),
+  startLsp: (repoPath: string, language?: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:lsp-start", repoPath, language),
   sendLspMessage: (message: string) =>
     ipcRenderer.send("atlas:lsp-client-to-server", message),
   onLspMessage: (handler: (event: any, message: string) => void) => {
     ipcRenderer.on("atlas:lsp-server-to-client", handler);
     return () => ipcRenderer.off("atlas:lsp-server-to-client", handler);
   },
+  applyWorkspaceEdit: (editsByFile: Record<string, any[]>): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:apply-workspace-edit", editsByFile),
 
   // DAP
-  startDap: (filePath: string) =>
-    ipcRenderer.invoke("atlas:dap-start", filePath),
+  startDap: (filePath: string, language?: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:dap-start", filePath, language),
   sendDapMessage: (message: string) =>
     ipcRenderer.send("atlas:dap-client-to-server", message),
   onDapMessage: (handler: (event: any, message: string) => void) => {
     ipcRenderer.on("atlas:dap-server-to-client", handler);
     return () => ipcRenderer.off("atlas:dap-server-to-client", handler);
   },
+
+  // Health
+  scanDeps: (repoPath: string) =>
+    ipcRenderer.invoke("atlas:scan-deps", repoPath),
 });

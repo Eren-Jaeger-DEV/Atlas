@@ -130,7 +130,7 @@ export function CommandPalette({ commandService, isOpen, onClose }: CommandPalet
           ) : (
             displayCommands.map((item, idx) => {
               const showRecentHeader = idx === 0 && search === "" && item.isRecent;
-              const showOtherHeader = search === "" && !item.isRecent && (idx === 0 || displayCommands[idx - 1].isRecent);
+              const showOtherHeader = search === "" && !item.isRecent && (idx === 0 || displayCommands[idx - 1]?.isRecent);
               
               return (
                 <div key={item.cmd.id}>

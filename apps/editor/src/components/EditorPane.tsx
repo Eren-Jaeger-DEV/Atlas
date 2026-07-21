@@ -4,6 +4,12 @@ import type * as Monaco from "monaco-editor";
 import * as monaco from "monaco-editor";
 import { dapClient, DAPEvent } from "../dap/DAPClient.js";
 
+import { EditorSettings } from "./SettingsPanel.js";
+import { SnippetManager } from "../snippets/SnippetManager.js";
+
+import { fetchDocumentSymbols } from "../lsp/LSPClient.js";
+import { parseUnifiedDiff, parseGitBlame, BlameInfo } from "./GitHelpers.js";
+
 // Configure Monaco to bundle locally rather than from CDN
 loader.config({ monaco });
 
@@ -16,6 +22,22 @@ interface EditorPaneProps {
   targetColumn?: number;
   onChange?: (content: string) => void;
   onCursorChange?: (lineContent: string, line: number, col: number) => void;
+  onSymbolsChange?: (symbols: any[], currentSymbol?: string) => void;
+  settings?: EditorSettings;
+}
+
+function findEnclosingSymbol(symbols: any[], line: number): string | undefined {
+  let best: any = undefined;
+  for (const sym of symbols) {
+    if (line >= sym.range.start.line && line <= sym.range.end.line) {
+      best = sym;
+      if (sym.children && sym.children.length > 0) {
+        const childBest = findEnclosingSymbol(sym.children, line);
+        if (childBest) return childBest;
+      }
+    }
+  }
+  return best?.name;
 }
 
 function inferLanguage(filePath?: string, hint?: string): string {
@@ -48,6 +70,8 @@ export function EditorPane({
   targetColumn,
   onChange,
   onCursorChange,
+  onSymbolsChange,
+  settings,
 }: EditorPaneProps) {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
@@ -60,6 +84,165 @@ export function EditorPane({
   const breakpointsRef = useRef<Set<number>>(new Set());
   const decorationsRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
   const activeLineDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+  const diffGutterDecosRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+  const blameDecoRef = useRef<Monaco.editor.IEditorDecorationsCollection | null>(null);
+  const blameMapRef = useRef<Record<number, BlameInfo>>({});
+  const lastFilePathRef = useRef<string | undefined>(undefined);
+  const updateInlineBlameRef = useRef<() => void>(() => {});
+  const symbolsRef = useRef<any[]>([]);
+
+  const updateSymbols = useCallback(async () => {
+    if (!filePath) return;
+    const syms = await fetchDocumentSymbols(filePath);
+    symbolsRef.current = syms;
+    if (onSymbolsChange) {
+      const pos = editorRef.current?.getPosition();
+      const currentSymName = pos ? findEnclosingSymbol(syms, pos.lineNumber - 1) : undefined;
+      onSymbolsChange(syms, currentSymName);
+    }
+  }, [filePath, onSymbolsChange]);
+
+  const updateInlineBlame = useCallback(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || !filePath) {
+      blameDecoRef.current?.clear();
+      return;
+    }
+
+    if (settings?.gitBlameEnabled === false) {
+      blameDecoRef.current?.clear();
+      return;
+    }
+
+    const pos = editor.getPosition();
+    if (!pos) {
+      blameDecoRef.current?.clear();
+      return;
+    }
+
+    const lineNum = pos.lineNumber;
+    const model = editor.getModel();
+    if (!model) {
+      blameDecoRef.current?.clear();
+      return;
+    }
+
+    const lineContent = model.getLineContent(lineNum);
+    const lineLength = lineContent.length;
+
+    const blame = blameMapRef.current[lineNum];
+    if (!blame) {
+      blameDecoRef.current?.clear();
+      return;
+    }
+
+    const dateStr = blame.date.split(" ")[0]; // YYYY-MM-DD
+    const hashStr = blame.hash.substring(0, 8);
+    const authorStr = blame.author;
+    
+    let text = "";
+    if (hashStr.startsWith("00000000") || authorStr.toLowerCase().includes("not committed yet")) {
+      text = "Not Committed Yet";
+    } else {
+      text = `${authorStr} • ${dateStr} • ${hashStr}`;
+    }
+
+    blameDecoRef.current?.set([
+      {
+        range: new monaco.Range(lineNum, lineLength + 1, lineNum, lineLength + 1),
+        options: {
+          after: {
+            content: `   ${text}`,
+            inlineClassName: "git-blame-ghost",
+          },
+        },
+      },
+    ]);
+  }, [filePath, settings?.gitBlameEnabled]);
+
+  updateInlineBlameRef.current = updateInlineBlame;
+
+  const updateGitDecorations = useCallback(async () => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco || !filePath || !repoPath) {
+      diffGutterDecosRef.current?.clear();
+      blameDecoRef.current?.clear();
+      blameMapRef.current = {};
+      return;
+    }
+
+    if (settings?.gitDiffGuttersEnabled === false && settings?.gitBlameEnabled === false) {
+      diffGutterDecosRef.current?.clear();
+      blameDecoRef.current?.clear();
+      blameMapRef.current = {};
+      return;
+    }
+
+    const content = editor.getValue();
+    const a = (window as any).atlasAPI;
+    if (!a) return;
+
+    try {
+      const [diffOutput, blameOutput] = await Promise.all([
+        settings?.gitDiffGuttersEnabled !== false
+          ? a.gitDiffContent(repoPath, filePath, content).catch(() => "")
+          : Promise.resolve(""),
+        settings?.gitBlameEnabled !== false
+          ? a.gitBlameContent(repoPath, filePath, content).catch(() => "")
+          : Promise.resolve(""),
+      ]);
+
+      // 1. Process Diff Gutters
+      if (settings?.gitDiffGuttersEnabled !== false) {
+        const markers = parseUnifiedDiff(diffOutput);
+        const newDiffDecos: Monaco.editor.IModelDeltaDecoration[] = [];
+
+        for (const marker of markers) {
+          if (marker.type === "add" || marker.type === "mod") {
+            const len = marker.length ?? 1;
+            for (let i = 0; i < len; i++) {
+              const line = marker.line + i;
+              newDiffDecos.push({
+                range: new monaco.Range(line, 1, line, 1),
+                options: {
+                  isWholeLine: false,
+                  linesDecorationsClassName: marker.type === "add" ? "git-gutter-add" : "git-gutter-mod",
+                },
+              });
+            }
+          } else if (marker.type === "del") {
+            newDiffDecos.push({
+              range: new monaco.Range(marker.line, 1, marker.line, 1),
+              options: {
+                isWholeLine: false,
+                linesDecorationsClassName: "git-gutter-del",
+              },
+            });
+          }
+        }
+        diffGutterDecosRef.current?.set(newDiffDecos);
+      } else {
+        diffGutterDecosRef.current?.clear();
+      }
+
+      // 2. Process Blame
+      if (settings?.gitBlameEnabled !== false) {
+        const blameMap = parseGitBlame(blameOutput);
+        blameMapRef.current = blameMap;
+        updateInlineBlame();
+      } else {
+        blameMapRef.current = {};
+        blameDecoRef.current?.clear();
+      }
+    } catch (err) {
+      console.error("[ERROR] Failed to update git decorations:", err);
+      diffGutterDecosRef.current?.clear();
+      blameDecoRef.current?.clear();
+      blameMapRef.current = {};
+    }
+  }, [filePath, repoPath, settings?.gitDiffGuttersEnabled, settings?.gitBlameEnabled, updateInlineBlame]);
 
   const resolvedLang = inferLanguage(filePath, language);
 
@@ -67,12 +250,18 @@ export function EditorPane({
     editorRef.current = editor;
     monacoRef.current = monaco;
 
+    SnippetManager.initialize(monaco).catch(console.error);
+
     if (repoPath) {
-      import("../lsp/LSPClient.js").then(m => m.initLSPClient(repoPath)).catch(console.error);
+      import("../lsp/LSPClient.js").then(m => {
+        m.initLSPClient(repoPath, resolvedLang).then(() => {
+          setTimeout(updateSymbols, 1000); // Give LSP a second to index before first fetch
+        });
+      }).catch(console.error);
     }
 
-    // Atlas dark theme — matches the rest of the UI
-    monaco.editor.defineTheme("atlas-dark", {
+    // Define Obsidian Theme
+    monaco.editor.defineTheme("obsidian", {
       base: "vs-dark",
       inherit: true,
       rules: [
@@ -110,7 +299,95 @@ export function EditorPane({
       },
     });
 
-    monaco.editor.setTheme("atlas-dark");
+    // Define Midnight Theme
+    monaco.editor.defineTheme("midnight", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "64748b", fontStyle: "italic" },
+        { token: "keyword", foreground: "ff79c6" },
+        { token: "string", foreground: "50fa7b" },
+        { token: "number", foreground: "bd93f9" },
+        { token: "type", foreground: "8be9fd" },
+        { token: "variable", foreground: "f8f8f2" },
+        { token: "function", foreground: "50fa7b" },
+        { token: "class", foreground: "8be9fd" },
+        { token: "operator", foreground: "f8f8f2" },
+      ],
+      colors: {
+        "editor.background": "#0b0f19",
+        "editor.foreground": "#f1f5f9",
+        "editorLineNumber.foreground": "#475569",
+        "editorLineNumber.activeForeground": "#38bdf8",
+        "editor.lineHighlightBackground": "#38bdf810",
+        "editor.selectionBackground": "#ff79c625",
+        "editorCursor.foreground": "#ff79c6",
+        "editorGutter.background": "#0b0f19",
+        "editorWidget.background": "#0b0f19",
+        "editorWidget.border": "#38bdf8",
+      }
+    });
+
+    // Define Monokai Theme
+    monaco.editor.defineTheme("monokai", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "75715e", fontStyle: "italic" },
+        { token: "keyword", foreground: "f92672" },
+        { token: "string", foreground: "e6db74" },
+        { token: "number", foreground: "ae81ff" },
+        { token: "type", foreground: "66d9ef" },
+        { token: "variable", foreground: "f8f8f2" },
+        { token: "function", foreground: "a6e22e" },
+        { token: "class", foreground: "66d9ef" },
+        { token: "operator", foreground: "f92672" },
+      ],
+      colors: {
+        "editor.background": "#272822",
+        "editor.foreground": "#f8f8f2",
+        "editorLineNumber.foreground": "#90908a",
+        "editorLineNumber.activeForeground": "#a6e22e",
+        "editor.lineHighlightBackground": "#3e3d32",
+        "editor.selectionBackground": "#49483e",
+        "editorCursor.foreground": "#f8f8f0",
+        "editorGutter.background": "#272822",
+        "editorWidget.background": "#272822",
+        "editorWidget.border": "#75715e",
+      }
+    });
+
+    // Define Light Theme
+    monaco.editor.defineTheme("light", {
+      base: "vs",
+      inherit: true,
+      rules: [
+        { token: "comment", foreground: "71717a", fontStyle: "italic" },
+        { token: "keyword", foreground: "7c3aed" },
+        { token: "string", foreground: "16a34a" },
+        { token: "number", foreground: "db2777" },
+        { token: "type", foreground: "0891b2" },
+        { token: "variable", foreground: "18181b" },
+        { token: "function", foreground: "d97706" },
+        { token: "class", foreground: "2563eb" },
+        { token: "operator", foreground: "18181b" },
+      ],
+      colors: {
+        "editor.background": "#ffffff",
+        "editor.foreground": "#18181b",
+        "editorLineNumber.foreground": "#a1a1aa",
+        "editorLineNumber.activeForeground": "#7c3aed",
+        "editor.lineHighlightBackground": "#f4f4f5",
+        "editor.selectionBackground": "#add6ff",
+        "editorCursor.foreground": "#7c3aed",
+        "editorGutter.background": "#ffffff",
+        "editorWidget.background": "#fafafa",
+        "editorWidget.border": "#e4e4e7",
+      }
+    });
+
+    const initialTheme = settings?.theme ?? "obsidian";
+    monaco.editor.setTheme(initialTheme);
 
     // TypeScript compiler options — strict mode
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
@@ -124,13 +401,23 @@ export function EditorPane({
     });
 
     // Cursor position -> line content callback
-    editor.onDidChangeCursorPosition(() => {
+    editor.onDidChangeCursorPosition((e) => {
+      const pos = e.position;
       const model = editor.getModel();
-      if (!model || !onCursorChange) return;
-      const pos = editor.getPosition();
+      if (!model) return;
       const lineNum = pos?.lineNumber ?? 1;
       const colNum = pos?.column ?? 1;
-      onCursorChange(model.getLineContent(lineNum), lineNum, colNum);
+      
+      if (onCursorChange) {
+        onCursorChange(model.getLineContent(lineNum), lineNum, colNum);
+      }
+      if (onSymbolsChange) {
+        const currentSymName = findEnclosingSymbol(symbolsRef.current, lineNum - 1);
+        onSymbolsChange(symbolsRef.current, currentSymName);
+      }
+      
+      // Update inline git blame on cursor move
+      updateInlineBlameRef.current();
     });
 
     // Keybindings
@@ -150,6 +437,8 @@ export function EditorPane({
 
     decorationsRef.current = editor.createDecorationsCollection([]);
     activeLineDecoRef.current = editor.createDecorationsCollection([]);
+    diffGutterDecosRef.current = editor.createDecorationsCollection([]);
+    blameDecoRef.current = editor.createDecorationsCollection([]);
 
     editor.onMouseDown((e) => {
       if (
@@ -181,7 +470,7 @@ export function EditorPane({
     });
 
     editor.focus();
-  }, [onCursorChange, filePath]);
+  }, [onCursorChange, onSymbolsChange, updateSymbols, filePath, repoPath]);
 
   // Listen for DAP paused events to show active line
   useEffect(() => {
@@ -208,12 +497,28 @@ export function EditorPane({
         activeLineDecoRef.current.clear();
       }
     });
-    return unsub;
+    return () => { unsub(); };
   }, [filePath]);
 
   const handleChange: OnChange = useCallback((value) => {
     onChange?.(value ?? "");
-  }, [onChange]);
+    updateSymbols();
+  }, [onChange, updateSymbols]);
+
+  // Dynamic settings update
+  useEffect(() => {
+    if (editorRef.current && monacoRef.current && settings) {
+      editorRef.current.updateOptions({
+        fontSize: settings.fontSize,
+        fontFamily: settings.fontFamily,
+        tabSize: settings.tabSize,
+        wordWrap: settings.wordWrap,
+        lineNumbers: settings.lineNumbers ? "on" : "off",
+        minimap: { enabled: settings.minimap }
+      });
+      monacoRef.current.editor.setTheme(settings.theme);
+    }
+  }, [settings]);
 
   // Sync external content changes (e.g. file switch)
   useEffect(() => {
@@ -225,6 +530,31 @@ export function EditorPane({
       model.setValue(content);
     }
   }, [content]);
+
+  const lastContentRef = useRef<string>("");
+
+  useEffect(() => {
+    if (lastFilePathRef.current !== filePath) {
+      lastFilePathRef.current = filePath;
+      lastContentRef.current = content;
+      diffGutterDecosRef.current?.clear();
+      blameDecoRef.current?.clear();
+      blameMapRef.current = {};
+      updateGitDecorations();
+      return;
+    }
+
+    if (lastContentRef.current === content) {
+      updateGitDecorations();
+      return;
+    }
+
+    lastContentRef.current = content;
+    const timer = setTimeout(() => {
+      updateGitDecorations();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [content, filePath, repoPath, settings?.gitBlameEnabled, settings?.gitDiffGuttersEnabled, updateGitDecorations]);
 
   // Find helpers using Monaco's built-in search
   const doFind = useCallback(() => {
@@ -250,12 +580,15 @@ export function EditorPane({
   }, []);
 
   useEffect(() => {
-    if (editorRef.current && targetLine) {
+    if (editorRef.current && targetLine !== undefined) {
       editorRef.current.revealLineInCenter(targetLine);
-      editorRef.current.setPosition({ lineNumber: targetLine, column: targetColumn || 1 });
+      editorRef.current.setPosition({ lineNumber: targetLine, column: targetColumn ?? 1 });
       editorRef.current.focus();
     }
-  }, [targetLine, targetColumn, filePath]);
+    
+    // Update symbols occasionally
+    updateSymbols();
+  }, [targetLine, targetColumn, updateSymbols, filePath]);
 
   return (
     <div style={s.wrapper}>
@@ -327,20 +660,20 @@ export function EditorPane({
           path={filePath ? (filePath.startsWith("/") || filePath.match(/^[a-zA-Z]:/) ? monaco.Uri.file(filePath).toString() : filePath) : undefined}
           language={resolvedLang}
           value={content}
-          theme="atlas-dark"
+          theme={settings?.theme ?? "obsidian"}
           onMount={handleMount}
           onChange={handleChange}
           options={{
-            fontSize: 13,
-            fontFamily: "'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace",
+            fontSize: settings?.fontSize ?? 14,
+            fontFamily: settings?.fontFamily ?? "'JetBrains Mono', Consolas, monospace",
             fontLigatures: true,
-            lineNumbers: "on",
+            lineNumbers: settings?.lineNumbers !== false ? "on" : "off",
             glyphMargin: true,
-            minimap: { enabled: true, scale: 1, renderCharacters: false },
-            wordWrap: "off",
+            minimap: { enabled: settings?.minimap !== false, scale: 1, renderCharacters: false },
+            wordWrap: settings?.wordWrap ?? "on",
             scrollBeyondLastLine: false,
             automaticLayout: true,
-            tabSize: 2,
+            tabSize: settings?.tabSize ?? 2,
             insertSpaces: true,
             renderWhitespace: "selection",
             bracketPairColorization: { enabled: true },
@@ -361,6 +694,7 @@ export function EditorPane({
               useShadows: false,
             },
             padding: { top: 8, bottom: 8 },
+            lightbulb: { enabled: true },
           }}
         />
       </div>

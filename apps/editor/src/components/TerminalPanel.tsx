@@ -45,7 +45,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
     setTabs(p => p.filter(t => t.id !== id));
     if (activeTabId === id) {
       const rem = tabs.filter(t => t.id !== id);
-      setActiveTabId(rem[rem.length - 1].id);
+      setActiveTabId(rem[rem.length - 1]?.id ?? "");
     }
   };
 

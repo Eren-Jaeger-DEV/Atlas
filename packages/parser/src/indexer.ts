@@ -554,7 +554,7 @@ export async function indexRepository(
     } catch (err) {
       errors.push({
         filePath,
-        error: err instanceof Error ? err.message : String(err),
+        error: err instanceof Error ? (err.stack ?? err.message) : String(err),
       });
     }
   }

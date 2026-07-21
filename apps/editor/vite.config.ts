@@ -1,11 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 import path from "node:path";
 
 export default defineConfig({
   base: "./",
   plugins: [
     react(),
+    nodePolyfills(),
     {
       name: "remove-crossorigin",
       transformIndexHtml(html) {
@@ -26,6 +28,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     modulePreload: false,
+    minify: false,
     rollupOptions: {
       input: path.resolve(__dirname, "index.html"),
     },

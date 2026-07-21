@@ -94,7 +94,13 @@ export class Orchestrator {
       // ─── PLANNING ───────────────────────────────────────────────────────
       this.emit({ type: "state_change", state: "PLANNING", runId });
 
-      const ctx = ContextEngine.assembleContext({ maxTokens: 4000 });
+      const ctx = ContextEngine.assembleContext({ 
+        maxTokens: 4000,
+        activeFilePath: "<Not Provided>",
+        activeContent: "<Not Provided>",
+        openTabs: [],
+        gitStatusSummary: "<Not Provided>"
+      });
       const enrichedGoal = `[System Context]\n${ctx.promptContext}\n\nUser Goal: ${goal}`;
 
       plan = await runPlanner(enrichedGoal, commonOpts);

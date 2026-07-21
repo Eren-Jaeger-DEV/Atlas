@@ -34,7 +34,7 @@ export function DebugPanel() {
         setVariables([]);
       }
     });
-    return unsub;
+    return () => { unsub(); };
   }, []);
 
   const doAction = (cmd: string) => dapClient.sendRequest(cmd);
@@ -44,11 +44,11 @@ export function DebugPanel() {
       <div style={s.header}>DEBUGGER</div>
       
       <div style={s.toolbar}>
-        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("continue")} title="Continue">â–¶ï¸</button>
-        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("next")} title="Step Over">â­ï¸</button>
-        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("stepIn")} title="Step Into">â¬‡ï¸</button>
-        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("stepOut")} title="Step Out">â¬†ï¸</button>
-        <button style={s.btn} disabled={!isRunning} onClick={() => doAction("disconnect")} title="Stop">â¹ï¸</button>
+        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("continue")} title="Continue">▶️</button>
+        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("next")} title="Step Over">⏭️</button>
+        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("stepIn")} title="Step Into">⬇️</button>
+        <button style={s.btn} disabled={!isPaused} onClick={() => doAction("stepOut")} title="Step Out">⬆️</button>
+        <button style={s.btn} disabled={!isRunning} onClick={() => doAction("disconnect")} title="Stop">⏹️</button>
       </div>
 
       <div style={s.section}>

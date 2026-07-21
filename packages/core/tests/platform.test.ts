@@ -40,7 +40,7 @@ describe("Platform Foundation — ServiceContainer & EventBus", () => {
     const bus = new EventBus();
     const settings = new SettingsService(bus);
 
-    expect(settings.get("theme")).toBe("dark");
+    expect(settings.get("theme")).toBe("obsidian");
 
     settings.setUserSettings({ fontSize: 16 });
     expect(settings.get("fontSize")).toBe(16);

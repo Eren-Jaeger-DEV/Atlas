@@ -2,6 +2,12 @@
   "appId": "com.atlas.studio",
   "productName": "AtlasStudio",
   "asar": true,
+  "asarUnpack": [
+    "node_modules/typescript-language-server/**/*",
+    "node_modules/typescript/**/*",
+    "node_modules/node-pty/**/*",
+    "node_modules/@vscode/ripgrep/**/*"
+  ],
   "publish": null,
   "npmRebuild": false,
   "directories": {
@@ -10,7 +16,8 @@
   "files": [
     "dist/**/*",
     "electron-dist/**/*",
-    "package.json"
+    "package.json",
+    "build/**/*"
   ],
   "win": {
     "icon": "build/icon.ico",
@@ -20,6 +27,13 @@
         "arch": ["x64"]
       }
     ]
+  },
+  "linux": {
+    "icon": "build/icon.png",
+    "target": ["AppImage", "tar.gz", "deb"],
+    "executableName": "AtlasStudio",
+    "maintainer": "Atlas Team <support@atlas.studio>",
+    "category": "Development"
   },
   "nsis": {
     "oneClick": false,
