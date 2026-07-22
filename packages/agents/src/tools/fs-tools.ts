@@ -42,9 +42,14 @@ export async function readFileTool(
 export async function writeFileTool(
   filePath: string,
   content: string,
-  repoRoot: string
+  repoRoot: string,
+  onCheckPermission?: (permission: string, data: any) => Promise<boolean>
 ): Promise<string> {
   const resolved = validatePath(filePath, repoRoot);
+  if (onCheckPermission) {
+    const granted = await onCheckPermission("workspace.write", { filePath, proposedCode: content });
+    if (!granted) throw new Error("Permission denied by user.");
+  }
   await writeFile(resolved, content, "utf-8");
   return `Written: ${filePath}`;
 }
@@ -64,13 +69,45 @@ export async function listDirectoryTool(
   }
 }
 
+export async function multiReplaceFileContentTool(
+  filePath: string,
+  chunks: Array<{ targetContent: string; replacementContent: string }>,
+  repoRoot: string,
+  onCheckPermission?: (permission: string, data: any) => Promise<boolean>
+): Promise<string> {
+  const resolved = validatePath(filePath, repoRoot);
+  const content = await readFile(resolved, "utf-8");
+  let newContent = content;
+
+  for (const chunk of chunks) {
+    if (!newContent.includes(chunk.targetContent)) {
+      throw new Error(`Target content not found in file: ${chunk.targetContent}`);
+    }
+    // Replace the exact chunk
+    newContent = newContent.replace(chunk.targetContent, chunk.replacementContent);
+  }
+
+  if (onCheckPermission) {
+    const granted = await onCheckPermission("workspace.write", { filePath, proposedCode: newContent });
+    if (!granted) throw new Error("Permission denied by user.");
+  }
+
+  await writeFile(resolved, newContent, "utf-8");
+  return `Successfully replaced ${chunks.length} block(s) in ${filePath}`;
+}
+
 export async function applyDiffTool(
   filePath: string,
   originalContent: string,
   newContent: string,
-  repoRoot: string
+  repoRoot: string,
+  onCheckPermission?: (permission: string, data: any) => Promise<boolean>
 ): Promise<string> {
   const resolved = validatePath(filePath, repoRoot);
+  if (onCheckPermission) {
+    const granted = await onCheckPermission("workspace.write", { filePath, proposedCode: newContent });
+    if (!granted) throw new Error("Permission denied by user.");
+  }
   await writeFile(resolved, newContent, "utf-8");
   const diff = createPatch(filePath, originalContent, newContent);
   return diff;
@@ -136,6 +173,39 @@ export const FS_TOOL_DEFINITIONS: LLMToolDefinition[] = [
         },
       },
       required: ["dir_path"],
+    },
+  },
+  {
+    name: "multi_replace_file_content",
+    description:
+      "Edit an existing file by making targeted replacements. This is the preferred way to edit code.",
+    parameters: {
+      type: "object",
+      properties: {
+        file_path: {
+          type: "string",
+          description: "Path to the file, relative to the repository root.",
+        },
+        chunks: {
+          type: "array",
+          description: "List of targeted replacements to make in the file.",
+          items: {
+            type: "object",
+            properties: {
+              targetContent: {
+                type: "string",
+                description: "The exact character sequence to replace, including whitespaces.",
+              },
+              replacementContent: {
+                type: "string",
+                description: "The new content to replace it with.",
+              },
+            },
+            required: ["targetContent", "replacementContent"],
+          },
+        },
+      },
+      required: ["file_path", "chunks"],
     },
   },
 ];

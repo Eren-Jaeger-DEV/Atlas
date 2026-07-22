@@ -26,8 +26,8 @@ export function GitHistoryPanel({ repoPath }: GitHistoryPanelProps) {
     setError(null);
 
     Promise.all([
-      api().gitLog(repoPath, 50),
-      api().gitStashList ? api().gitStashList(repoPath) : Promise.resolve([]),
+      api()?.gitLog ? api().gitLog(repoPath, 50) : Promise.resolve([]),
+      api()?.gitStashList ? api().gitStashList(repoPath) : Promise.resolve([]),
     ])
       .then(([log, stashList]) => {
         setCommits(Array.isArray(log) ? log : []);
@@ -38,18 +38,18 @@ export function GitHistoryPanel({ repoPath }: GitHistoryPanelProps) {
   }, [repoPath]);
 
   const handleStashSave = async () => {
-    if (!repoPath) return;
+    if (!repoPath || !api()?.gitStashSave) return;
     await api().gitStashSave(repoPath);
-    const updated = api().gitStashList
+    const updated = api()?.gitStashList
       ? await api().gitStashList(repoPath)
       : [];
     setStashes(Array.isArray(updated) ? updated : []);
   };
 
   const handleStashPop = async () => {
-    if (!repoPath || stashes.length === 0) return;
+    if (!repoPath || stashes.length === 0 || !api()?.gitStashPop) return;
     await api().gitStashPop(repoPath);
-    const updated = api().gitStashList
+    const updated = api()?.gitStashList
       ? await api().gitStashList(repoPath)
       : [];
     setStashes(Array.isArray(updated) ? updated : []);

@@ -10,7 +10,7 @@
  * which then delegates to the agent runtime subprocess.
  */
 
-import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Menu, clipboard } from "electron";
+import { app, BrowserWindow, ipcMain, shell, dialog, protocol, net, Menu, clipboard, safeStorage } from "electron";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readdir, readFile, writeFile, mkdir, rm, rename, stat } from "node:fs/promises";
@@ -20,6 +20,7 @@ import WebSocket from "ws";
 import vm from "node:vm";
 import { cp as fsCp } from "node:fs/promises";
 import os from "node:os";
+import * as http from "node:http";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
@@ -29,6 +30,26 @@ const execFileAsync = promisify(execFile);
 const isDev = process.env["NODE_ENV"] === "development";
 
 let mainWindow: BrowserWindow | null = null;
+const permissionRequests = new Map<string, (allowed: boolean) => void>();
+const planApprovalRequests = new Map<string, (approved: boolean) => void>();
+
+ipcMain.on("atlas:permission-decision", (_event, { reqId, allowed }) => {
+  permissionRequests.get(reqId)?.(allowed);
+  permissionRequests.delete(reqId);
+});
+
+ipcMain.on("atlas:plan-decision", (_event, { reqId, approved }) => {
+  planApprovalRequests.get(reqId)?.(approved);
+  planApprovalRequests.delete(reqId);
+});
+
+ipcMain.on("atlas:ghost-token-emit", (_event, data) => {
+  mainWindow?.webContents.send("atlas:ghost-token", data);
+});
+
+ipcMain.handle("atlas:get-repos", async () => {
+  return { success: true, repoPath: getProjectRoot() };
+});
 import type * as pty from "node-pty";
 const terminalProcesses = new Map<string, pty.IPty>();
 
@@ -66,7 +87,6 @@ function createWindow(): void {
   // Load URL
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");
-    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadURL("app://bundle/index.html");
   }
@@ -210,10 +230,60 @@ function buildApplicationMenu(): void {
 }
 
 // ---------------------------------------------------------------------------
-// IPC handlers â€” bridge between renderer and agent runtime
+// Helpers
+// ---------------------------------------------------------------------------
+async function createProvider(repoRoot: string) {
+  const settings = await getMergedSettings();
+  const providerName = settings.ai?.provider || "openai";
+  let apiKey = settings.ai?.apiKeys?.[providerName] || "";
+  
+  if (providerName === "anthropic" && !apiKey) apiKey = process.env.ANTHROPIC_API_KEY || "";
+  if (providerName === "openai" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
+  if (providerName === "gemini" && !apiKey) apiKey = process.env.GEMINI_API_KEY || "";
+  if (providerName === "openai-compatible" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
+  
+  // If no plaintext key, try secure storage (new method via keys.json)
+  if (!apiKey && safeStorage.isEncryptionAvailable()) {
+    try {
+      const { readFileSync, existsSync } = await import("fs");
+      const { join } = await import("path");
+      const keysPath = join(app.getPath("userData"), "..", "atlas", "keys.json");
+      if (existsSync(keysPath)) {
+        const keysObj = JSON.parse(readFileSync(keysPath, "utf-8"));
+        const keyMap: Record<string, string> = {
+          "openai": "openaiApiKey",
+          "anthropic": "anthropicApiKey",
+          "gemini": "geminiApiKey",
+          "openai-compatible": "openRouterApiKey"
+        };
+        const secureKey = keyMap[providerName];
+        if (secureKey && keysObj[secureKey]) {
+          apiKey = safeStorage.decryptString(Buffer.from(keysObj[secureKey], "base64"));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to read secure key:", e);
+    }
+  }
+
+  const { ProviderRouter } = await import("@atlas/agents");
+  return new ProviderRouter({
+    provider: providerName as any,
+    apiKey,
+    model: settings.ai?.model,
+    baseUrl: settings.ai?.customEndpoint
+  });
+}
+
+function getProjectRoot(): string | undefined {
+  return global.__atlasRepoRoot;
+}
+
+// ---------------------------------------------------------------------------
+// IPC handlers — bridge between renderer and agent runtime
 // ---------------------------------------------------------------------------
 
-// Impact query â€” can run in-process since it's zero-AI
+// Impact query — can run in-process since it's zero-AI
 ipcMain.handle("atlas:impact", async (_event, filePath: string, symbolName?: string) => {
   try {
     // Lazy-import MemoryEngine (only the main process does this)
@@ -292,19 +362,68 @@ ipcMain.handle("atlas:revoke-permission", async (_event, extensionId: string) =>
   engine.revokePermissions(extensionId);
 });
 
+ipcMain.handle("atlas:permission-response", (_event, reqId: string, granted: boolean) => {
+  const resolve = permissionRequests.get(reqId);
+  if (resolve) {
+    resolve(granted);
+    permissionRequests.delete(reqId);
+  }
+});
+
 // Inline Agent Action
 ipcMain.handle("atlas:agent-inline-action", async (_event, action: string, text: string) => {
-  // In a real app, this would route to packages/agents' orchestrator or an LLM provider directly.
-  // For now, we simulate a mock stream/delay.
-  await new Promise(r => setTimeout(r, 1000));
-  if (action === "explain") {
-    return `[Agent] Explanation for the selected code:\nThis code snippet appears to handle state management or dispatch logic.`;
-  } else if (action === "test") {
-    return `[Agent] Generating unit tests...\n\nimport { test, expect } from "vitest";\n\ntest("works correctly", () => {\n  expect(true).toBe(true);\n});`;
-  } else if (action === "docs") {
-    return `[Agent] Generating documentation...\n\n/**\n * This module is responsible for the core functionality.\n */`;
+  const repoRoot = getProjectRoot();
+  if (!repoRoot) return "[Agent] No active workspace to run inline action.";
+  
+  try {
+    const provider = await createProvider(repoRoot);
+    let prompt = "";
+    if (action === "explain") prompt = `Please explain the following code snippet concisely:\n\n${text}`;
+    if (action === "test") prompt = `Please generate a single unit test block for the following code using vitest syntax (do not generate anything else, just the test code):\n\n${text}`;
+    if (action === "docs") prompt = `Please generate JSDoc/TSDoc comments for the following code (do not generate the code itself, just the comment block):\n\n${text}`;
+
+    const { Orchestrator } = await import("@atlas/agents");
+    const { MemoryEngine } = await import("@atlas/graph");
+    const memory = await MemoryEngine.create({ repoRoot });
+    
+    let resultText = "";
+    const orchestrator = new Orchestrator({
+      provider,
+      memory,
+      repoRoot,
+      onEvent: (ev) => {
+        // Collect coder output or final plan reasoning
+        if (ev.type === "plan_ready" && !resultText) {
+          resultText = ev.plan.planningReasoning;
+        }
+        if (ev.type === "coder_output" && ev.output.filesAfter) {
+          // For inline actions, we might just want the first modified file's content
+          const firstFile = Object.keys(ev.output.filesAfter)[0];
+          if (firstFile) resultText = ev.output.filesAfter[firstFile];
+        }
+      }
+    });
+
+    // Run as a targeted inline task
+    const runRecord = await orchestrator.run(`[INLINE ACTION] ${prompt}`, {
+      activeFilePath: "<Inline>",
+      activeContent: text,
+      openTabs: [],
+      gitStatusSummary: "Unknown"
+    });
+    
+    memory.close();
+    
+    // Fallback to plan reasoning if coder didn't output files (e.g. explain)
+    if (!resultText && runRecord.plan?.planningReasoning) {
+      resultText = runRecord.plan.planningReasoning;
+    }
+
+    return resultText || "No output generated.";
+  } catch (err) {
+    console.error("Inline agent action error:", err);
+    return `[Agent Error] ${String(err)}`;
   }
-  return `[Agent] Action completed.`;
 });
 
 // Dependency Graph Data
@@ -417,6 +536,42 @@ async function getMergedSettings() {
   }
 }
 
+let settingsWindow: BrowserWindow | null = null;
+ipcMain.handle("atlas:open-settings-window", () => {
+  if (settingsWindow) {
+    if (settingsWindow.isMinimized()) settingsWindow.restore();
+    settingsWindow.focus();
+    return;
+  }
+
+  settingsWindow = new BrowserWindow({
+    width: 600,
+    height: 700,
+    minWidth: 400,
+    minHeight: 500,
+    backgroundColor: "#000000",
+    icon: path.join(__dirname, "../build/icon.png"),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+    autoHideMenuBar: true,
+    title: "Settings - Atlas Studio"
+  });
+
+  if (isDev) {
+    settingsWindow.loadURL("http://localhost:5173/?window=settings");
+  } else {
+    settingsWindow.loadURL("app://bundle/index.html?window=settings");
+  }
+
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+});
+
 ipcMain.handle("atlas:get-settings", async () => {
   return await getMergedSettings();
 });
@@ -434,8 +589,50 @@ ipcMain.handle("atlas:update-settings", async (_event, newSettings: any) => {
     
     userSettings = { ...userSettings, ...newSettings };
     await writeFile(userSettingsPath, JSON.stringify(userSettings, null, 2), "utf-8");
+    
+    const merged = await getMergedSettings();
+    BrowserWindow.getAllWindows().forEach(win => {
+      win.webContents.send("atlas:settings-updated", merged);
+    });
   } catch (err) {
     console.error("Failed to update settings:", err);
+  }
+});
+
+ipcMain.handle("atlas:get-secure-key", async (_event, key: string) => {
+  try {
+    const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
+    if (!(await stat(keysPath).catch(() => null))) return null;
+    const keysObj = JSON.parse(await readFile(keysPath, "utf-8"));
+    const encrypted = keysObj[key];
+    if (!encrypted) return null;
+    return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+  } catch (err) {
+    console.error("Failed to get secure key:", err);
+    return null;
+  }
+});
+
+ipcMain.handle("atlas:set-secure-key", async (_event, key: string, value: string) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error("OS Keychain encryption is not available on this system.");
+    }
+    const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
+    const dir = path.dirname(keysPath);
+    await mkdir(dir, { recursive: true });
+    
+    let keysObj: Record<string, string> = {};
+    if (await stat(keysPath).catch(() => null)) {
+      keysObj = JSON.parse(await readFile(keysPath, "utf-8"));
+    }
+    
+    const encrypted = safeStorage.encryptString(value).toString("base64");
+    keysObj[key] = encrypted;
+    await writeFile(keysPath, JSON.stringify(keysObj, null, 2), "utf-8");
+  } catch (err) {
+    console.error("Failed to set secure key:", err);
+    throw err;
   }
 });
 
@@ -874,7 +1071,9 @@ ipcMain.handle("atlas:rename-file", async (_event, oldPath: string, newPath: str
 });
 
 // Integrated Terminal - real PTY via node-pty (ANSI colors, interactive programs, real resize)
-import type * as IPty from "node-pty";
+
+const terminalProcesses = new Map<string, pty.IPty>();
+const terminalHistories = new Map<string, string[]>();
 
 ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: string) => {
   if (terminalProcesses.has(termId)) return { success: true };
@@ -905,16 +1104,28 @@ ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: stri
   });
 
   terminalProcesses.set(termId, proc);
+  terminalHistories.set(termId, []);
 
   proc.onData((data: string) => {
+    const hist = terminalHistories.get(termId);
+    if (hist) {
+      hist.push(data);
+      if (hist.length > 500) hist.shift(); // Keep last 500 chunks
+    }
     event.sender.send("atlas:terminal-data", { termId, data });
   });
 
   proc.onExit(() => {
     terminalProcesses.delete(termId);
+    terminalHistories.delete(termId);
   });
 
   return { success: true };
+});
+
+ipcMain.handle("atlas:terminal-get-history", async (_event, termId: string) => {
+  const hist = terminalHistories.get(termId);
+  return hist ? hist.join("") : "";
 });
 
 ipcMain.handle("atlas:terminal-input", async (_event, termId: string, data: string) => {
@@ -1131,32 +1342,61 @@ ipcMain.handle("atlas:add-repo", async (_event, repoPath: string) => {
   return { success: true, repoPath };
 });
 
-// Agent run â€” delegates to agent runtime subprocess
-ipcMain.handle("atlas:run", async (event, goal: string) => {
-  try {
-    const { MemoryEngine } = await import("@atlas/graph");
-    const { Orchestrator, detectProviderFromEnv, createProvider } = await import("@atlas/agents");
-    const repoRoot = global.__atlasRepoRoot;
-    if (!repoRoot) return { error: "No repo open" };
+// Agent run — delegates to agent runtime subprocess
+ipcMain.handle("atlas:run", async (event, input: string | any[], context?: any) => {
+  const repoRoot = getProjectRoot();
+  if (!repoRoot) return { error: "No active workspace" };
 
-    const providerConfig = detectProviderFromEnv();
-    const provider = createProvider(providerConfig);
+  try {
+    const provider = await createProvider(repoRoot);
+    const { Orchestrator } = await import("@atlas/agents");
+    const { MemoryEngine } = await import("@atlas/graph");
     const memory = await MemoryEngine.create({ repoRoot });
 
     const orchestrator = new Orchestrator({
       provider,
       memory,
       repoRoot,
+      planningMode: context?.planningMode,
       onEvent: (ev) => {
         event.sender.send("atlas:event", ev);
       },
+      checkPermission: async (permission, data) => {
+        return new Promise<boolean>((resolve) => {
+          const reqId = Date.now().toString() + Math.random().toString();
+          permissionRequests.set(reqId, resolve);
+          event.sender.send("atlas:request-permission", { reqId, permission, data });
+        });
+      },
+      waitForPlanApproval: async (plan) => {
+        return new Promise<boolean>((resolve) => {
+          const reqId = Date.now().toString() + Math.random().toString();
+          planApprovalRequests.set(reqId, resolve);
+          event.sender.send("atlas:request-plan-approval", { reqId, plan });
+        });
+      }
     });
 
-    const record = await orchestrator.run(goal);
+    const runRecord = await orchestrator.run(input, context);
     memory.close();
-    return record;
+    return runRecord;
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle("atlas:get-runs", async () => {
+  const repoRoot = getProjectRoot();
+  if (!repoRoot) return [];
+
+  try {
+    const { MemoryEngine } = await import("@atlas/graph");
+    const memory = await MemoryEngine.create({ repoRoot });
+    const runs = memory.getAllRuns();
+    memory.close();
+    return runs;
+  } catch (err) {
+    return [];
   }
 });
 
@@ -1390,6 +1630,8 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  startRemoteServer();
 });
 
 app.on("window-all-closed", () => {
@@ -1407,10 +1649,12 @@ ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     const depsCount = Object.keys(pkg.dependencies || {}).length + Object.keys(pkg.devDependencies || {}).length;
     
-    const { execSync } = require("child_process");
+    const { exec } = require("child_process");
+    const { promisify } = require("util");
+    const execAsync = promisify(exec);
     try {
-      const output = execSync('npm outdated --json', { cwd: repoPath, encoding: 'utf-8' });
-      const outdated = JSON.parse(output);
+      const { stdout } = await execAsync('npm outdated --json', { cwd: repoPath, encoding: 'utf-8' });
+      const outdated = JSON.parse(stdout);
       return { deps: depsCount, outdated: Object.keys(outdated).length };
     } catch (e: any) {
       // npm outdated exits with 1 if there are outdated deps
@@ -1418,7 +1662,9 @@ ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
         try {
           const outdated = JSON.parse(e.stdout);
           return { deps: depsCount, outdated: Object.keys(outdated).length };
-        } catch (parseErr) { }
+        } catch (parseErr) {
+          console.warn("[WARN] Failed to parse npm outdated JSON output:", parseErr);
+        }
       }
       return { deps: depsCount, outdated: 0 };
     }
@@ -1426,3 +1672,150 @@ ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
     return { deps: 0, outdated: 0 };
   }
 });
+
+// ---------------------------------------------------------------------------
+// Remote Phone Control (Phase 5)
+// ---------------------------------------------------------------------------
+const remoteClients = new Set<WebSocket>();
+
+function startRemoteServer() {
+  const server = http.createServer((req, res) => {
+    if (req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+          <title>Atlas Remote Control</title>
+          <style>
+            body { font-family: -apple-system, sans-serif; background: #000; color: #e4e4e7; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+            #log { flex: 1; overflow-y: auto; font-size: 13px; margin-bottom: 20px; border: 1px solid #333; padding: 10px; border-radius: 8px; background: #111; white-space: pre-wrap; display: flex; flex-direction: column; gap: 8px; }
+            .event-plan { color: #a78bfa; }
+            .event-code { color: #38bdf8; }
+            .event-test { color: #4ade80; }
+            .event-review { color: #f87171; }
+            .user-msg { color: #fff; align-self: flex-end; background: #27272a; padding: 8px; border-radius: 8px; max-width: 80%; }
+            .agent-msg { background: #18181b; padding: 8px; border-radius: 8px; max-width: 90%; }
+            input { padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; margin-bottom: 10px; }
+            button { padding: 12px; font-size: 16px; border-radius: 8px; border: none; background: #38bdf8; color: #000; font-weight: bold; cursor: pointer; }
+          </style>
+        </head>
+        <body>
+          <h2>Atlas Remote</h2>
+          <div id="log"></div>
+          <input type="text" id="prompt" placeholder="Ask agent..." />
+          <button id="sendBtn">Send</button>
+          <script>
+            const ws = new WebSocket('ws://' + location.host);
+            const log = document.getElementById('log');
+            
+            function appendMsg(content, className) {
+              const div = document.createElement('div');
+              div.className = className;
+              div.textContent = content;
+              log.appendChild(div);
+              log.scrollTop = log.scrollHeight;
+            }
+
+            ws.onmessage = (e) => {
+              const ev = JSON.parse(e.data);
+              if (ev.type === 'state_change') {
+                appendMsg('State: ' + ev.state, 'agent-msg event-code');
+              } else if (ev.type === 'plan_ready') {
+                appendMsg('Plan generated with ' + ev.plan.steps.length + ' steps.', 'agent-msg event-plan');
+              } else if (ev.type === 'test_result') {
+                appendMsg('Tests ' + ev.result.status, 'agent-msg ' + (ev.result.status === 'passed' ? 'event-test' : 'event-review'));
+              } else if (ev.type === 'review_result') {
+                appendMsg('Review risk: ' + ev.result.overallRisk, 'agent-msg event-review');
+              } else if (ev.type === 'awaiting_human') {
+                appendMsg('⚠️ Awaiting Human: ' + ev.reason, 'agent-msg');
+                log.lastChild.style.color = 'yellow';
+              }
+            };
+            document.getElementById('sendBtn').onclick = () => {
+              const text = document.getElementById('prompt').value;
+              if (text) {
+                ws.send(JSON.stringify({ type: 'run', payload: text }));
+                document.getElementById('prompt').value = '';
+                appendMsg(text, 'user-msg');
+              }
+            };
+          </script>
+        </body>
+        </html>
+      `);
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
+  const wss = new WebSocket.Server({ server });
+  
+  wss.on('connection', (ws) => {
+    remoteClients.add(ws);
+    console.log('[Remote] Phone connected');
+    ws.on('close', () => remoteClients.delete(ws));
+    
+    ws.on('message', async (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'run') {
+          const repoRoot = global.__atlasRepoRoot || global.__atlasWorkspaceRoots?.[0];
+          if (!repoRoot) {
+            ws.send(JSON.stringify({ type: 'error', message: 'No active workspace' }));
+            return;
+          }
+          
+          const { Orchestrator } = await import("@atlas/agents");
+          const { MemoryEngine } = await import("@atlas/graph");
+          const memory = await MemoryEngine.create({ repoRoot });
+          
+          const { createProvider } = await import("./main.js"); // Wait, createProvider is already in this file! We can just call it.
+          // Wait, createProvider isn't exported... Let's just define it inline or call the global one since this is inside main.ts.
+          // Actually, createProvider is defined in main.ts so I can just call it directly!
+          const provider = await createProvider(repoRoot);
+
+          const orchestrator = new Orchestrator({
+            provider,
+            memory,
+            repoRoot,
+            onEvent: (ev) => {
+              ws.send(JSON.stringify(ev));
+              if (mainWindow) {
+                mainWindow.webContents.send("atlas:event", ev);
+              }
+            },
+            checkPermission: async (permission, data) => {
+              return new Promise<boolean>((resolve) => {
+                if (mainWindow) {
+                  const reqId = Date.now().toString() + Math.random().toString();
+                  permissionRequests.set(reqId, resolve);
+                  mainWindow.webContents.send("atlas:request-permission", { reqId, permission, data });
+                } else {
+                  resolve(false);
+                }
+              });
+            }
+          });
+
+          await orchestrator.run(msg.payload, {
+            activeFilePath: "<Remote Phone>",
+            activeContent: "",
+            openTabs: [],
+            gitStatusSummary: "Unknown"
+          });
+          memory.close();
+        }
+      } catch (e) {
+        console.error('[Remote] Error', e);
+      }
+    });
+  });
+
+  server.listen(4000, '0.0.0.0', () => {
+    console.log('[Remote] Control server running on port 4000');
+  });
+}
+

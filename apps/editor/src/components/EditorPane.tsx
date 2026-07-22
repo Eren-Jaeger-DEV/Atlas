@@ -41,12 +41,14 @@ function findEnclosingSymbol(symbols: any[], line: number): string | undefined {
 }
 
 function inferLanguage(filePath?: string, hint?: string): string {
-  if (hint && hint !== "typescript") return hint;
-  if (!filePath) return "typescript";
+  if (!filePath) return hint || "typescript";
   const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "tsx") return "typescriptreact";
+  if (ext === "jsx") return "javascriptreact";
+  if (hint && hint !== "typescript") return hint;
   const map: Record<string, string> = {
     ts: "typescript", tsx: "typescriptreact",
-    js: "javascript",  jsx: "javascript",
+    js: "javascript",  jsx: "javascriptreact",
     py: "python",      json: "json",
     md: "markdown",    css: "css",
     html: "html",      sh: "shell",
@@ -510,11 +512,13 @@ export function EditorPane({
     if (editorRef.current && monacoRef.current && settings) {
       editorRef.current.updateOptions({
         fontSize: settings.fontSize,
+        lineHeight: Math.max(18, Math.floor(settings.fontSize * 1.6)),
         fontFamily: settings.fontFamily,
         tabSize: settings.tabSize,
         wordWrap: settings.wordWrap,
         lineNumbers: settings.lineNumbers ? "on" : "off",
-        minimap: { enabled: settings.minimap }
+        minimap: { enabled: settings.minimap },
+        padding: { top: 8 }
       });
       monacoRef.current.editor.setTheme(settings.theme);
     }
@@ -694,7 +698,7 @@ export function EditorPane({
               useShadows: false,
             },
             padding: { top: 8, bottom: 8 },
-            lightbulb: { enabled: true },
+            lightbulb: { enabled: true as any },
           }}
         />
       </div>

@@ -9,6 +9,11 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { ImpactResult, GraphNode, OrchestratorEvent, RunRecord } from "@atlas/core";
 
 contextBridge.exposeInMainWorld("atlasAPI", {
+  getSecureKey: (key: string): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:get-secure-key", key),
+  setSecureKey: (key: string, value: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:set-secure-key", key, value),
+
   // Memory / graph
   impact: (filePath: string, symbolName?: string): Promise<ImpactResult> =>
     ipcRenderer.invoke("atlas:impact", filePath, symbolName),
@@ -54,6 +59,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   // Integrated Terminal
   terminalCreate: (termId: string, cwd?: string) =>
     ipcRenderer.invoke("atlas:terminal-create", termId, cwd),
+
+  terminalGetHistory: (termId: string): Promise<string> =>
+    ipcRenderer.invoke("atlas:terminal-get-history", termId),
 
   terminalInput: (termId: string, data: string) =>
     ipcRenderer.invoke("atlas:terminal-input", termId, data),
@@ -121,8 +129,11 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.invoke("atlas:git-blame", repoPath, filePath),
 
   // Agent run
-  run: (goal: string): Promise<RunRecord> =>
-    ipcRenderer.invoke("atlas:run", goal),
+  run: (input: string | any[], context?: any): Promise<RunRecord> =>
+    ipcRenderer.invoke("atlas:run", input, context),
+
+  getRuns: (): Promise<RunRecord[]> =>
+    ipcRenderer.invoke("atlas:get-runs"),
 
   // Event streaming from agent runs
   onEvent: (handler: (event: OrchestratorEvent) => void) => {
@@ -195,10 +206,17 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.invoke("atlas:get-tasks", repoPath),
 
   // Settings
+  openSettingsWindow: (): Promise<void> =>
+    ipcRenderer.invoke("atlas:open-settings-window"),
   getSettings: (): Promise<any> =>
     ipcRenderer.invoke("atlas:get-settings"),
   updateSettings: (settings: any): Promise<void> =>
     ipcRenderer.invoke("atlas:update-settings", settings),
+  onSettingsUpdated: (handler: (settings: any) => void) => {
+    const listener = (_event: any, settings: any) => handler(settings);
+    ipcRenderer.on("atlas:settings-updated", listener);
+    return () => ipcRenderer.off("atlas:settings-updated", listener);
+  },
 
   // Permissions
   grantPermission: (extensionId: string, permissions: string[]): Promise<void> =>
@@ -207,9 +225,31 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   revokePermission: (extensionId: string): Promise<void> =>
     ipcRenderer.invoke("atlas:revoke-permission", extensionId),
 
+  respondPermission: (reqId: string, granted: boolean): Promise<void> =>
+    ipcRenderer.invoke("atlas:permission-response", reqId, granted),
+
+  sendPlanDecision: (reqId: string, approved: boolean) =>
+    ipcRenderer.send("atlas:plan-decision", { reqId, approved }),
+
+  onRequestPlanApproval: (handler: (payload: { reqId: string, plan: any }) => void) => {
+    const listener = (_event: any, payload: any) => handler(payload);
+    ipcRenderer.on("atlas:request-plan-approval", listener);
+    return () => ipcRenderer.off("atlas:request-plan-approval", listener);
+  },
+
   // AI
   inlineAgentAction: (action: string, text: string): Promise<string> =>
     ipcRenderer.invoke("atlas:agent-inline-action", action, text),
+  testProviderConnection: (providerName: string, apiKey: string, baseUrl?: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("atlas:test-provider-connection", providerName, apiKey, baseUrl),
+
+  // Secure token storage sync
+  getSecureKeySync: (key: string): string | null =>
+    ipcRenderer.sendSync("atlas:get-secure-key-sync", key),
+  setSecureKeySync: (key: string, value: string): void =>
+    ipcRenderer.sendSync("atlas:set-secure-key-sync", key, value),
+  removeSecureKeySync: (key: string): void =>
+    ipcRenderer.sendSync("atlas:remove-secure-key-sync", key),
 
   // Graph Data
   getGraphData: (repoPath: string): Promise<{ nodes: any[], edges: any[] }> =>
@@ -248,4 +288,12 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   // Health
   scanDeps: (repoPath: string) =>
     ipcRenderer.invoke("atlas:scan-deps", repoPath),
+
+  // Ghost Text Streaming
+  emitGhostToken: (token: string, line: number) =>
+    ipcRenderer.send("atlas:ghost-token-emit", { token, line }),
+  onGhostToken: (handler: (event: any, data: { token: string; line: number }) => void) => {
+    ipcRenderer.on("atlas:ghost-token", handler);
+    return () => ipcRenderer.off("atlas:ghost-token", handler);
+  },
 });

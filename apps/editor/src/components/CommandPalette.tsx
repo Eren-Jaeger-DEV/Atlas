@@ -17,7 +17,9 @@ export function CommandPalette({ commandService, isOpen, onClose }: CommandPalet
     try {
       const stored = localStorage.getItem("atlas_recent_commands");
       if (stored) setRecentIds(JSON.parse(stored));
-    } catch {}
+    } catch (err) {
+      console.warn("[WARN] Failed to parse atlas_recent_commands from localStorage:", err);
+    }
   }, []);
 
   useEffect(() => {

@@ -82,10 +82,33 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
     setTree(await updateTreeItem(tree));
   };
 
+  const findItemByPath = (nodes: FileItem[], targetPath: string): FileItem | undefined => {
+    for (const node of nodes) {
+      if (node.path === targetPath) return node;
+      if (node.children) {
+        const found = findItemByPath(node.children, targetPath);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
+
   const handleCreateFile = async () => {
     const filename = prompt("Enter file name (e.g. index.ts):");
     if (!filename || !workspaceRoots || workspaceRoots.length === 0) return;
-    const targetDir = selectedPath && !selectedPath.endsWith("/") ? selectedPath : workspaceRoots[0];
+
+    let targetDir = workspaceRoots[0];
+    if (selectedPath) {
+      const selectedItem = findItemByPath(tree, selectedPath);
+      if (selectedItem?.isDirectory) {
+        targetDir = selectedItem.path;
+      } else {
+        const parts = selectedPath.split(/[/\\]/);
+        parts.pop();
+        if (parts.length > 0) targetDir = parts.join("/");
+      }
+    }
+
     const targetPath = `${targetDir}/${filename}`.replace(/\/+/g, "/");
 
     const api = (window as any).atlasAPI;
@@ -147,15 +170,15 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
         <span style={styles.headerTitle}>EXPLORER</span>
         <div style={styles.actions}>
           <button style={styles.actionButton} onClick={handleCreateFile} title="New File">
-            + File
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2-2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
           </button>
           {onAddFolder && (
             <button style={styles.actionButton} onClick={onAddFolder} title="Add Workspace Folder">
-              + Folder
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             </button>
           )}
           <button style={styles.actionButton} onClick={onSelectRepo} title="Open Workspace">
-            Open
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </button>
         </div>
       </div>
@@ -180,18 +203,18 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#0d0d10",
+    backgroundColor: "#050505",
     color: "#a1a1aa",
-    fontSize: "12px",
+    fontSize: "13px",
     userSelect: "none",
-    borderRight: "1px solid #27272a",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "4px 8px",
-    backgroundColor: "#09090b",
+    padding: "0 8px",
+    height: "35px",
+    backgroundColor: "#000000",
     borderBottom: "1px solid #27272a",
   },
   headerTitle: {
@@ -202,17 +225,18 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actions: {
     display: "flex",
-    gap: "6px",
+    gap: "2px",
   },
   actionButton: {
-    background: "#18181b",
-    border: "1px solid #27272a",
-    color: "#e4e4e7",
-    fontSize: "11px",
-    borderRadius: "4px",
-    padding: "3px 8px",
+    background: "none",
+    border: "none",
+    color: "#71717a",
+    padding: "4px",
     cursor: "pointer",
-    fontWeight: 500,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "color 0.1s",
   },
   treeContainer: {
     flex: 1,
@@ -222,14 +246,15 @@ const styles: Record<string, React.CSSProperties> = {
   treeItem: {
     display: "flex",
     alignItems: "center",
-    padding: "4px 8px",
+    padding: "0 8px",
     cursor: "pointer",
-    borderRadius: "4px",
-    margin: "1px 6px",
-    height: "26px",
+    borderRadius: "0",
+    margin: "0",
+    height: "22px",
+    transition: "background-color 0.1s",
   },
   selectedItem: {
-    backgroundColor: "#18181b",
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
     color: "#fafafa",
   },
   label: {
@@ -238,7 +263,7 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     color: "#e4e4e7",
-    fontSize: "12px",
+    fontSize: "13px",
     fontFamily: "'Inter', sans-serif",
   },
   deleteButton: {

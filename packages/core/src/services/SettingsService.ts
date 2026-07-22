@@ -17,7 +17,9 @@ export interface SettingsSchema {
   minimap: boolean;
   lineNumbers: boolean;
   terminalShell: "cmd" | "powershell" | "bash";
+  aiProvider: "openai" | "anthropic" | "gemini" | "openai-compatible";
   aiModel: string;
+  aiBaseUrl: string;
   gitBlameEnabled: boolean;
   gitDiffGuttersEnabled: boolean;
 }
@@ -33,7 +35,9 @@ export const DEFAULT_SETTINGS_SCHEMA: SettingsSchema = {
   minimap: true,
   lineNumbers: true,
   terminalShell: "cmd",
+  aiProvider: "gemini",
   aiModel: "gemini-2.0-flash",
+  aiBaseUrl: "",
   gitBlameEnabled: true,
   gitDiffGuttersEnabled: true,
 };

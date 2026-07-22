@@ -45,7 +45,7 @@ export function MergeConflictEditor({
         
         for (const line of lines) {
           if (state === "normal") {
-            if (line.startsWith("<<<<<<<")) {
+            if (/^<{7}(\s+.*)?$/.test(line)) {
               if (currentText.length > 0) {
                 parsedChunks.push({ type: "text", content: currentText.join("\n") });
                 currentText = [];
@@ -56,14 +56,14 @@ export function MergeConflictEditor({
               currentText.push(line);
             }
           } else if (state === "in-current") {
-            if (line.startsWith("=======")) {
+            if (/^={7}$/.test(line)) {
               state = "in-incoming";
               incomingChange = [];
             } else {
               currentChange.push(line);
             }
           } else if (state === "in-incoming") {
-            if (line.startsWith(">>>>>>>")) {
+            if (/^>{7}(\s+.*)?$/.test(line)) {
               conflictId++;
               parsedChunks.push({
                 type: "conflict",

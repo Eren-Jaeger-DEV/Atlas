@@ -10,7 +10,7 @@
   },
   "main": "./electron-dist/main.js",
   "scripts": {
-    "dev": "concurrently \"vite\" \"electron .\"",
+    "dev": "npx cross-env NODE_ENV=development concurrently \"vite\" \"electron .\"",
     "build": "vite build && tsc -p tsconfig.electron.json",
     "electron": "electron .",
     "preview": "vite preview",

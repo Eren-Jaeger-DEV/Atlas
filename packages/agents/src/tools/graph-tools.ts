@@ -65,6 +65,24 @@ export async function recordDecisionTool(
   return `Decision recorded: ${decision.id} — "${decision.title}"`;
 }
 
+export async function logBugPatternTool(
+  errorSignature: string,
+  solution: string,
+  contextTags: string,
+  ctx: GraphToolContext
+): Promise<string> {
+  const { sha256 } = await import("js-sha256");
+  const id = sha256(`bug:${errorSignature}:${Date.now()}`).slice(0, 24);
+  ctx.memory.logBugPattern({
+    id,
+    errorSignature,
+    solution,
+    contextTags,
+    createdAt: Date.now(),
+  });
+  return `Bug pattern recorded with ID: ${id}`;
+}
+
 // ---------------------------------------------------------------------------
 // LLM tool definitions
 // ---------------------------------------------------------------------------
@@ -99,7 +117,8 @@ export const GRAPH_TOOL_DEFINITIONS: LLMToolDefinition[] = [
         },
         symbol_name: {
           type: "string",
-          description: "Optional: the specific function or class name to analyze.",
+          description:
+            "Optional name of a specific function or class to target the impact analysis.",
         },
       },
       required: ["file_path"],
@@ -108,24 +127,48 @@ export const GRAPH_TOOL_DEFINITIONS: LLMToolDefinition[] = [
   {
     name: "record_decision",
     description:
-      "Record an architectural or implementation decision in the knowledge graph. Call this when making significant design choices so future agents and developers can trace the reasoning.",
+      "Record a significant architectural or design decision into the project's knowledge graph.",
     parameters: {
       type: "object",
       properties: {
         title: {
           type: "string",
-          description: "Short title for the decision.",
+          description: "Short, descriptive title of the decision.",
         },
         description: {
           type: "string",
-          description: "What was decided.",
+          description: "Detailed description of what was decided and why.",
         },
         rationale: {
           type: "string",
-          description: "Why this decision was made and what alternatives were rejected.",
+          description:
+            "The specific reasoning, trade-offs, and alternatives considered.",
         },
       },
       required: ["title", "description", "rationale"],
     },
   },
+  {
+    name: "log_bug_pattern",
+    description:
+      "Record a recurring bug or a complex fix so the Swarm can learn to avoid it in the future.",
+    parameters: {
+      type: "object",
+      properties: {
+        error_signature: {
+          type: "string",
+          description: "A short, distinct description or snippet of the error.",
+        },
+        solution: {
+          type: "string",
+          description: "How the error was resolved or the correct pattern to use.",
+        },
+        context_tags: {
+          type: "string",
+          description: "Comma-separated tags (e.g. 'react, state, memory-leak').",
+        },
+      },
+      required: ["error_signature", "solution"],
+    },
+  }
 ];

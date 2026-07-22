@@ -11,14 +11,16 @@ export interface EditorSettings {
   lineNumbers: boolean;
   autoSave: "off" | "afterDelay" | "onFocusChange";
   terminalShell: "cmd" | "powershell" | "bash";
-  aiModel: "gemini-2.0-flash" | "gpt-4o" | "claude-3-5-sonnet" | "ollama-local";
+  aiProvider: "openai" | "anthropic" | "gemini" | "openai-compatible";
+  aiModel: string;
+  aiBaseUrl: string;
   gitBlameEnabled: boolean;
   gitDiffGuttersEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: EditorSettings = {
   theme: "obsidian",
-  fontSize: 14,
+  fontSize: 13,
   fontFamily: "'JetBrains Mono', Consolas, monospace",
   tabSize: 2,
   wordWrap: "on",
@@ -27,7 +29,9 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   lineNumbers: true,
   autoSave: "off",
   terminalShell: "cmd",
+  aiProvider: "gemini",
   aiModel: "gemini-2.0-flash",
+  aiBaseUrl: "",
   gitBlameEnabled: true,
   gitDiffGuttersEnabled: true,
 };
@@ -40,10 +44,58 @@ interface SettingsPanelProps {
 export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps) {
   const [localSettings, setLocalSettings] = useState<EditorSettings>(settings);
   const [searchQuery, setSearchQuery] = useState("");
+  const [secureKeys, setSecureKeys] = useState<Record<string, string>>({
+    openRouterApiKey: "",
+    openaiApiKey: "",
+    anthropicApiKey: "",
+    geminiApiKey: ""
+  });
+  const [testStatus, setTestStatus] = useState<Record<string, "idle" | "testing" | "success" | "error">>({});
 
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
+
+  useEffect(() => {
+    const loadKeys = async () => {
+      const api = (window as any).atlasAPI;
+      if (!api) return;
+      const r = await api.getSecureKey("openRouterApiKey");
+      const o = await api.getSecureKey("openaiApiKey");
+      const a = await api.getSecureKey("anthropicApiKey");
+      const g = await api.getSecureKey("geminiApiKey");
+      setSecureKeys({
+        openRouterApiKey: r || "",
+        openaiApiKey: o || "",
+        anthropicApiKey: a || "",
+        geminiApiKey: g || ""
+      });
+    };
+    loadKeys();
+  }, []);
+
+  const handleSecureKeyChange = (key: string, value: string) => {
+    setSecureKeys(prev => ({ ...prev, [key]: value }));
+    const api = (window as any).atlasAPI;
+    if (api) api.setSecureKey(key, value);
+    setTestStatus(prev => ({ ...prev, [key]: "idle" }));
+  };
+
+  const handleTestConnection = async (providerName: string, stateKey: string) => {
+    const api = (window as any).atlasAPI;
+    if (!api?.testProviderConnection) return;
+    
+    setTestStatus(prev => ({ ...prev, [stateKey]: "testing" }));
+    const key = secureKeys[stateKey];
+    if (!key) {
+      setTestStatus(prev => ({ ...prev, [stateKey]: "error" }));
+      return;
+    }
+    
+    const baseUrl = providerName === "openai-compatible" ? localSettings.aiBaseUrl : undefined;
+    const res = await api.testProviderConnection(providerName, key, baseUrl);
+    setTestStatus(prev => ({ ...prev, [stateKey]: res.success ? "success" : "error" }));
+  };
 
   const handleChange = <K extends keyof EditorSettings>(key: K, value: EditorSettings[K]) => {
     const updated = { ...localSettings, [key]: value };
@@ -227,20 +279,144 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
             </select>
           </div>
           )}
+        </div>
+        )}
 
-          {matches(["ai", "agent", "model", "gemini", "gpt", "claude", "ollama"]) && (
+        {/* Section: AI Configuration */}
+        {(matches(["ai", "model", "provider", "baseurl"])) && (
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>AI CONFIGURATION</div>
+          
           <div style={styles.settingItem}>
-            <label style={styles.label}>Autonomous AI Model</label>
+            <label style={styles.label}>AI Provider</label>
             <select
               style={styles.select}
-              value={localSettings.aiModel}
-              onChange={(e) => handleChange("aiModel", e.target.value as any)}
+              value={localSettings.aiProvider || "openai"}
+              onChange={(e) => handleChange("aiProvider", e.target.value as any)}
             >
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash (Fast & Intelligent)</option>
-              <option value="gpt-4o">OpenAI GPT-4o</option>
-              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-              <option value="ollama-local">Ollama (100% Offline Local Model)</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="openai-compatible">OpenAI-Compatible (Custom / OpenRouter)</option>
             </select>
+          </div>
+
+          <div style={styles.settingItem}>
+            <label style={styles.label}>AI Model</label>
+            <input 
+              type="text" 
+              style={styles.textInput}
+              value={localSettings.aiModel}
+              onChange={(e) => handleChange("aiModel", e.target.value)}
+              placeholder="e.g. gemini-2.0-flash or gpt-4o"
+            />
+          </div>
+
+          {localSettings.aiProvider === "openai-compatible" && (
+            <div style={styles.settingItem}>
+              <label style={styles.label}>Base URL (Custom Endpoint)</label>
+              <input 
+                type="text" 
+                style={styles.textInput}
+                value={localSettings.aiBaseUrl || ""}
+                onChange={(e) => handleChange("aiBaseUrl", e.target.value)}
+                placeholder="https://api.routing.run/v1"
+              />
+            </div>
+          )}
+        </div>
+        )}
+
+        {/* Section: AI Providers & Keys */}
+        {(matches(["ai", "provider", "key", "api", "routing", "openai", "anthropic", "gemini"])) && (
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>AI API KEYS</div>
+
+          {matches(["api", "key", "routing", "openrouter"]) && (
+          <div style={styles.settingItem}>
+            <label style={styles.label}>routing.run API Key</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input 
+                type="password"
+                style={{...styles.textInput, flex: 1}}
+                value={secureKeys.openRouterApiKey}
+                onChange={(e) => handleSecureKeyChange("openRouterApiKey", e.target.value)}
+                placeholder="rk_..."
+              />
+              <button 
+                style={styles.testBtn} 
+                onClick={() => handleTestConnection("openai-compatible", "openRouterApiKey")}
+                disabled={testStatus.openRouterApiKey === "testing" || !secureKeys.openRouterApiKey}
+              >
+                {testStatus.openRouterApiKey === "testing" ? "..." : testStatus.openRouterApiKey === "success" ? "OK" : testStatus.openRouterApiKey === "error" ? "Fail" : "Test"}
+              </button>
+            </div>
+          </div>
+          )}
+
+          {matches(["api", "key", "openai"]) && (
+          <div style={styles.settingItem}>
+            <label style={styles.label}>OpenAI API Key</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input 
+                type="password"
+                style={{...styles.textInput, flex: 1}}
+                value={secureKeys.openaiApiKey}
+                onChange={(e) => handleSecureKeyChange("openaiApiKey", e.target.value)}
+                placeholder="sk-proj-..."
+              />
+              <button 
+                style={styles.testBtn} 
+                onClick={() => handleTestConnection("openai", "openaiApiKey")}
+                disabled={testStatus.openaiApiKey === "testing" || !secureKeys.openaiApiKey}
+              >
+                {testStatus.openaiApiKey === "testing" ? "..." : testStatus.openaiApiKey === "success" ? "OK" : testStatus.openaiApiKey === "error" ? "Fail" : "Test"}
+              </button>
+            </div>
+          </div>
+          )}
+
+          {matches(["api", "key", "anthropic"]) && (
+          <div style={styles.settingItem}>
+            <label style={styles.label}>Anthropic API Key</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input 
+                type="password"
+                style={{...styles.textInput, flex: 1}}
+                value={secureKeys.anthropicApiKey}
+                onChange={(e) => handleSecureKeyChange("anthropicApiKey", e.target.value)}
+                placeholder="sk-ant-..."
+              />
+              <button 
+                style={styles.testBtn} 
+                onClick={() => handleTestConnection("anthropic", "anthropicApiKey")}
+                disabled={testStatus.anthropicApiKey === "testing" || !secureKeys.anthropicApiKey}
+              >
+                {testStatus.anthropicApiKey === "testing" ? "..." : testStatus.anthropicApiKey === "success" ? "OK" : testStatus.anthropicApiKey === "error" ? "Fail" : "Test"}
+              </button>
+            </div>
+          </div>
+          )}
+
+          {matches(["api", "key", "gemini"]) && (
+          <div style={styles.settingItem}>
+            <label style={styles.label}>Gemini API Key</label>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input 
+                type="password"
+                style={{...styles.textInput, flex: 1}}
+                value={secureKeys.geminiApiKey}
+                onChange={(e) => handleSecureKeyChange("geminiApiKey", e.target.value)}
+                placeholder="AIzaSy..."
+              />
+              <button 
+                style={styles.testBtn} 
+                onClick={() => handleTestConnection("gemini", "geminiApiKey")}
+                disabled={testStatus.geminiApiKey === "testing" || !secureKeys.geminiApiKey}
+              >
+                {testStatus.geminiApiKey === "testing" ? "..." : testStatus.geminiApiKey === "success" ? "OK" : testStatus.geminiApiKey === "error" ? "Fail" : "Test"}
+              </button>
+            </div>
           </div>
           )}
         </div>
@@ -328,5 +504,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "12px",
     outline: "none",
     boxSizing: "border-box",
+  },
+  testBtn: {
+    backgroundColor: "#27272a",
+    border: "1px solid #3f3f46",
+    color: "#fafafa",
+    borderRadius: "4px",
+    padding: "6px 10px",
+    fontSize: "12px",
+    cursor: "pointer",
+    outline: "none",
+    minWidth: "60px"
   }
 };

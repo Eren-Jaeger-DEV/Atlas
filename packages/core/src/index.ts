@@ -18,6 +18,9 @@ export type {
   RunRecord,
   OrchestratorEvent,
   RiskLevel as AgentRiskLevel,
+  TaskNode,
+  TaskType,
+  TaskStatus,
 } from "./types/agent.js";
 export type {
   ImpactResult,
@@ -52,6 +55,7 @@ export type {
 
 // Platform & Service Architecture
 export { EventBus, type AtlasEventName, type EventCallback } from "./events/EventBus.js";
+export { LSPBridge, type LSPDiagnostic, type LSPSymbol, type LSPConfig } from "./platform/LSPBridge.js";
 export { ServiceContainer } from "./platform/ServiceContainer.js";
 export { CommandService, type CommandDescriptor, type CommandHandler } from "./services/CommandService.js";
 export { SettingsService, DEFAULT_SETTINGS_SCHEMA, type SettingsSchema } from "./services/SettingsService.js";

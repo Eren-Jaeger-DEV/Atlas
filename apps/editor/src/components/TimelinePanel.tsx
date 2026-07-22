@@ -11,7 +11,7 @@ interface CommitRecord {
 
 interface TimelineEvent {
   id: string;
-  type: "commit" | "test" | "security" | "graph";
+  type: "commit" | "test" | "security" | "graph" | "agent";
   timestamp: string;
   title: string;
   description: string;
@@ -32,47 +32,38 @@ export function TimelinePanel({ repoPath }: TimelinePanelProps) {
     setLoading(true);
     setError(null);
 
-    // Fetch git log and synthesize timeline events
-    api().gitLog(repoPath, 20)
-      .then((log: CommitRecord[]) => {
-        if (!Array.isArray(log)) return;
-        
+    Promise.all([
+      api()?.gitLog ? api().gitLog(repoPath, 20) : Promise.resolve([]),
+      api()?.getRuns ? api().getRuns() : Promise.resolve([])
+    ])
+      .then(([log, runs]: [CommitRecord[], any[]]) => {
         const synthesizedEvents: TimelineEvent[] = [];
-        log.forEach((commit, idx) => {
-          // 1. The commit itself
-          synthesizedEvents.push({
-            id: `commit-${commit.hash}`,
-            type: "commit",
-            timestamp: commit.date,
-            title: `Commit: ${commit.hash.substring(0, 7)}`,
-            description: commit.message,
-            commitHash: commit.hash
+        
+        if (Array.isArray(log)) {
+          log.forEach((commit) => {
+            synthesizedEvents.push({
+              id: `commit-${commit.hash}`,
+              type: "commit",
+              timestamp: commit.date,
+              title: `Commit: ${commit.hash.substring(0, 7)}`,
+              description: commit.message,
+              commitHash: commit.hash
+            });
           });
-          
-          // 2. Mock Test Results linked to the commit (simulate timeline correlation)
-          if (idx % 3 === 0) {
-            synthesizedEvents.push({
-              id: `test-${commit.hash}`,
-              type: "test",
-              timestamp: commit.date,
-              title: "Test Suite Passed",
-              description: "142 passing, 0 failing",
-              commitHash: commit.hash
-            });
-          }
+        }
 
-          // 3. Mock Security findings
-          if (idx % 7 === 0) {
+        if (Array.isArray(runs)) {
+          runs.forEach(run => {
             synthesizedEvents.push({
-              id: `sec-${commit.hash}`,
-              type: "security",
-              timestamp: commit.date,
-              title: "Security Scan",
-              description: "Found 1 moderate vulnerability in dependencies.",
-              commitHash: commit.hash
+              id: `run-${run.id}`,
+              type: "agent",
+              timestamp: new Date(run.startedAt).toISOString(),
+              title: `Agent Task: ${run.finalState}`,
+              description: run.goal,
+              commitHash: run.commitHash
             });
-          }
-        });
+          });
+        }
 
         // Sort chronologically (newest first based on commit date)
         synthesizedEvents.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -88,6 +79,7 @@ export function TimelinePanel({ repoPath }: TimelinePanelProps) {
       case "test": return "🧪";
       case "security": return "🛡️";
       case "graph": return "🕸️";
+      case "agent": return "🤖";
       default: return "📌";
     }
   };
@@ -98,7 +90,8 @@ export function TimelinePanel({ repoPath }: TimelinePanelProps) {
       case "test": return "#4ade80";
       case "security": return "#f87171";
       case "graph": return "#a78bfa";
-      default: return "#e4e4e7";
+      case "agent": return "#f59e0b";
+      default: return "#52525b";
     }
   };
 

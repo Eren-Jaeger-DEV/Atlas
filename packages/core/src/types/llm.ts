@@ -87,7 +87,7 @@ export interface ILLMProvider {
 // Provider config
 // ---------------------------------------------------------------------------
 
-export type LLMProviderName = "openai" | "anthropic" | "gemini";
+export type LLMProviderName = "openai" | "anthropic" | "gemini" | "openai-compatible";
 
 export interface LLMProviderConfig {
   provider: LLMProviderName;

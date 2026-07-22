@@ -38,23 +38,56 @@ interface EditorTab {
   language: string;
   targetLine?: number;
   targetColumn?: number;
+  isBinary?: boolean;
 }
 type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "impact" | "graph" | "health" | "extensions" | "account" | "release" | "ai" | "settings" | "outline";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
 interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; }
 
+function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', color: '#e4e4e7', backgroundColor: '#000000', fontFamily: 'system-ui' }}>
+      <div style={{ fontSize: '48px', marginBottom: '16px', color: '#fbbf24' }}>⚠️</div>
+      <p style={{ maxWidth: '400px', textAlign: 'center', lineHeight: '1.5', marginBottom: '24px' }}>
+        The file is not displayed in the text editor because it is either binary or uses an unsupported text encoding.
+      </p>
+      <button 
+        style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#e4e4e7', border: '1px solid #27272a', borderRadius: '2px', cursor: 'pointer' }}
+        onClick={onOpenAnyway}
+        onMouseOver={e => e.currentTarget.style.backgroundColor = '#27272a'}
+        onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+      >
+        Open Anyway
+      </button>
+    </div>
+  );
+}
+
 const api = () => (window as any).atlasAPI;
 
 export function App() {
-  const [repoPath, setRepoPath]             = useState<string | undefined>(() => localStorage.getItem("atlas_last_repo") || undefined);
+  const [repoPath, setRepoPath]             = useState<string | undefined>(() => {
+    const last = localStorage.getItem("atlas_last_repo");
+    if (last) return last;
+    try {
+      const stored = JSON.parse(localStorage.getItem("atlas_workspace_roots") || "[]");
+      if (Array.isArray(stored) && stored.length > 0) return stored[0];
+    } catch (err) {
+      console.warn("[WARN] Failed to parse atlas_workspace_roots from localStorage:", err);
+    }
+    return undefined;
+  });
   const [workspaceRoots, setWorkspaceRoots] = useState<string[]>(() => {
     try { 
       const stored = JSON.parse(localStorage.getItem("atlas_workspace_roots") || "[]");
       if (Array.isArray(stored) && stored.length > 0) return stored;
       const lastRepo = localStorage.getItem("atlas_last_repo");
       return lastRepo ? [lastRepo] : [];
-    } catch { return []; }
+    } catch (err) {
+      console.warn("[WARN] Failed to parse atlas_workspace_roots for initial state:", err);
+      return [];
+    }
   });
   const [recentProjects, setRecentProjects] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem("atlas_recent_projects") || "[]"); } catch { return []; }
@@ -72,6 +105,7 @@ export function App() {
   const [splitTabIndex, setSplitTabIndex]           = useState(0);
   const [showMergeConflict, setShowMergeConflict]   = useState(false);
   const [showAiSafety, setShowAiSafety]             = useState(false);
+  const [aiSafetyData, setAiSafetyData]             = useState<any>(null);
   const [showInlineAi, setShowInlineAi]             = useState(false);
   const [showAboutModal, setShowAboutModal]         = useState(false);
   const [activeCursorPos, setActiveCursorPos]       = useState({ line: 1, col: 1 });
@@ -114,7 +148,7 @@ export function App() {
       setLsStatus(status);
     });
     
-    return () => unsubscribe();
+    return () => { unsubscribe(); };
   }, [repoPath, activeTab?.language]);
 
   const determineLanguage = (filePath: string) => {
@@ -141,7 +175,7 @@ export function App() {
       });
     } catch (err) {
       console.error("Failed to open file:", err);
-    }
+    };
   }, []);
 
   const saveRecentProject = useCallback((path: string) => {
@@ -206,6 +240,10 @@ export function App() {
     setTabs(p => p.map((t,i) => i===activeTabIndex ? {...t, content: contentToSave, isDirty:false} : t));
   }, [activeTab, activeTabIndex, settings.formatOnSave, repoPath]);
 
+  const handleOpenSettings = () => {
+    api()?.openSettingsWindow?.();
+  };
+
   const handleOpenFile = async (filePath: string, line?: number) => {
     const ei = tabs.findIndex(t => t.filePath === filePath);
     if (ei >= 0) {
@@ -214,17 +252,35 @@ export function App() {
       return;
     }
 
+    const binaryExts = new Set([".db", ".sqlite", ".sqlite3", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".tar", ".gz", ".mp3", ".mp4", ".exe", ".dll", ".so", ".dylib", ".wasm", ".bin", ".woff", ".woff2", ".ttf", ".eot"]);
+    const ext = filePath.substring(filePath.lastIndexOf(".")).toLowerCase();
+    
     let content = "";
-    try { content = await api()?.readFile(filePath) ?? ""; } catch { content = "// read error"; }
+    let isBinary = false;
+    if (binaryExts.has(ext)) {
+      isBinary = true;
+    } else {
+      try { content = await api()?.readFile(filePath) ?? ""; } catch { content = "// read error"; }
+    }
+    
     const language = determineLanguage(filePath);
-    setTabs(p => [...p, { filePath, content, language, isDirty: false }]);
+    setTabs(p => [...p, { filePath, content, language, isDirty: false, isBinary }]);
     setActiveTabIndex(tabs.length);
   };
 
   const handleCloseTab = (i: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    setTabs(p => p.filter((_,j) => j !== i));
-    if (activeTabIndex >= i && activeTabIndex > 0) setActiveTabIndex(activeTabIndex - 1);
+    setTabs(p => {
+      const nextTabs = p.filter((_, j) => j !== i);
+      if (nextTabs.length === 0) {
+        setActiveTabIndex(0);
+        setSplitTabIndex(0);
+      } else {
+        setActiveTabIndex(prev => (prev >= nextTabs.length ? Math.max(0, nextTabs.length - 1) : prev));
+        setSplitTabIndex(prev => (prev >= nextTabs.length ? Math.max(0, nextTabs.length - 1) : prev));
+      }
+      return nextTabs;
+    });
   };
 
   const handleViewDiff = async (filePath: string, staged: boolean) => {
@@ -251,6 +307,12 @@ export function App() {
     if (a?.getSettings) {
       a.getSettings().then((s: any) => {
         if (s) setSettings(s);
+      });
+    }
+
+    if (a?.onSettingsUpdated) {
+      return a.onSettingsUpdated((newSettings: any) => {
+        setSettings(newSettings);
       });
     }
   }, []);
@@ -290,7 +352,7 @@ export function App() {
     const h = (e: KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl && e.shiftKey && e.key.toLowerCase()==="p") { e.preventDefault(); setShowCommandPalette(p=>!p); }
-      else if (ctrl && e.key===",")                        { e.preventDefault(); setActiveSidebar("settings"); }
+      else if (ctrl && e.key===",")                        { e.preventDefault(); handleOpenSettings(); }
       else if (ctrl && e.key.toLowerCase()==="l")          { e.preventDefault(); setShowRightAiSidebar(p=>!p); }
       else if (ctrl && e.key.toLowerCase()==="k")          { e.preventDefault(); setShowCommandPalette(p=>!p); }
       else if (ctrl && e.key.toLowerCase()==="s")          { e.preventDefault(); handleSave(); }
@@ -318,7 +380,7 @@ export function App() {
       else if (action==="menu:show-explorer")     setActiveSidebar("explorer");
       else if (action==="menu:show-git")          setActiveSidebar("git");
       else if (action==="menu:toggle-ai-sidebar") setShowRightAiSidebar(p=>!p);
-      else if (action==="menu:open-settings")     setActiveSidebar("settings");
+      else if (action==="menu:open-settings")     handleOpenSettings();
       else if (action==="menu:toggle-terminal")   setShowBottomPanel(p=>!p);
     });
   }, [handleSelectRepo]);
@@ -385,7 +447,7 @@ export function App() {
   useEffect(() => {
     const unregisters = [
       commandService.registerCommand("about-atlas", "About Atlas Studio v1.0", () => setShowAboutModal(true)),
-      commandService.registerCommand("open-settings", "Open Settings", () => setActiveSidebar("settings"), "Ctrl+,"),
+      commandService.registerCommand("open-settings", "Open Settings", handleOpenSettings, "Ctrl+,"),
       commandService.registerCommand("open-folder", "Open Workspace Folder", handleSelectRepo, "Ctrl+O"),
       commandService.registerCommand("add-folder", "Add Folder to Workspace", handleAddFolder),
       commandService.registerCommand("split-editor", "Toggle Split Editor", () => setIsSplit(p=>!p), "Ctrl+\\"),
@@ -440,6 +502,22 @@ export function App() {
       return () => unregisters.forEach((fn) => fn());
     }
   }, [repoPath, commandService]);
+
+  useEffect(() => {
+    const handleRequestPermission = (_e: any, req: any) => {
+      setAiSafetyData(req);
+      setShowAiSafety(true);
+    };
+    if ((window as any).atlasAPI) {
+      const ipc = (window as any).electron?.ipcRenderer;
+      if (ipc) {
+        ipc.on("atlas:request-permission", handleRequestPermission);
+        return () => {
+          ipc.removeListener("atlas:request-permission", handleRequestPermission);
+        };
+      }
+    }
+  }, []);
 
   const wname = repoPath ? repoPath.split(/[/\\]/).pop() : "Atlas Studio";
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
@@ -500,9 +578,9 @@ export function App() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="3" y1="16" x2="21" y2="16"/></svg>
           </button>
           <button style={{...s.iconBtn,...(showRightAiSidebar?s.iconOn:{})}} title="Toggle AI Chat (Ctrl+L)" onClick={()=>setShowRightAiSidebar(p=>!p)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
           </button>
-          <button style={s.iconBtn} title="Settings (Ctrl+,)" onClick={()=>setActiveSidebar("settings")}>
+          <button style={s.iconBtn} title="Settings (Ctrl+,)" onClick={handleOpenSettings}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
           </button>
           <div style={s.winSep}/>
@@ -537,13 +615,15 @@ export function App() {
               {id:"ai",        lbl:"Agent",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
             ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
               <button key={id} style={{...s.actBtn,...(activeSidebar===id?s.actOn:{})}} onClick={()=>setActiveSidebar(id)} title={lbl}>
-                {icon}
+                <span style={{ opacity: activeSidebar===id ? 1 : 0.6 }}>{icon}</span>
               </button>
             ))}
           </div>
           <div style={s.actBot}>
-            <button style={{...s.actBtn,...(activeSidebar==="settings"?s.actOn:{})}} onClick={()=>setActiveSidebar("settings")} title="Settings">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+            <button style={s.actBtn} onClick={handleOpenSettings} title="Settings">
+              <span style={{ opacity: 0.6 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+              </span>
             </button>
           </div>
         </nav>
@@ -568,14 +648,13 @@ export function App() {
               <textarea style={s.agentArea} placeholder="Describe task..." value={aiGoal} onChange={e=>setAiGoal(e.target.value)}/>
               <button style={s.agentBtn} disabled={aiRunning} onClick={async()=>{
                 if(!aiGoal.trim()||!repoPath) return;
-                const a=api(); if(!a?.runAgent) return;
-                setAiRunning(true); setAiEvents(["Agent initialized..."]);
-                try { const r=await a.runAgent(aiGoal,repoPath); setAiEvents(p=>[...p,r.error?`[FAIL] ${r.error}`:"[PASS] Done"]); }
+                const a=api(); if(!a?.run) return;
+                setAiRunning(true);
+                try { const r=await a.run(aiGoal); setAiEvents(p=>[...p,r.error?`[FAIL] ${r.error}`:"[PASS] Done"]); }
                 catch(e){ setAiEvents(p=>[...p,`[FAIL] ${e}`]); } finally { setAiRunning(false); }
               }}>{aiRunning?"Running...":"Run Agent"}</button>
             </div>
           )}
-          {activeSidebar==="settings"   && <SettingsPanel settings={settings} onUpdateSettings={handleUpdateSettings}/>}
         </aside>
 
         <div style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} />
@@ -617,43 +696,57 @@ export function App() {
               <DiffViewer filePath={activeDiff.filePath} diffText={activeDiff.diffText} onClose={()=>setActiveDiff(null)}/>
             ) : tabs.length > 0 ? (
               <div style={{ display: "flex", width: "100%", height: "100%" }}>
-                <div style={{ flex: 1, borderRight: isSplit ? "1px solid #27272a" : "none", height: "100%" }}>
+                <div style={{ flex: 1, borderRight: isSplit ? "1px solid #27272a" : "none", height: "100%", overflow: "auto" }}>
                   {activeTab && (
-                    <EditorPane
-                      filePath={activeTab.filePath}
-                      repoPath={repoPath}
-                      content={activeTab.content}
-                      language={activeTab.language}
-                      targetLine={activeTab.targetLine}
-                      targetColumn={activeTab.targetColumn}
-                      onChange={c=>setTabs(p=>p.map((t,i)=>i===activeTabIndex?{...t,content:c,isDirty:true}:t))}
-                      onCursorChange={(l, line, col)=>{ 
-                        setActiveCursorPos({ line, col });
-                        const m=l.match(/\b([A-Za-z_]\w*)\b/); 
-                        if(m) setCursorSymbol(m[1]); 
-                      }}
-                      onSymbolsChange={(symbols, currentSymbol) => {
-                        setActiveSymbols(symbols);
-                        if(currentSymbol) setCursorSymbol(currentSymbol);
-                      }}
-                      settings={settings}
-                    />
+                      activeTab.isBinary ? (
+                        <BinaryFileView onOpenAnyway={async () => {
+                          const c = await api()?.readFile(activeTab.filePath).catch(()=>"// read error") || "";
+                          setTabs(p => p.map((t,i) => i === activeTabIndex ? {...t, isBinary: false, content: c} : t));
+                        }} />
+                      ) : (
+                      <EditorPane
+                        filePath={activeTab.filePath}
+                        repoPath={repoPath}
+                        content={activeTab.content}
+                        language={activeTab.language}
+                        targetLine={activeTab.targetLine}
+                        targetColumn={activeTab.targetColumn}
+                        onChange={c=>setTabs(p=>p.map((t,i)=>i===activeTabIndex?{...t,content:c,isDirty:true}:t))}
+                        onCursorChange={(l, line, col)=>{ 
+                          setActiveCursorPos({ line, col });
+                          const m=l.match(/\b([A-Za-z_]\w*)\b/); 
+                          if(m) setCursorSymbol(m[1]); 
+                        }}
+                        onSymbolsChange={(symbols, currentSymbol) => {
+                          setActiveSymbols(symbols);
+                          if(currentSymbol) setCursorSymbol(currentSymbol);
+                        }}
+                        settings={settings}
+                      />
+                      )
                   )}
                 </div>
 
                 {isSplit && (
-                  <div style={{ flex: 1, height: "100%" }}>
+                  <div style={{ flex: 1, height: "100%", overflow: "auto" }}>
                     {splitTab ? (
-                      <EditorPane
-                        filePath={splitTab.filePath}
-                        repoPath={repoPath}
-                        content={splitTab.content}
-                        language={splitTab.language}
-                        targetLine={splitTab.targetLine}
-                        targetColumn={splitTab.targetColumn}
-                        onChange={c=>setTabs(p=>p.map((t,i)=>i===splitTabIndex?{...t,content:c,isDirty:true}:t))}
-                        settings={settings}
-                      />
+                      splitTab.isBinary ? (
+                        <BinaryFileView onOpenAnyway={async () => {
+                          const c = await api()?.readFile(splitTab.filePath).catch(()=>"// read error") || "";
+                          setTabs(p => p.map((t,i) => i === splitTabIndex ? {...t, isBinary: false, content: c} : t));
+                        }} />
+                      ) : (
+                        <EditorPane
+                          filePath={splitTab.filePath}
+                          repoPath={repoPath}
+                          content={splitTab.content}
+                          language={splitTab.language}
+                          targetLine={splitTab.targetLine}
+                          targetColumn={splitTab.targetColumn}
+                          onChange={c=>setTabs(p=>p.map((t,i)=>i===splitTabIndex?{...t,content:c,isDirty:true}:t))}
+                          settings={settings}
+                        />
+                      )
                     ) : (
                       <div style={s.splitPlaceholder}>Select tab to view in split pane</div>
                     )}
@@ -662,19 +755,27 @@ export function App() {
               </div>
             ) : (
               <div style={s.welcome}>
+                <img src={logoImg} alt="Atlas" style={s.welcomeLogoBg}/>
                 <div style={s.welcomeCard}>
-                  <img src={logoImg} alt="Atlas" style={s.welcomeLogo}/>
                   <h2 style={s.welcomeH2}>Atlas Studio</h2>
                   <p style={s.welcomeP}>The Developer-First Independent IDE Platform</p>
                   
                   <div style={s.welcomeRow}>
-                    <button style={s.wBtn} onClick={handleSelectRepo}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight:"6px"}}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                      Open Workspace Folder
+                    <button 
+                      style={s.wBtnLink} 
+                      onClick={handleSelectRepo} 
+                      onMouseOver={(e)=>e.currentTarget.style.textDecoration="underline"}
+                      onMouseOut={(e)=>e.currentTarget.style.textDecoration="none"}
+                    >
+                      Open Workspace Folder...
                     </button>
-                    <button style={s.wBtnO} onClick={()=>setActiveSidebar("settings")}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginRight:"6px"}}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
-                      Settings
+                    <button 
+                      style={s.wBtnLink} 
+                      onClick={handleOpenSettings}
+                      onMouseOver={(e)=>e.currentTarget.style.textDecoration="underline"}
+                      onMouseOut={(e)=>e.currentTarget.style.textDecoration="none"}
+                    >
+                      Settings...
                     </button>
                   </div>
 
@@ -682,7 +783,10 @@ export function App() {
                     <div style={s.recentBox}>
                       <p style={s.recentHdr}>RECENT WORKSPACES</p>
                       {recentProjects.map(path => (
-                        <button key={path} style={s.recentItem} onClick={() => handleOpenRecent(path)}>
+                        <button key={path} style={s.recentItem} onClick={() => handleOpenRecent(path)}
+                          onMouseOver={(e)=>e.currentTarget.style.opacity="0.8"}
+                          onMouseOut={(e)=>e.currentTarget.style.opacity="1"}
+                        >
                           <span style={s.recentName}>{path.split(/[/\\]/).pop()}</span>
                           <span style={s.recentPath}>{path}</span>
                         </button>
@@ -717,22 +821,24 @@ export function App() {
         </div>
 
         {showRightAiSidebar && <div style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "right-sidebar"; document.body.style.cursor = "col-resize"; }} />}
-        {showRightAiSidebar && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} onClose={() => setShowRightAiSidebar(false)} />}
+        {showRightAiSidebar && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} activeContent={activeTab?.content} openTabs={tabs.map(t => ({ filePath: t.filePath, content: t.content }))} cursorLine={activeCursorPos?.line} cursorSymbol={cursorSymbol} onClose={() => setShowRightAiSidebar(false)} />}
       </div>
 
       {showAboutModal && <AboutAtlasModal onClose={()=>setShowAboutModal(false)} />}
 
-      {showAiSafety && (
+      {showAiSafety && aiSafetyData && (
         <AiSafetyModal
-          filePath={activeTab?.filePath || "src/index.ts"}
-          proposedCode="// Proposed AI modification\nexport function example() { return true; }"
+          filePath={aiSafetyData.data?.filePath || "unknown"}
+          proposedCode={aiSafetyData.data?.proposedCode || "// No code proposed"}
           onApprove={() => {
-            api()?.grantPermission("atlas-agent", ["workspace.write"]);
+            api()?.respondPermission(aiSafetyData.reqId, true);
             setShowAiSafety(false);
+            setAiSafetyData(null);
           }}
           onReject={() => {
-            api()?.revokePermission("atlas-agent");
+            api()?.respondPermission(aiSafetyData.reqId, false);
             setShowAiSafety(false);
+            setAiSafetyData(null);
           }}
         />
       )}
@@ -753,13 +859,13 @@ export function App() {
 
 const s: Record<string,React.CSSProperties> = {
   root:{ display:"flex",flexDirection:"column",height:"100vh",width:"100vw",backgroundColor:"#000000",color:"#e4e4e7",fontFamily:"Inter,-apple-system,'Segoe UI',sans-serif",overflow:"hidden",userSelect:"none" },
-  titlebar:{ display:"flex",alignItems:"center",height:"28px",backgroundColor:"#000000",borderBottom:"1px solid #38bdf8",flexShrink:0,WebkitAppRegion:"drag" } as any,
+  titlebar:{ display:"flex",alignItems:"center",height:"28px",backgroundColor:"#000000",borderBottom:"1px solid #27272a",flexShrink:0,WebkitAppRegion:"drag" } as any,
   tbLeft:{ display:"flex",alignItems:"center",flexShrink:0,paddingLeft:"6px",gap:"0" },
   logo:{ width:"16px",height:"16px",objectFit:"contain",marginRight:"6px",flexShrink:0 },
   menuWrapper:{ position:"relative" as const },
   menuItem:{ background:"none",border:"none",color:"#a1a1aa",fontSize:"12px",padding:"0 8px",height:"28px",cursor:"pointer",display:"flex",alignItems:"center",whiteSpace:"nowrap" as const,transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)" },
-  menuItemOn:{ backgroundColor:"#27272a",color:"#38bdf8" },
-  dropdown:{ position:"absolute" as const,top:"28px",left:"0",backgroundColor:"#050505",border:"1px solid #38bdf8",borderRadius:"4px",minWidth:"220px",zIndex:9999,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",padding:"4px 0",WebkitAppRegion:"no-drag" } as any,
+  menuItemOn:{ backgroundColor:"#27272a",color:"#fafafa" },
+  dropdown:{ position:"absolute" as const,top:"28px",left:"0",backgroundColor:"#050505",border:"1px solid #27272a",minWidth:"220px",zIndex:9999,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",padding:"4px 0",WebkitAppRegion:"no-drag" } as any,
 
   dropItem:{ display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",color:"#e4e4e7",fontSize:"12px",padding:"5px 16px",cursor:"pointer",textAlign:"left" as const,gap:"24px",transition:"background 0.15s" },
   dropDisabled:{ color:"#52525b",cursor:"default" },
@@ -768,47 +874,46 @@ const s: Record<string,React.CSSProperties> = {
   tbCenter:{ position:"absolute" as const,left:"50%",transform:"translateX(-50%)",pointerEvents:"none" },
   centerTxt:{ fontSize:"12px",color:"#94a3b8",whiteSpace:"nowrap" as const },
   tbRight:{ display:"flex",alignItems:"center",marginLeft:"auto",gap:"0" },
-  iconBtn:{ width:"28px",height:"28px",background:"none",border:"none",color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"4px",transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)" },
-  iconOn:{ color:"#38bdf8" },
+  iconBtn:{ width:"28px",height:"28px",background:"none",border:"none",color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"0",transition:"color 0.2s" },
+  iconOn:{ color:"#fafafa" },
   winSep:{ width:"1px",height:"14px",backgroundColor:"#27272a",margin:"0 4px" },
   wc:{ width:"46px",height:"28px",background:"none",border:"none",color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s" },
   wcClose:{ },
   body:{ display:"flex",flex:1,overflow:"hidden" },
-  actBar:{ width:"40px",backgroundColor:"#000000",borderRight:"1px solid #38bdf8",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"4px",paddingBottom:"4px",flexShrink:0 },
+  actBar:{ width:"48px",backgroundColor:"#000000",borderRight:"1px solid #27272a",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"4px",paddingBottom:"4px",flexShrink:0 },
   actTop:{ display:"flex",flexDirection:"column",gap:"0",alignItems:"center" },
   actBot:{ display:"flex",flexDirection:"column",alignItems:"center" },
-  actBtn:{ width:"40px",padding:"8px 0",border:"none",background:"transparent",color:"#64748b",cursor:"pointer",display:"flex",flexDirection:"column" as const,alignItems:"center",gap:"4px",borderRadius:"0",transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)" },
+  actBtn:{ width:"48px",padding:"10px 0",border:"none",background:"transparent",color:"#64748b",cursor:"pointer",display:"flex",flexDirection:"column" as const,alignItems:"center",gap:"4px",borderRadius:"0",transition:"color 0.1s" },
   actOn:{ color:"#fafafa",borderLeft:"2px solid #38bdf8" },
   actLbl:{ display:"none" },
-  sidebar:{ backgroundColor:"#050505",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0 },
+  sidebar:{ backgroundColor:"#000000",borderRight:"1px solid #27272a",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0 },
   resizerX: { width: "4px", backgroundColor: "transparent", cursor: "col-resize", zIndex: 10, transition: "background-color 0.2s" },
   resizerY: { height: "4px", backgroundColor: "transparent", cursor: "row-resize", zIndex: 10, transition: "background-color 0.2s" },
   center:{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" },
-  tabBar:{ display:"flex",height:"30px",backgroundColor:"#000000",borderBottom:"1px solid #38bdf8",overflowX:"auto" as const,flexShrink:0 },
-  tab:{ display:"flex",alignItems:"center",gap:"5px",padding:"0 12px",minWidth:"80px",maxWidth:"160px",backgroundColor:"#050505",borderRight:"1px solid #38bdf8",color:"#94a3b8",fontSize:"12px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0,transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)" },
-  tabOn:{ backgroundColor:"#000000",color:"#e4e4e7",borderTop:"2px solid #38bdf8" },
-  tabName:{ flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,fontWeight:500 },
-  tabDot:{ color:"#38bdf8",fontSize:"14px" },
+  tabBar:{ display:"flex",height:"35px",backgroundColor:"#000000",borderBottom:"1px solid #27272a",overflowX:"auto" as const,flexShrink:0 },
+  tab:{ display:"flex",alignItems:"center",gap:"5px",padding:"0 12px",minWidth:"80px",maxWidth:"160px",backgroundColor:"#000000",borderRight:"1px solid #27272a",color:"#94a3b8",fontSize:"13px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0,transition:"all 0.1s" },
+  tabOn:{ backgroundColor:"#09090b",color:"#e4e4e7",borderTop:"2px solid #38bdf8" },
+  tabName:{ flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,fontWeight:400 },
+  tabDot:{ color:"#fafafa",fontSize:"14px" },
   tabX:{ fontSize:"12px",opacity:0.5,padding:"0 2px",cursor:"pointer",transition:"opacity 0.2s" },
   editorArea:{ flex:1,overflow:"hidden",position:"relative" as const },
   splitPlaceholder:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:"#64748b",fontSize:"12px",backgroundColor:"#000000" },
-  welcome:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",backgroundColor:"#000000",backgroundImage:"radial-gradient(circle at center, rgba(56,189,248,0.05) 0%, transparent 60%)" },
-  welcomeCard:{ display:"flex",flexDirection:"column",alignItems:"center",padding:"50px 60px",borderRadius:"16px",backgroundColor:"#050505",border:"1px solid #38bdf8",boxShadow:"0 25px 65px rgba(0,0,0,0.6)",maxWidth:"520px",width:"100%" },
-  welcomeLogo:{ width:"80px",height:"80px",objectFit:"contain",marginBottom:"16px",filter:"drop-shadow(0 4px 12px rgba(56,189,248,0.3))" },
-  welcomeH2:{ margin:"0 0 8px",fontSize:"22px",fontWeight:800,background:"linear-gradient(90deg, #fafafa 0%, #a1a1aa 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent" },
-  welcomeP:{ margin:"0 0 28px",fontSize:"13px",color:"#94a3b8" },
-  welcomeRow:{ display:"flex",gap:"12px",width:"100%",justifyContent:"center" },
-  wBtn:{ display:"flex",alignItems:"center",backgroundColor:"#38bdf8",color:"#000000",border:"none",padding:"10px 22px",borderRadius:"8px",fontWeight:700,fontSize:"12px",cursor:"pointer",boxShadow:"0 4px 14px rgba(56,189,248,0.25)",transition:"all 0.2s" },
-  wBtnO:{ display:"flex",alignItems:"center",backgroundColor:"transparent",color:"#e4e4e7",border:"1px solid #38bdf8",padding:"10px 22px",borderRadius:"8px",fontWeight:600,fontSize:"12px",cursor:"pointer",transition:"all 0.2s" },
-  recentBox:{ marginTop:"32px",width:"100%",display:"flex",flexDirection:"column",gap:"8px" },
-  recentHdr:{ fontSize:"10px",fontWeight:700,letterSpacing:"1px",color:"#64748b",margin:"0 0 6px" },
-  recentItem:{ display:"flex",flexDirection:"column" as const,alignItems:"flex-start",backgroundColor:"#000000",border:"1px solid #27272a",borderRadius:"8px",padding:"10px 14px",cursor:"pointer",textAlign:"left" as const,transition:"border-color 0.2s" },
-  recentName:{ fontSize:"13px",fontWeight:600,color:"#e4e4e7",marginBottom:"2px" },
+  welcome:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",backgroundColor:"#000000",position:"relative" as const },
+  welcomeLogoBg:{ position:"absolute" as const,width:"400px",height:"400px",objectFit:"contain",opacity:0.02,pointerEvents:"none" as const,top:"50%",left:"50%",transform:"translate(-50%, -50%)" },
+  welcomeCard:{ display:"flex",flexDirection:"column",alignItems:"flex-start",padding:"20px",maxWidth:"400px",width:"100%",zIndex:1 },
+  welcomeH2:{ margin:"0 0 8px",fontSize:"22px",fontWeight:400,color:"#fafafa" },
+  welcomeP:{ margin:"0 0 24px",fontSize:"13px",color:"#64748b" },
+  welcomeRow:{ display:"flex",flexDirection:"column" as const,gap:"8px",width:"100%",alignItems:"flex-start" },
+  wBtnLink:{ background:"transparent",border:"none",color:"#38bdf8",padding:"0",fontSize:"13px",cursor:"pointer",textDecoration:"none",transition:"color 0.1s" },
+  recentBox:{ marginTop:"32px",width:"100%",display:"flex",flexDirection:"column",gap:"4px" },
+  recentHdr:{ fontSize:"11px",fontWeight:600,color:"#e4e4e7",margin:"0 0 6px" },
+  recentItem:{ display:"flex",flexDirection:"column" as const,alignItems:"flex-start",backgroundColor:"transparent",border:"none",padding:"6px 0",cursor:"pointer",textAlign:"left" as const,transition:"opacity 0.2s" },
+  recentName:{ fontSize:"13px",color:"#38bdf8",marginBottom:"2px" },
   recentPath:{ fontSize:"11px",color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,width:"100%" },
-  dock:{ backgroundColor:"#050505",borderTop:"1px solid #38bdf8",display:"flex",flexDirection:"column",flexShrink:0 },
-  dockTabs:{ display:"flex",height:"26px",backgroundColor:"#000000",borderBottom:"1px solid #38bdf8",flexShrink:0 },
-  dockTab:{ background:"none",border:"none",borderBottom:"2px solid transparent",borderRight:"1px solid #38bdf8",color:"#94a3b8",padding:"0 14px",fontSize:"11px",fontWeight:700,cursor:"pointer",letterSpacing:"0.4px",transition:"all 0.2s" },
-  dockOn:{ color:"#38bdf8",borderBottom:"2px solid #38bdf8" },
+  dock:{ backgroundColor:"#000000",borderTop:"1px solid #27272a",display:"flex",flexDirection:"column",flexShrink:0 },
+  dockTabs:{ display:"flex",height:"24px",backgroundColor:"#000000",borderBottom:"1px solid #27272a",flexShrink:0 },
+  dockTab:{ background:"none",border:"none",borderBottom:"1px solid transparent",borderRight:"1px solid transparent",color:"#94a3b8",padding:"0 12px",fontSize:"11px",cursor:"pointer",transition:"color 0.1s" },
+  dockOn:{ color:"#fafafa",borderBottom:"1px solid #38bdf8" },
   dockContent:{ flex:1,overflow:"hidden" },
   log:{ padding:"6px 12px",fontFamily:"'JetBrains Mono',Consolas,monospace",fontSize:"12px",overflowY:"auto" as const,height:"100%" },
   logLine:{ color:"#e4e4e7",lineHeight:"1.6",margin:0 },

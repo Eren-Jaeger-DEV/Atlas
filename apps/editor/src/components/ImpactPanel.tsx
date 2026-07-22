@@ -40,7 +40,7 @@ export function ImpactPanel({ filePath, symbolName }: ImpactPanelProps) {
 
     try {
       const api = (window as any).atlasAPI;
-      if (!api) {
+      if (!api || !api.impact) {
         setState({ status: "no-graph" });
         return;
       }

@@ -22,6 +22,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const termMapRef = useRef<Map<string, { term: Terminal; fit: FitAddon }>>(new Map());
+  const unsubMapRef = useRef<Map<string, () => void>>(new Map());
 
   const handleAddTab = () => {
     const newId = `term-${Date.now()}`;
@@ -37,6 +38,11 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
   const handleCloseTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (tabs.length <= 1) return;
+    const unsub = unsubMapRef.current.get(id);
+    if (unsub) {
+      unsub();
+      unsubMapRef.current.delete(id);
+    }
     const item = termMapRef.current.get(id);
     if (item) {
       item.term.dispose();
@@ -96,9 +102,12 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
           api.terminalCreate(tab.id, repoPath).then(() => {
             term.onData((data: string) => api.terminalInput(tab.id, data));
           });
-          api.onTerminalData((payload: { termId: string; data: string }) => {
+          const unsub = api.onTerminalData((payload: { termId: string; data: string }) => {
             if (payload.termId === tab.id) term.write(payload.data);
           });
+          if (typeof unsub === "function") {
+            unsubMapRef.current.set(tab.id, unsub);
+          }
 
           // Copy text automatically when selected
           term.onSelectionChange(() => {

@@ -71,7 +71,15 @@ We are systematically building features to match and exceed standard editor capa
   - [x] **2.4 Snippets & Auto-completion:** Language-specific snippet insertion.
   - [x] **2.5 Outline View & Breadcrumbs:** Document symbol tree and cursor-tracking breadcrumbs.
   - [x] **2.6 Inline Git Blame & Diff Gutters:** Visual source-control feedback.
-* **Tier 3 — Beyond VS Code**: Live Blast-radius Dependency Impact, AI Timeline logs, unique design elements, and project metrics dashboard.
+* **Tier 3 — Beyond VS Code**: Live Blast-radius Dependency Impact, Project metrics dashboard, and **Atlas Synapse**.
+  - [x] **Atlas Synapse (AI Orchestration Engine):** A hybrid Graph-Driven Swarm architecture that integrates multi-agent task execution over a real-time Directed Acyclic Graph (DAG) state, backed by automated Tri-Surface verification (AST + Terminal + Headless Vision), a Dual-Surface UI (Inline Micro-HUD + Full Flight Deck), and a Self-Healing Memory Engine (GraphDB) that persists bug patterns.
+* **Tier 4 — 10/10 Flagship Architecture Subsystems**:
+  - [x] **Worker-Threaded Graph Engine (`GraphWorkerClient`):** Background thread SQLite graph queries & vector similarity calculations (`node:worker_threads`).
+  - [x] **Unified LSP Diagnostic Bridge (`LSPBridge`):** Language-agnostic compiler diagnostics and symbol definition resolution.
+  - [x] **Inline Monaco Ghost-Text Streaming (`InlineGhostEditor`):** Low-latency token-level stream decoration with accept/reject hotkeys.
+  - [x] **Trajectory Replay & Time-Travel Engine (`TrajectoryReplay`):** Execution step snapshotting, rewind, and offline playback.
+  - [x] **Visual DOM Verifier (`VisualVerifier`):** Headless layout regression testing during AI code edits.
+  - [x] **Autonomous Browser Subagent (`BrowserSubagent`):** Dynamic DOM accessibility (a11y) tree extraction, visual spatial grounding, and automated web task execution.
 
 ---
 
@@ -91,7 +99,8 @@ Engineering decisions and architectural evolutions are formally documented as RF
 - [`RFC-013-ai-runtime-and-agent-architecture.md`](file:///f:/projects/Atlas/docs/architecture/RFC-013-ai-runtime-and-agent-architecture.md): AI Runtime & Safety Approval
 - [`RFC-014-cloud-sync-accounts-and-team-collaboration.md`](file:///f:/projects/Atlas/docs/architecture/RFC-014-cloud-sync-accounts-and-team-collaboration.md): Cloud Sync & Workspace Profiles
 - [`RFC-015-release-engineering-and-quality-assurance.md`](file:///f:/projects/Atlas/docs/architecture/RFC-015-release-engineering-and-quality-assurance.md): Release Engineering & Performance Budgets
-- [`RFC-016-v1.0-release-specification-and-final-architecture.md`](file:///f:/projects/Atlas/docs/architecture/RFC-016-v1.0-release-specification-and-final-architecture.md): Atlas Studio v1.0 System Blueprint
+- [`RFC-016-v1.0-release-specification-and-final-architecture.md`](file:///home/victor/My%20projects/Atlas/docs/architecture/RFC-016-v1.0-release-specification-and-final-architecture.md): Atlas Studio v1.0 System Blueprint
+- [`RFC-017-autonomous-browser-and-dom-tools.md`](file:///home/victor/My%20projects/Atlas/docs/architecture/RFC-017-autonomous-browser-and-dom-tools.md): Autonomous Browser & Dynamic DOM Subsystem Architecture
 
 ---
 

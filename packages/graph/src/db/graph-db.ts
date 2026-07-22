@@ -80,6 +80,44 @@ CREATE TABLE IF NOT EXISTS node_embeddings (
   vector_json TEXT NOT NULL,
   created_at  INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS task_events (
+  id          TEXT PRIMARY KEY,
+  run_id      TEXT NOT NULL,
+  task_id     TEXT NOT NULL,
+  event_type  TEXT NOT NULL,
+  payload     TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS task_events_run ON task_events(run_id);
+
+CREATE TABLE IF NOT EXISTS bug_patterns (
+  id              TEXT PRIMARY KEY,
+  error_signature TEXT NOT NULL,
+  solution        TEXT NOT NULL,
+  context_tags    TEXT,
+  created_at      INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chat_nodes (
+  id          TEXT PRIMARY KEY,
+  session_id  TEXT NOT NULL,
+  role        TEXT NOT NULL,
+  content     TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_session ON chat_nodes(session_id);
+
+CREATE TABLE IF NOT EXISTS developer_profiles (
+  id          TEXT PRIMARY KEY,
+  preferences TEXT NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chat_embeddings (
+  chat_id     TEXT PRIMARY KEY,
+  vector_blob BLOB NOT NULL
+);
 `;
 
 // ---------------------------------------------------------------------------
@@ -93,6 +131,14 @@ export interface DecisionRecord {
   rationale: string;
   supersedes?: string;
   commitHash?: string;
+  createdAt: number;
+}
+
+export interface BugPattern {
+  id: string;
+  errorSignature: string;
+  solution: string;
+  contextTags?: string;
   createdAt: number;
 }
 
@@ -121,7 +167,7 @@ export class GraphDB {
     return instance;
   }
 
-  private async init(): Promise<void> {
+  public async init(): Promise<void> {
     mkdirSync(path.dirname(this.dbPath), { recursive: true });
 
     const SQL = await initSqlJs();
@@ -391,6 +437,38 @@ export class GraphDB {
   }
 
   // -------------------------------------------------------------------------
+  // Agent-to-Agent Event Bus (Task Events)
+  // -------------------------------------------------------------------------
+  
+  logTaskEvent(runId: string, taskId: string, eventType: string, payload: any): void {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    this.run(
+      `INSERT INTO task_events (id, run_id, task_id, event_type, payload, created_at)
+       VALUES ($id, $runId, $taskId, $eventType, $payload, $createdAt)`,
+      {
+        $id: id,
+        $runId: runId,
+        $taskId: taskId,
+        $eventType: eventType,
+        $payload: JSON.stringify(payload),
+        $createdAt: Date.now()
+      }
+    );
+    this.persist();
+  }
+
+  getTaskEvents(runId: string): Array<{ id: string, taskId: string, eventType: string, payload: any, createdAt: number }> {
+    return this.all<any>("SELECT * FROM task_events WHERE run_id = $runId ORDER BY created_at ASC", { $runId: runId })
+      .map(r => ({
+        id: r.id,
+        taskId: r.task_id,
+        eventType: r.event_type,
+        payload: JSON.parse(r.payload),
+        createdAt: r.created_at
+      }));
+  }
+
+  // -------------------------------------------------------------------------
   // Run traces
   // -------------------------------------------------------------------------
 
@@ -405,9 +483,9 @@ export class GraphDB {
       {
         $id: run["id"],
         $goal: run["goal"],
-        $plan: JSON.stringify(run["plan"]),
-        $coderOutputs: JSON.stringify(run["coderOutputs"] ?? []),
-        $testResults: JSON.stringify(run["testResults"] ?? []),
+        $plan: run["plan"] ? JSON.stringify(run["plan"]) : "{}",
+        $coderOutputs: run["coderOutputs"] ? JSON.stringify(run["coderOutputs"]) : JSON.stringify([]),
+        $testResults: run["testResults"] ? JSON.stringify(run["testResults"]) : JSON.stringify([]),
         $reviewResult: run["reviewResult"] ? JSON.stringify(run["reviewResult"]) : null,
         $finalState: run["finalState"],
         $commitHash: (run["commitHash"] as string | undefined) ?? null,
@@ -433,6 +511,22 @@ export class GraphDB {
       startedAt: row.started_at,
       completedAt: row.completed_at,
     };
+  }
+
+  getAllRuns(): Record<string, unknown>[] {
+    const rows = this.all<any>("SELECT * FROM runs ORDER BY started_at DESC");
+    return rows.map(row => ({
+      id: row.id,
+      goal: row.goal,
+      plan: JSON.parse(row.plan),
+      coderOutputs: JSON.parse(row.coder_outputs),
+      testResults: JSON.parse(row.test_results),
+      reviewResult: row.review_result ? JSON.parse(row.review_result) : null,
+      finalState: row.final_state,
+      commitHash: row.commit_hash,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+    }));
   }
 
   // -------------------------------------------------------------------------
@@ -483,8 +577,169 @@ export class GraphDB {
     return JSON.parse(row.vector_json);
   }
 
+  // -------------------------------------------------------------------------
+  // Bug Patterns (Phase 4)
+  // -------------------------------------------------------------------------
+
+  logBugPattern(pattern: BugPattern): void {
+    this.run(
+      `INSERT INTO bug_patterns (id, error_signature, solution, context_tags, created_at)
+       VALUES ($id, $errorSignature, $solution, $contextTags, $createdAt)`,
+      {
+        $id: pattern.id,
+        $errorSignature: pattern.errorSignature,
+        $solution: pattern.solution,
+        $contextTags: pattern.contextTags ?? null,
+        $createdAt: pattern.createdAt,
+      }
+    );
+    this.persist();
+  }
+
+  getBugPatterns(): BugPattern[] {
+    const rows = this.all<any>("SELECT * FROM bug_patterns ORDER BY created_at DESC");
+    return rows.map((row) => ({
+      id: row.id,
+      errorSignature: row.error_signature,
+      solution: row.solution,
+      contextTags: row.context_tags,
+      createdAt: row.created_at,
+    }));
+  }
+
+  // -------------------------------------------------------------------------
+  // Chat Memory (Phase 5)
+  // -------------------------------------------------------------------------
+
+  logChatNode(node: { id: string, sessionId: string, role: string, content: string, createdAt: number }): void {
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO chat_nodes (id, session_id, role, content, created_at)
+       VALUES (?, ?, ?, ?, ?)`
+    );
+    stmt.run([node.id, node.sessionId, node.role, node.content, node.createdAt]);
+    stmt.free();
+    this.dirty = true;
+    this.persist();
+  }
+
+  getChatNodes(sessionId: string): Array<{ id: string, sessionId: string, role: string, content: string, createdAt: number }> {
+    const stmt = this.db.prepare(
+      `SELECT id, session_id, role, content, created_at
+       FROM chat_nodes WHERE session_id = ? ORDER BY created_at ASC`
+    );
+    const results: any[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        id: row.id as string,
+        sessionId: row.session_id as string,
+        role: row.role as string,
+        content: row.content as string,
+        createdAt: row.created_at as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  getAllChatNodes(): Array<{ id: string, sessionId: string, role: string, content: string, createdAt: number }> {
+    const stmt = this.db.prepare(
+      `SELECT id, session_id, role, content, created_at FROM chat_nodes`
+    );
+    const results: any[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      results.push({
+        id: row.id as string,
+        sessionId: row.session_id as string,
+        role: row.role as string,
+        content: row.content as string,
+        createdAt: row.created_at as number,
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  getChatNode(id: string): { id: string, sessionId: string, role: string, content: string, createdAt: number } | null {
+    const stmt = this.db.prepare(
+      `SELECT id, session_id, role, content, created_at FROM chat_nodes WHERE id = ?`
+    );
+    let result = null;
+    if (stmt.step()) {
+      const row = stmt.getAsObject();
+      result = {
+        id: row.id as string,
+        sessionId: row.session_id as string,
+        role: row.role as string,
+        content: row.content as string,
+        createdAt: row.created_at as number,
+      };
+    }
+    stmt.free();
+    return result;
+  }
+
+  upsertChatNodeEmbedding(chatId: string, vector: number[]): void {
+    const arr = new Float32Array(vector);
+    const blob = new Uint8Array(arr.buffer);
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO chat_embeddings (chat_id, vector_blob) VALUES (?, ?)`
+    );
+    stmt.run([chatId, blob]);
+    stmt.free();
+    this.dirty = true;
+    this.persist();
+  }
+
+  getChatNodeEmbeddings(): Array<{ chatId: string; vector: number[] }> {
+    const stmt = this.db.prepare(`SELECT chat_id, vector_blob FROM chat_embeddings`);
+    const results: Array<{ chatId: string; vector: number[] }> = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      const blob = row.vector_blob as Uint8Array;
+      const arr = new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4);
+      results.push({
+        chatId: row.chat_id as string,
+        vector: Array.from(arr),
+      });
+    }
+    stmt.free();
+    return results;
+  }
+
+  // -------------------------------------------------------------------------
+  // Developer Profiles (Phase 5)
+  // -------------------------------------------------------------------------
+
+  upsertDeveloperProfile(id: string, preferences: string): void {
+    this.run(
+      `INSERT INTO developer_profiles (id, preferences, updated_at)
+       VALUES ($id, $preferences, $updatedAt)
+       ON CONFLICT(id) DO UPDATE SET
+         preferences = excluded.preferences,
+         updated_at = excluded.updated_at`,
+      {
+        $id: id,
+        $preferences: preferences,
+        $updatedAt: Date.now(),
+      }
+    );
+    this.persist();
+  }
+
+  getDeveloperProfile(id: string): string | undefined {
+    const row = this.get<any>("SELECT preferences FROM developer_profiles WHERE id = $id", {
+      $id: id,
+    });
+    return row ? row.preferences : undefined;
+  }
+
   close(): void {
     if (this.dirty) this.persist();
-    this.db.close();
+    if (this.db) {
+      this.db.close();
+      (this as any).db = null;
+    }
   }
 }

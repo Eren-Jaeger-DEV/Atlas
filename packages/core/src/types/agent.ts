@@ -14,10 +14,32 @@ export type AgentState =
   | "PLANNING"
   | "CODING"
   | "TESTING"
+  | "VERIFYING"
   | "REVIEWING"
   | "AWAITING_HUMAN" // orchestrator paused — human input required
+  | "APPROVED"
+  | "CANCELLED"
   | "DONE"
   | "ERROR";
+
+// ---------------------------------------------------------------------------
+// Dynamic DAG Orchestration
+// ---------------------------------------------------------------------------
+
+export type TaskType = "PLAN" | "CODE" | "TEST" | "VERIFY" | "REVIEW" | "CUSTOM";
+export type TaskStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+
+export interface TaskNode {
+  id: string;
+  type: TaskType;
+  status: TaskStatus;
+  parentId?: string;
+  dependencies: string[]; // Task IDs that must complete first
+  data: any;
+  result?: any;
+  error?: string;
+}
+
 
 // ---------------------------------------------------------------------------
 // Planner output
@@ -62,6 +84,10 @@ export interface CoderOutput {
   reasoning: string;
   /** Alternatives considered and rejected */
   alternativesConsidered?: string[];
+  /** Snapshot of file contents before modification */
+  filesBefore?: Record<string, string>;
+  /** Snapshot of file contents after modification */
+  filesAfter?: Record<string, string>;
   createdAt: number;
 }
 

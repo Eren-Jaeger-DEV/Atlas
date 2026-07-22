@@ -73,6 +73,7 @@ describe("Orchestrator State Machine", () => {
       "PLANNING",
       "CODING",
       "TESTING",
+      "VERIFYING",
       "REVIEWING",
       "DONE",
     ]);
@@ -172,6 +173,7 @@ describe("Orchestrator State Machine", () => {
       "TESTING",
       "CODING",
       "TESTING",
+      "VERIFYING",
       "REVIEWING",
       "DONE",
     ]);

@@ -9,6 +9,10 @@ export interface ContextOptions {
   activeContent?: string;
   openTabs?: Array<{ filePath: string; content: string }>;
   gitStatusSummary?: string;
+  cursorLine?: number;
+  cursorSymbol?: string;
+  terminalHistory?: string;
+  diagnostics?: string;
   maxTokens?: number;
 }
 
@@ -27,7 +31,11 @@ export class ContextEngine {
     const sections: string[] = [];
 
     if (options.activeFilePath && options.activeContent) {
-      sections.push(`=== Active File: ${options.activeFilePath} ===\n${options.activeContent.slice(0, 2000)}`);
+      let cursorInfo = "";
+      if (options.cursorLine !== undefined) {
+        cursorInfo = `\n(Cursor is on line ${options.cursorLine}${options.cursorSymbol ? `, symbol: ${options.cursorSymbol}` : ''})`;
+      }
+      sections.push(`=== Active File: ${options.activeFilePath} ===${cursorInfo}\n${options.activeContent.slice(0, 2000)}`);
     }
 
     if (options.openTabs && options.openTabs.length > 0) {
@@ -39,6 +47,14 @@ export class ContextEngine {
 
     if (options.gitStatusSummary) {
       sections.push(`=== Git Repository Status ===\n${options.gitStatusSummary}`);
+    }
+
+    if (options.terminalHistory) {
+      sections.push(`=== Terminal History ===\n${options.terminalHistory.slice(-2000)}`);
+    }
+
+    if (options.diagnostics) {
+      sections.push(`=== Diagnostics / Errors ===\n${options.diagnostics.slice(0, 2000)}`);
     }
 
     let fullText = sections.join("\n\n");

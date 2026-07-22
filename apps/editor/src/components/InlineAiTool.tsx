@@ -2,6 +2,7 @@ import { useState } from "react";
 
 interface InlineAiToolProps {
   selectedText?: string;
+  position?: { top?: number; left?: number; right?: number };
   onExplain: () => void;
   onGenerateTests: () => void;
   onGenerateDocs: () => void;
@@ -12,6 +13,7 @@ const api = () => (window as any).atlasAPI;
 
 export function InlineAiTool({
   selectedText,
+  position,
   onExplain,
   onGenerateTests,
   onGenerateDocs,
@@ -35,10 +37,15 @@ export function InlineAiTool({
     }
   };
 
+  const containerStyle: React.CSSProperties = {
+    ...styles.container,
+    ...(position ? { top: `${position.top ?? 10}px`, right: position.right !== undefined ? `${position.right}px` : "20px", left: position.left !== undefined ? `${position.left}px` : undefined } : {}),
+  };
+
   return (
-    <div style={styles.container}>
+    <div style={containerStyle}>
       <div style={styles.header}>
-        <span style={styles.title}>AI CODE ASSISTANT</span>
+        <span style={styles.title}>ATLAS SYNAPSE HUD</span>
         <button style={styles.closeBtn} onClick={onClose}>✕</button>
       </div>
 

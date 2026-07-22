@@ -41,8 +41,12 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
     }
   };
 
+  const [displayLimit, setDisplayLimit] = useState(100);
+
+  const displayedResults = results.slice(0, displayLimit);
+
   // Group results by file
-  const groupedResults = results.reduce((acc: any, curr: any) => {
+  const groupedResults = displayedResults.reduce((acc: any, curr: any) => {
     if (!acc[curr.file]) acc[curr.file] = [];
     acc[curr.file].push(curr);
     return acc;
@@ -111,24 +115,34 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
             <div style={{fontSize: "11px", color: "#64748b", marginTop: "8px"}}>Find text, regex, or specific file types.</div>
           </div>
         ) : (
-          Object.entries(groupedResults).map(([file, matches]: [string, any]) => (
-            <div key={file} style={styles.fileGroup}>
-              <div style={styles.fileName} title={file}>
-                📄 {file.split(/[/\\]/).pop()}
-                <span style={styles.matchCount}>{matches.length}</span>
-              </div>
-              {matches.map((match: any, idx: number) => (
-                <div 
-                  key={`${file}-${match.line}-${idx}`} 
-                  style={styles.matchItem}
-                  onClick={() => onFileSelect(file, match.line)}
-                >
-                  <span style={styles.matchLineNum}>{match.line}</span>
-                  <span style={styles.matchText}>{match.matchText}</span>
+          <>
+            {Object.entries(groupedResults).map(([file, matches]: [string, any]) => (
+              <div key={file} style={styles.fileGroup}>
+                <div style={styles.fileName} title={file}>
+                  📄 {file.split(/[/\\]/).pop()}
+                  <span style={styles.matchCount}>{matches.length}</span>
                 </div>
-              ))}
-            </div>
-          ))
+                {matches.map((match: any, idx: number) => (
+                  <div 
+                    key={`${file}-${match.line}-${idx}`} 
+                    style={styles.matchItem}
+                    onClick={() => onFileSelect(file, match.line)}
+                  >
+                    <span style={styles.matchLineNum}>{match.line}</span>
+                    <span style={styles.matchText}>{match.matchText}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {results.length > displayLimit && (
+              <button
+                style={{ margin: "12px", padding: "6px 12px", backgroundColor: "#27272a", color: "#fafafa", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                onClick={() => setDisplayLimit(prev => prev + 100)}
+              >
+                Show More ({results.length - displayLimit} remaining)
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

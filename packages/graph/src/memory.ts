@@ -7,7 +7,7 @@
 import path from "node:path";
 import type { GraphNode, GraphEdge, ImpactResult } from "@atlas/core";
 import { GraphDB } from "./db/graph-db.js";
-import type { DecisionRecord } from "./db/graph-db.js";
+import type { DecisionRecord, BugPattern } from "./db/graph-db.js";
 import { computeImpact } from "./impact.js";
 import { EmbeddingEngine, cosineSimilarity } from "./embeddings.js";
 
@@ -172,6 +172,26 @@ export class MemoryEngine {
   }
 
   // -------------------------------------------------------------------------
+  // Chat Memory (Phase 5)
+  // -------------------------------------------------------------------------
+
+  logChatNode(node: { id: string, sessionId: string, role: string, content: string, createdAt: number }): void {
+    this.db.logChatNode(node);
+  }
+
+  getChatNodes(sessionId: string): Array<{ id: string, sessionId: string, role: string, content: string, createdAt: number }> {
+    return this.db.getChatNodes(sessionId);
+  }
+
+  upsertDeveloperProfile(id: string, preferences: string): void {
+    this.db.upsertDeveloperProfile(id, preferences);
+  }
+
+  getDeveloperProfile(id: string): string | undefined {
+    return this.db.getDeveloperProfile(id);
+  }
+
+  // -------------------------------------------------------------------------
   // Vector Embeddings & Hybrid Search
   // -------------------------------------------------------------------------
 
@@ -189,6 +209,52 @@ export class MemoryEngine {
       count++;
     }
     return count;
+  }
+
+  async indexChatEmbeddings(engine?: EmbeddingEngine): Promise<number> {
+    const embedder = engine ?? new EmbeddingEngine();
+    const existingEmbeddings = new Set(this.db.getChatNodeEmbeddings().map((e) => e.chatId));
+    const allChatNodes = this.db.getAllChatNodes();
+
+    let count = 0;
+    for (const node of allChatNodes) {
+      if (existingEmbeddings.has(node.id)) continue;
+      const textToEmbed = `${node.role}: ${node.content}`.trim();
+      const vector = await embedder.embed(textToEmbed);
+      this.db.upsertChatNodeEmbedding(node.id, vector);
+      count++;
+    }
+    return count;
+  }
+
+  async vectorSearchChat(query: string, limit = 10, engine?: EmbeddingEngine): Promise<Array<{ id: string, sessionId: string, role: string, content: string, createdAt: number }>> {
+    const embedder = engine ?? new EmbeddingEngine();
+    const queryVector = await embedder.embed(query);
+    const storedEmbeddings = this.db.getChatNodeEmbeddings();
+
+    if (storedEmbeddings.length === 0) {
+      await this.indexChatEmbeddings(embedder);
+    }
+
+    const embeddingsList = this.db.getChatNodeEmbeddings();
+    const scored: Array<{ chatId: string; score: number }> = [];
+
+    for (const item of embeddingsList) {
+      const score = cosineSimilarity(queryVector, item.vector);
+      if (score > 0) {
+        scored.push({ chatId: item.chatId, score });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+
+    const results: Array<any> = [];
+    for (const item of scored.slice(0, limit)) {
+      const node = this.db.getChatNode(item.chatId);
+      if (node) results.push(node);
+    }
+
+    return results;
   }
 
   async vectorSearch(query: string, limit = 20, engine?: EmbeddingEngine): Promise<GraphNode[]> {
@@ -270,6 +336,26 @@ export class MemoryEngine {
 
   getRun(id: string): Record<string, unknown> | undefined {
     return this.db.getRun(id);
+  }
+
+  getAllRuns(): Record<string, unknown>[] {
+    return this.db.getAllRuns();
+  }
+
+  logTaskEvent(runId: string, taskId: string, eventType: string, payload: any): void {
+    this.db.logTaskEvent(runId, taskId, eventType, payload);
+  }
+
+  getTaskEvents(runId: string): Array<{ id: string, taskId: string, eventType: string, payload: any, createdAt: number }> {
+    return this.db.getTaskEvents(runId);
+  }
+
+  logBugPattern(pattern: BugPattern): void {
+    this.db.logBugPattern(pattern);
+  }
+
+  getBugPatterns(): BugPattern[] {
+    return this.db.getBugPatterns();
   }
 
   getStats() {

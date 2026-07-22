@@ -19,8 +19,13 @@ export function ExtensionGallery() {
 
   const loadExtensions = () => {
     setLoading(true);
-    api()
-      .listExtensions()
+    const a = api();
+    if (!a?.listExtensions) {
+      setExtensions([]);
+      setLoading(false);
+      return;
+    }
+    a.listExtensions()
       .then((list: ExtensionManifest[]) => {
         setExtensions(Array.isArray(list) ? list : []);
       })
@@ -34,10 +39,12 @@ export function ExtensionGallery() {
 
   const handleInstall = async () => {
     try {
-      const dir = await api().selectDirectory();
+      const a = api();
+      if (!a?.selectDirectory || !a?.installExtension) return;
+      const dir = await a.selectDirectory();
       if (dir) {
         setLoading(true);
-        await api().installExtension(dir);
+        await a.installExtension(dir);
         loadExtensions();
       }
     } catch (e) {
