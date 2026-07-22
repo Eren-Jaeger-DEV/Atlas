@@ -57,7 +57,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
 
     // Ensure active tab terminal is created and attached
     tabs.forEach(tab => {
@@ -67,17 +67,17 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
           fontSize: 13,
           fontFamily: "'JetBrains Mono', Consolas, monospace",
           theme: {
-            background: "#09090b",
-            foreground: "#fafafa",
-            cursor: "#fafafa",
-            selectionBackground: "#27272a",
-            black: "#18181b",
+            background: "var(--bg-base, #09090b)",
+            foreground: "var(--text-main, #fafafa)",
+            cursor: "var(--text-main, #fafafa)",
+            selectionBackground: "var(--border-color, #27272a)",
+            black: "var(--bg-header, #18181b)",
             red: "#f87171",
             green: "#4ade80",
             yellow: "#facc15",
             blue: "#60a5fa",
             magenta: "#c084fc",
-            cyan: "#38bdf8",
+            cyan: "var(--accent, #38bdf8)",
             white: "#f4f4f5",
           },
         });
@@ -195,15 +195,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#09090b",
-    color: "#fafafa",
+    backgroundColor: "var(--bg-base, #09090b)",
+    color: "var(--text-main, #fafafa)",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "0 8px",
-    backgroundColor: "#0d0d10",
+    backgroundColor: "var(--bg-base, #0d0d10)",
     borderBottom: "1px solid #27272a",
     fontSize: "11px",
     height: "28px",
@@ -220,16 +220,16 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "6px",
     padding: "0 10px",
     height: "100%",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     cursor: "pointer",
     fontSize: "11px",
     fontWeight: 600,
     borderBottom: "2px solid transparent",
   },
   tabOn: {
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     borderBottom: "2px solid #fafafa",
-    backgroundColor: "#141417",
+    backgroundColor: "var(--bg-panel, #141417)",
   },
   tabX: {
     fontSize: "10px",
@@ -238,7 +238,7 @@ const styles: Record<string, React.CSSProperties> = {
   addBtn: {
     background: "none",
     border: "none",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "14px",
     cursor: "pointer",
     padding: "0 6px",
@@ -249,16 +249,16 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "10px",
   },
   select: {
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     fontSize: "11px",
     borderRadius: "3px",
     padding: "1px 4px",
     outline: "none",
   },
   subtext: {
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "10px",
   },
   canvasContainer: {

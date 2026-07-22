@@ -27,7 +27,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
   const [planApprovalReq, setPlanApprovalReq] = useState<{reqId: string, plan: any} | null>(null);
 
   useEffect(() => {
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
     if (!api?.onEvent) return;
 
     const unsubscribePlan = api.onRequestPlanApproval?.((payload: { reqId: string, plan: any }) => {
@@ -83,7 +83,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
     setStreamEvents([]);
     setAwaitingHuman(null);
 
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
     if (api?.run) {
       const runKey = Date.now().toString();
       setActiveRuns(prev => { const n = new Set(prev); n.add(runKey); return n; });
@@ -177,7 +177,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             onAccept={() => setComposerOutput(null)}
             onReject={async () => {
               // Revert by calling API write for the before files
-              const api = (window as any).atlasAPI;
+              const api = window.atlasAPI;
               for (const [fp, content] of Object.entries(composerOutput.filesBefore)) {
                 await api.writeFile(fp, content as string);
               }
@@ -217,7 +217,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
         ) : messages.length === 0 && activeView !== "history" ? (
           <div style={styles.emptyState}>
             <div style={styles.logoMark}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#e4e4e7" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-main, #e4e4e7)" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
             </div>
             <h3 style={styles.emptyTitle}>Atlas</h3>
           </div>
@@ -236,8 +236,8 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
         {activeRuns.size > 0 && (
           <div style={styles.agentBubble}>
             {streamEvents.map((ev, idx) => (
-              <div key={idx} style={{ fontSize: "11px", color: "#a1a1aa", marginBottom: "4px" }}>
-                {ev.runId && <span style={{color: "#38bdf8", marginRight: "4px"}}>[{ev.runId.substring(0,4)}]</span>}
+              <div key={idx} style={{ fontSize: "11px", color: "var(--text-muted, #a1a1aa)", marginBottom: "4px" }}>
+                {ev.runId && <span style={{color: "var(--accent, #38bdf8)", marginRight: "4px"}}>[{ev.runId.substring(0,4)}]</span>}
                 {ev.type === "state_change" && `State: ${ev.state}`}
                 {ev.type === "plan_ready" && `Plan generated with ${ev.plan.steps.length} steps.`}
                 {ev.type === "step_start" && `Working on: ${ev.step.title}`}
@@ -248,17 +248,17 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             ))}
             {awaitingHuman && !planApprovalReq ? (
               <p style={{ ...styles.bubbleText, color: "#f87171", marginTop: "8px" }}>
-                ⚠️ Awaiting Human: {awaitingHuman}
+                [WARN] Awaiting Human: {awaitingHuman}
               </p>
             ) : planApprovalReq ? (
               <div style={{ marginTop: "8px", padding: "8px", border: "1px solid #38bdf8", borderRadius: "4px" }}>
-                <p style={{ color: "#38bdf8", fontWeight: "bold", marginBottom: "8px" }}>Plan Approval Required</p>
-                <p style={{ color: "#e4e4e7", fontSize: "11px", marginBottom: "12px" }}>Review the plan in artifacts.</p>
+                <p style={{ color: "var(--accent, #38bdf8)", fontWeight: "bold", marginBottom: "8px" }}>Plan Approval Required</p>
+                <p style={{ color: "var(--text-main, #e4e4e7)", fontSize: "11px", marginBottom: "12px" }}>Review the plan in artifacts.</p>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <button 
                     style={{ ...styles.sendBtn, width: "auto", padding: "4px 12px", borderRadius: "4px", fontSize: "11px", fontWeight: "bold" }}
                     onClick={() => {
-                      (window as any).atlasAPI.sendPlanDecision(planApprovalReq.reqId, true);
+                      window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, true);
                       setPlanApprovalReq(null);
                       setAwaitingHuman(null);
                     }}
@@ -266,9 +266,9 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
                     Approve
                   </button>
                   <button 
-                    style={{ background: "#3f3f46", color: "#e4e4e7", border: "none", width: "auto", padding: "4px 12px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
+                    style={{ background: "var(--border-color, #3f3f46)", color: "var(--text-main, #e4e4e7)", border: "none", width: "auto", padding: "4px 12px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
                     onClick={() => {
-                      (window as any).atlasAPI.sendPlanDecision(planApprovalReq.reqId, false);
+                      window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, false);
                       setPlanApprovalReq(null);
                       setAwaitingHuman(null);
                     }}
@@ -305,7 +305,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           </div>
           <div style={styles.inputBottom}>
             <div 
-              style={{...styles.modelSelector, color: planningMode ? "#38bdf8" : "#a1a1aa"}}
+              style={{...styles.modelSelector, color: planningMode ? "var(--accent, #38bdf8)" : "var(--text-muted, #a1a1aa)"}}
               onClick={() => setPlanningMode(!planningMode)}
               title="Toggle Planning Mode"
             >
@@ -354,7 +354,7 @@ const styles: Record<string, React.CSSProperties> = {
   headerTitle: {
     fontSize: "13px",
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
   },
   headerActions: {
     display: "flex",
@@ -363,7 +363,7 @@ const styles: Record<string, React.CSSProperties> = {
   iconBtn: {
     background: "none",
     border: "none",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     cursor: "pointer",
     padding: "4px",
     borderRadius: "4px",
@@ -385,7 +385,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
   },
   logoMark: {
     marginBottom: "12px",
@@ -393,11 +393,11 @@ const styles: Record<string, React.CSSProperties> = {
   emptyTitle: {
     fontSize: "16px",
     fontWeight: 700,
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     margin: 0,
   },
   userBubble: {
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     border: "1px solid #27272a",
     borderRadius: "8px",
     padding: "12px",
@@ -411,7 +411,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "95%",
   },
   bubbleText: {
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     lineHeight: 1.5,
     margin: 0,
     fontSize: "13px",
@@ -424,7 +424,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#000000",
   },
   inputBox: {
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     border: "1px solid #27272a",
     borderRadius: "12px",
     display: "flex",
@@ -440,7 +440,7 @@ const styles: Record<string, React.CSSProperties> = {
   addContextBtn: {
     background: "none",
     border: "none",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     cursor: "pointer",
     padding: "4px",
     display: "flex",
@@ -454,7 +454,7 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: "150px",
     backgroundColor: "transparent",
     border: "none",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     fontSize: "13px",
     resize: "none",
     fontFamily: "inherit",
@@ -471,7 +471,7 @@ const styles: Record<string, React.CSSProperties> = {
   modelSelector: {
     display: "flex",
     alignItems: "center",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     fontSize: "11px",
     fontWeight: 500,
     cursor: "pointer",
@@ -483,9 +483,9 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   micBtn: {
-    background: "#18181b",
+    background: "var(--bg-header, #18181b)",
     border: "none",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     borderRadius: "50%",
     width: "28px",
     height: "28px",
@@ -495,7 +495,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   sendBtn: {
-    background: "#38bdf8",
+    background: "var(--accent, #38bdf8)",
     border: "none",
     color: "#000000",
     borderRadius: "50%",
@@ -519,17 +519,17 @@ const styles: Record<string, React.CSSProperties> = {
   historyHdr: {
     fontSize: "11px",
     fontWeight: 700,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     textTransform: "uppercase",
     margin: "0 0 8px 0",
   },
   historyItem: {
     padding: "8px 12px",
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     border: "1px solid #27272a",
     borderRadius: "6px",
     cursor: "pointer",
     fontSize: "12px",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
   },
 };

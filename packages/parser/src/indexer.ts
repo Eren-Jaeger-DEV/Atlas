@@ -163,8 +163,8 @@ async function scanWorkspacePackages(repoRoot: string): Promise<Record<string, s
       if (entrypoint) {
         map[pkgName] = entrypoint.replace(/\\/g, "/");
       }
-    } catch {
-      // Ignore invalid package.jsons
+    } catch (err) {
+      console.warn("Failed to parse a workspace package.json:", err);
     }
   }
 
@@ -252,7 +252,8 @@ function runQuery(language: any, queryStr: string, tree: TreeSitter.Tree): any[]
   try {
     const q = new TreeSitter.Query(language, queryStr);
     return q.matches(tree.rootNode);
-  } catch {
+  } catch (err) {
+    console.warn("Failed to run tree-sitter query:", queryStr, err);
     return [];
   }
 }

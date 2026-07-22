@@ -78,15 +78,15 @@ export function DebugPanel() {
 
 const s = {
   panel: {
-    display: "flex", flexDirection: "column", height: "100%", backgroundColor: "#0d0d10",
-    color: "#e4e4e7", fontFamily: "Inter, sans-serif"
+    display: "flex", flexDirection: "column", height: "100%", backgroundColor: "var(--bg-base, #0d0d10)",
+    color: "var(--text-main, #e4e4e7)", fontFamily: "Inter, sans-serif"
   } as React.CSSProperties,
   header: {
     padding: "10px 12px", fontSize: "11px", fontWeight: 700, letterSpacing: "1px",
-    color: "#71717a", textTransform: "uppercase", borderBottom: "1px solid #27272a"
+    color: "var(--text-muted, #71717a)", textTransform: "uppercase", borderBottom: "1px solid #27272a"
   } as React.CSSProperties,
   toolbar: {
-    display: "flex", gap: "8px", padding: "8px 12px", borderBottom: "1px solid #27272a", backgroundColor: "#141417"
+    display: "flex", gap: "8px", padding: "8px 12px", borderBottom: "1px solid #27272a", backgroundColor: "var(--bg-panel, #141417)"
   } as React.CSSProperties,
   btn: {
     background: "none", border: "none", cursor: "pointer", fontSize: "14px", opacity: 1, padding: "4px"
@@ -95,7 +95,7 @@ const s = {
     display: "flex", flexDirection: "column", borderBottom: "1px solid #27272a"
   } as React.CSSProperties,
   sectionTitle: {
-    padding: "6px 12px", fontSize: "10px", fontWeight: 600, backgroundColor: "#18181b", color: "#a1a1aa"
+    padding: "6px 12px", fontSize: "10px", fontWeight: 600, backgroundColor: "var(--bg-header, #18181b)", color: "var(--text-muted, #a1a1aa)"
   } as React.CSSProperties,
   content: {
     padding: "8px 12px", maxHeight: "300px", overflowY: "auto", fontSize: "12px"
@@ -108,5 +108,5 @@ const s = {
   } as React.CSSProperties,
   varName: { color: "#93c5fd" } as React.CSSProperties,
   varValue: { color: "#d4d4d8" } as React.CSSProperties,
-  fileLoc: { color: "#71717a", fontSize: "11px", marginLeft: "6px" } as React.CSSProperties,
+  fileLoc: { color: "var(--text-muted, #71717a)", fontSize: "11px", marginLeft: "6px" } as React.CSSProperties,
 };

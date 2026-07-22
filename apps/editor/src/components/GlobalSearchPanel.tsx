@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 export interface GlobalSearchPanelProps {
   workspaceRoot: string;
@@ -15,6 +15,9 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replaceText, setReplaceText] = useState("");
+  const [replaceLoading, setReplaceLoading] = useState(false);
+  const [replaceSuccessMsg, setReplaceSuccessMsg] = useState<string | null>(null);
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -38,6 +41,33 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
       setError(err.message || String(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReplaceAll = async () => {
+    if (!query) return;
+    
+    setReplaceLoading(true);
+    setError(null);
+    setReplaceSuccessMsg(null);
+
+    try {
+      if (api()?.globalReplace) {
+        const res = await api().globalReplace(workspaceRoot, query, replaceText, {
+          isRegex,
+          include: includeGlob || undefined,
+          exclude: excludeGlob || undefined,
+        });
+        setReplaceSuccessMsg(`Replaced ${res.occurrences} occurrences across ${res.filesUpdated} files.`);
+        // Refresh search results
+        handleSearch();
+      } else {
+        setError("globalReplace API not available");
+      }
+    } catch (err: any) {
+      setError(err.message || String(err));
+    } finally {
+      setReplaceLoading(false);
     }
   };
 
@@ -70,11 +100,21 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
           <button 
             type="button"
             onClick={() => setIsRegex(!isRegex)}
-            style={{ ...styles.toggleBtn, backgroundColor: isRegex ? "#38bdf8" : "#27272a", color: isRegex ? "#09090b" : "#a1a1aa" }}
+            style={{ ...styles.toggleBtn, backgroundColor: isRegex ? "var(--accent, #38bdf8)" : "var(--border-color, #27272a)", color: isRegex ? "var(--bg-base, #09090b)" : "var(--text-muted, #a1a1aa)" }}
             title="Use Regular Expression"
           >
             .*
           </button>
+        </div>
+
+        <div style={styles.inputGroup}>
+          <input 
+            type="text" 
+            placeholder="Replace with..." 
+            value={replaceText} 
+            onChange={e => setReplaceText(e.target.value)}
+            style={styles.input}
+          />
         </div>
         
         <input 
@@ -93,14 +133,31 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
           style={styles.input}
         />
 
-        <button type="submit" disabled={loading} style={styles.submitBtn}>
-          {loading ? "Searching..." : "Search"}
-        </button>
+        <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+          <button type="submit" disabled={loading || replaceLoading} style={{ ...styles.submitBtn, flex: 1 }}>
+            {loading ? "..." : "Search"}
+          </button>
+          <button 
+            type="button" 
+            onClick={handleReplaceAll} 
+            disabled={loading || replaceLoading || !query} 
+            style={{ ...styles.submitBtn, flex: 1, backgroundColor: "#10b981", color: "#022c22" }}
+            title="Replace All across Workspace"
+          >
+            {replaceLoading ? "..." : "Replace All"}
+          </button>
+        </div>
       </form>
 
       {error && (
         <div style={styles.errorBox}>
           {error}
+        </div>
+      )}
+
+      {replaceSuccessMsg && (
+        <div style={{ ...styles.errorBox, color: "#10b981", backgroundColor: "#022c22", borderBottom: "1px solid #065f46" }}>
+          {replaceSuccessMsg}
         </div>
       )}
 
@@ -136,7 +193,7 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
             ))}
             {results.length > displayLimit && (
               <button
-                style={{ margin: "12px", padding: "6px 12px", backgroundColor: "#27272a", color: "#fafafa", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                style={{ margin: "12px", padding: "6px 12px", backgroundColor: "var(--border-color, #27272a)", color: "var(--text-main, #fafafa)", border: "none", borderRadius: "4px", cursor: "pointer" }}
                 onClick={() => setDisplayLimit(prev => prev + 100)}
               >
                 Show More ({results.length - displayLimit} remaining)
@@ -155,7 +212,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     height: "100%",
     backgroundColor: "#000000",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
   },
   header: {
     padding: "4px 8px",
@@ -187,7 +244,7 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     backgroundColor: "transparent",
     border: "none",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     padding: "6px 8px",
     fontSize: "12px",
     outline: "none",
@@ -202,7 +259,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "all 0.2s",
   },
   submitBtn: {
-    backgroundColor: "#38bdf8",
+    backgroundColor: "var(--accent, #38bdf8)",
     color: "#0f111a",
     border: "none",
     padding: "6px",
@@ -248,7 +305,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "12px",
     fontWeight: 600,
     backgroundColor: "#161b22",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   matchCount: {
     backgroundColor: "#1e293b",
@@ -271,7 +328,7 @@ const styles: Record<string, React.CSSProperties> = {
     transition: "background-color 0.15s",
   },
   matchLineNum: {
-    color: "#38bdf8",
+    color: "var(--accent, #38bdf8)",
     width: "24px",
     textAlign: "right",
     flexShrink: 0,

@@ -183,4 +183,5 @@ export type OrchestratorEvent =
   | { type: "review_result"; result: ReviewResult; runId: string }
   | { type: "awaiting_human"; reason: string; runId: string }
   | { type: "done"; record: RunRecord; runId: string }
-  | { type: "error"; message: string; runId: string };
+  | { type: "error"; message: string; runId: string }
+  | { type: "dag_update"; taskId?: string; data?: any; nodes?: any[]; runId: string };

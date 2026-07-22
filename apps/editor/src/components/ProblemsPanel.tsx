@@ -113,7 +113,7 @@ const s = {
     flexDirection: "column",
     height: "100%",
     backgroundColor: "#000000",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontFamily: "Inter, sans-serif",
   } as React.CSSProperties,
   header: {
@@ -132,7 +132,7 @@ const s = {
     display: "flex",
     alignItems: "center",
     height: "100%",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     borderBottom: "2px solid #38bdf8",
     marginRight: "16px",
   } as React.CSSProperties,
@@ -181,7 +181,7 @@ const s = {
     padding: "4px 12px",
     fontSize: "12px",
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     backgroundColor: "#050505",
   } as React.CSSProperties,
   fileIcon: {

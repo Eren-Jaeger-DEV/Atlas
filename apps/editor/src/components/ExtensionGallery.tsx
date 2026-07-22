@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-
-const api = () => (window as any).atlasAPI;
+import styled from "styled-components";
+import { useAtlasAPI } from "../hooks/useAtlasAPI";
+import { GlobalErrorBoundary } from "./GlobalErrorBoundary";
 
 interface ExtensionManifest {
   id?: string;
@@ -12,43 +13,243 @@ interface ExtensionManifest {
   permissions?: string[];
 }
 
-export function ExtensionGallery() {
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--bg-base, #0d0d10);
+  color: var(--text-main, #fafafa);
+`;
+
+const Header = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: var(--bg-base, #09090b);
+  border-bottom: 1px solid #27272a;
+`;
+
+const HeaderLeft = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const Title = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+`;
+
+const Subtext = styled.span`
+  font-size: 11px;
+  color: var(--text-muted, #71717a);
+`;
+
+const InstallBtn = styled.button`
+  background-color: transparent;
+  border: none;
+  color: var(--text-muted, #a1a1aa);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:hover {
+    color: var(--text-main, #fafafa);
+    background-color: var(--bg-panel, #141417);
+  }
+`;
+
+const SearchBox = styled.div`
+  padding: 10px 12px;
+  border-bottom: 1px solid #27272a;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  background-color: var(--bg-header, #18181b);
+  border: 1px solid #27272a;
+  color: var(--text-main, #fafafa);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+  &:focus {
+    border-color: var(--accent, #38bdf8);
+  }
+`;
+
+const List = styled.div`
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`;
+
+const EmptyState = styled.div`
+  background-color: var(--bg-panel, #141417);
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const EmptyTitle = styled.p`
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-muted, #a1a1aa);
+`;
+
+const EmptyDesc = styled.p`
+  font-size: 11px;
+  color: var(--text-muted, #71717a);
+  margin: 0;
+  line-height: 1.6;
+`;
+
+const EmptyPath = styled.p`
+  font-size: 10px;
+  color: #52525b;
+  margin: 0;
+`;
+
+const Code = styled.code`
+  font-family: monospace;
+  color: var(--accent, #38bdf8);
+  font-size: 10px;
+`;
+
+const Card = styled.div`
+  background-color: var(--bg-panel, #141417);
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const CardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+`;
+
+const ExtName = styled.p`
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 2px;
+  color: var(--text-main, #fafafa);
+`;
+
+const ExtMeta = styled.p`
+  font-size: 10px;
+  color: var(--text-muted, #71717a);
+  margin: 0;
+`;
+
+const Publisher = styled.span`
+  color: var(--accent, #38bdf8);
+`;
+
+const InstalledBadge = styled.span`
+  font-size: 9px;
+  font-weight: 700;
+  color: #4ade80;
+  background-color: rgba(74, 222, 128, 0.08);
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+`;
+
+const ExtDesc = styled.p`
+  font-size: 11px;
+  color: var(--text-muted, #a1a1aa);
+  margin: 0;
+  line-height: 1.4;
+`;
+
+const PermList = styled.div`
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+`;
+
+const PermBadge = styled.span`
+  background-color: var(--bg-header, #18181b);
+  border: 1px solid #27272a;
+  color: var(--text-muted, #71717a);
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: monospace;
+`;
+
+const ErrorAlert = styled.div`
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin: 10px 12px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+function ExtensionGalleryContent() {
+  const api = useAtlasAPI();
   const [extensions, setExtensions] = useState<ExtensionManifest[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   const loadExtensions = () => {
     setLoading(true);
-    const a = api();
-    if (!a?.listExtensions) {
+    if (!api?.listExtensions) {
       setExtensions([]);
       setLoading(false);
       return;
     }
-    a.listExtensions()
+    api.listExtensions()
       .then((list: ExtensionManifest[]) => {
-        setExtensions(Array.isArray(list) ? list : []);
+        setExtensions(list || []);
       })
-      .catch(() => setExtensions([]))
+      .catch((e) => {
+        console.error("Failed to load extensions", e);
+        setExtensions([]);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     loadExtensions();
-  }, []);
+  }, [api]);
 
   const handleInstall = async () => {
+    setInstallError(null);
     try {
-      const a = api();
-      if (!a?.selectDirectory || !a?.installExtension) return;
-      const dir = await a.selectDirectory();
+      if (!api?.selectDirectory || !api?.installExtension) return;
+      const dir = await api.selectDirectory();
       if (dir) {
         setLoading(true);
-        await a.installExtension(dir);
+        await api.installExtension(dir);
         loadExtensions();
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: unknown) {
+      console.error("Extension installation failed:", e);
+      setInstallError(e instanceof Error ? e.message : "Failed to install extension. Check the console for details.");
       setLoading(false);
     }
   };
@@ -63,129 +264,94 @@ export function ExtensionGallery() {
   });
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={styles.title}>EXTENSIONS MARKETPLACE</span>
-          <span style={styles.subtext}>
+    <Container>
+      <Header>
+        <HeaderLeft>
+          <Title>EXTENSIONS MARKETPLACE</Title>
+          <Subtext>
             {loading ? "Scanning..." : `${extensions.length} Installed`}
-          </span>
-        </div>
-        <button style={styles.installBtn} onClick={handleInstall} title="Install Local Extension...">
+          </Subtext>
+        </HeaderLeft>
+        <InstallBtn onClick={handleInstall} title="Install Local Extension...">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
           </svg>
-        </button>
-      </div>
+        </InstallBtn>
+      </Header>
 
-      <div style={styles.searchBox}>
-        <input
-          style={styles.searchInput}
+      {installError && (
+        <ErrorAlert>
+          <span>{installError}</span>
+          <button 
+            style={{ background: "transparent", border: "none", color: "#fca5a5", cursor: "pointer", padding: "4px" }}
+            onClick={() => setInstallError(null)}
+          >
+            ✕
+          </button>
+        </ErrorAlert>
+      )}
+
+      <SearchBox>
+        <SearchInput
           placeholder="Filter installed extensions..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-      </div>
+      </SearchBox>
 
-      <div style={styles.list}>
+      <List>
         {!loading && extensions.length === 0 && (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>No Extensions Installed</p>
-            <p style={styles.emptyDesc}>
+          <EmptyState>
+            <EmptyTitle>No Extensions Installed</EmptyTitle>
+            <EmptyDesc>
               Install extensions by placing a folder containing a{" "}
-              <code style={styles.code}>manifest.json</code> into the Atlas
+              <Code>manifest.json</Code> into the Atlas
               extensions directory. Marketplace integration is coming in a
               future release.
-            </p>
-            <p style={styles.emptyPath}>
+            </EmptyDesc>
+            <EmptyPath>
               Extensions dir:{" "}
-              <code style={styles.code}>%APPDATA%\atlas\extensions\</code>
-            </p>
-          </div>
+              <Code>%APPDATA%\atlas\extensions\</Code>
+            </EmptyPath>
+          </EmptyState>
         )}
 
         {filtered.map((ext, idx) => (
-          <div key={ext.id ?? ext.dirName ?? idx} style={styles.card}>
-            <div style={styles.cardHeader}>
+          <Card key={ext.id ?? ext.dirName ?? idx}>
+            <CardHeader>
               <div>
-                <p style={styles.extName}>{ext.name ?? ext.dirName ?? "Unknown Extension"}</p>
-                <p style={styles.extMeta}>
+                <ExtName>{ext.name ?? ext.dirName ?? "Unknown Extension"}</ExtName>
+                <ExtMeta>
                   v{ext.version ?? "?.?.?"} by{" "}
-                  <span style={{ color: "#38bdf8" }}>{ext.publisher ?? "Unknown"}</span>
-                </p>
+                  <Publisher>{ext.publisher ?? "Unknown"}</Publisher>
+                </ExtMeta>
               </div>
-              <span style={styles.installedBadge}>[INSTALLED]</span>
-            </div>
+              <InstalledBadge>[INSTALLED]</InstalledBadge>
+            </CardHeader>
 
             {ext.description && (
-              <p style={styles.extDesc}>{ext.description}</p>
+              <ExtDesc>{ext.description}</ExtDesc>
             )}
 
             {Array.isArray(ext.permissions) && ext.permissions.length > 0 && (
-              <div style={styles.permList}>
+              <PermList>
                 {ext.permissions.map(p => (
-                  <span key={p} style={styles.permBadge}>{p}</span>
+                  <PermBadge key={p}>{p}</PermBadge>
                 ))}
-              </div>
+              </PermList>
             )}
-          </div>
+          </Card>
         ))}
-      </div>
-    </div>
+      </List>
+    </Container>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: "flex", flexDirection: "column", height: "100%",
-    backgroundColor: "#0d0d10", color: "#fafafa",
-  },
-  header: {
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "8px 12px", backgroundColor: "#09090b", borderBottom: "1px solid #27272a",
-  },
-  headerLeft: { display: "flex", flexDirection: "column", gap: "2px" },
-  title: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.8px" },
-  subtext: { fontSize: "11px", color: "#71717a" },
-  installBtn: {
-    backgroundColor: "transparent", border: "none", color: "#a1a1aa",
-    cursor: "pointer", padding: "4px", borderRadius: "4px",
-    display: "flex", alignItems: "center", justifyContent: "center",
-  },
-  searchBox: { padding: "10px 12px", borderBottom: "1px solid #27272a" },
-  searchInput: {
-    width: "100%", backgroundColor: "#18181b", border: "1px solid #27272a",
-    color: "#fafafa", borderRadius: "6px", padding: "6px 10px", fontSize: "12px", outline: "none",
-    boxSizing: "border-box",
-  },
-  list: {
-    flex: 1, padding: "12px", overflowY: "auto",
-    display: "flex", flexDirection: "column", gap: "10px",
-  },
-  emptyState: {
-    backgroundColor: "#141417", border: "1px solid #27272a",
-    borderRadius: "8px", padding: "20px", display: "flex", flexDirection: "column", gap: "8px",
-  },
-  emptyTitle: { fontSize: "13px", fontWeight: 700, margin: 0, color: "#a1a1aa" },
-  emptyDesc: { fontSize: "11px", color: "#71717a", margin: 0, lineHeight: "1.6" },
-  emptyPath: { fontSize: "10px", color: "#52525b", margin: 0 },
-  code: { fontFamily: "monospace", color: "#38bdf8", fontSize: "10px" },
-  card: {
-    backgroundColor: "#141417", border: "1px solid #27272a",
-    borderRadius: "6px", padding: "12px", display: "flex", flexDirection: "column", gap: "8px",
-  },
-  cardHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
-  extName: { fontSize: "13px", fontWeight: 700, margin: "0 0 2px", color: "#fafafa" },
-  extMeta: { fontSize: "10px", color: "#71717a", margin: 0 },
-  installedBadge: {
-    fontSize: "9px", fontWeight: 700, color: "#4ade80",
-    backgroundColor: "rgba(74,222,128,0.08)", padding: "2px 6px",
-    borderRadius: "3px", whiteSpace: "nowrap",
-  },
-  extDesc: { fontSize: "11px", color: "#a1a1aa", margin: 0, lineHeight: "1.4" },
-  permList: { display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "2px" },
-  permBadge: {
-    backgroundColor: "#18181b", border: "1px solid #27272a", color: "#71717a",
-    fontSize: "9px", padding: "1px 5px", borderRadius: "3px", fontFamily: "monospace",
-  },
-};
+// Wrap the main content in an ErrorBoundary to prevent catastrophic crashes
+export function ExtensionGallery() {
+  return (
+    <GlobalErrorBoundary>
+      <ExtensionGalleryContent />
+    </GlobalErrorBoundary>
+  );
+}

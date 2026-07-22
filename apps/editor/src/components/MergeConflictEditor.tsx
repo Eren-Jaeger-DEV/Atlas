@@ -21,7 +21,7 @@ interface MergeConflictEditorProps {
   onComplete: () => void;
 }
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 export function MergeConflictEditor({
   filePath,
@@ -144,9 +144,9 @@ export function MergeConflictEditor({
 
       <div style={styles.body}>
         {loading ? (
-          <div style={{ color: "#71717a", textAlign: "center", marginTop: "20px" }}>Loading file...</div>
+          <div style={{ color: "var(--text-muted, #71717a)", textAlign: "center", marginTop: "20px" }}>Loading file...</div>
         ) : conflicts.length === 0 ? (
-          <div style={{ color: "#71717a", textAlign: "center", marginTop: "20px" }}>No conflicts found.</div>
+          <div style={{ color: "var(--text-muted, #71717a)", textAlign: "center", marginTop: "20px" }}>No conflicts found.</div>
         ) : (
           conflicts.map((block, idx) => (
             <div key={block.id} style={styles.conflictCard}>
@@ -156,7 +156,7 @@ export function MergeConflictEditor({
                   <button
                     style={{
                       ...styles.actionBtn,
-                      backgroundColor: block.chosen === "current" ? "#1e3a8a" : "#18181b",
+                      backgroundColor: block.chosen === "current" ? "#1e3a8a" : "var(--bg-header, #18181b)",
                       color: "#60a5fa",
                     }}
                     onClick={() => resolveBlock(block.id, "current")}
@@ -166,7 +166,7 @@ export function MergeConflictEditor({
                   <button
                     style={{
                       ...styles.actionBtn,
-                      backgroundColor: block.chosen === "incoming" ? "#14532d" : "#18181b",
+                      backgroundColor: block.chosen === "incoming" ? "#14532d" : "var(--bg-header, #18181b)",
                       color: "#4ade80",
                     }}
                     onClick={() => resolveBlock(block.id, "incoming")}
@@ -176,8 +176,8 @@ export function MergeConflictEditor({
                   <button
                     style={{
                       ...styles.actionBtn,
-                      backgroundColor: block.chosen === "both" ? "#3f3f46" : "#18181b",
-                      color: "#fafafa",
+                      backgroundColor: block.chosen === "both" ? "var(--border-color, #3f3f46)" : "var(--bg-header, #18181b)",
+                      color: "var(--text-main, #fafafa)",
                     }}
                     onClick={() => resolveBlock(block.id, "both")}
                   >
@@ -210,15 +210,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#09090b",
-    color: "#fafafa",
+    backgroundColor: "var(--bg-base, #09090b)",
+    color: "var(--text-main, #fafafa)",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "10px 16px",
-    backgroundColor: "#141417",
+    backgroundColor: "var(--bg-panel, #141417)",
     borderBottom: "1px solid #27272a",
   },
   title: {
@@ -230,7 +230,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   filePath: {
     fontSize: "12px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
   },
   rightGroup: {
     display: "flex",
@@ -245,8 +245,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "4px",
   },
   completeBtn: {
-    backgroundColor: "#fafafa",
-    color: "#09090b",
+    backgroundColor: "var(--text-main, #fafafa)",
+    color: "var(--bg-base, #09090b)",
     border: "none",
     borderRadius: "4px",
     padding: "6px 14px",
@@ -263,7 +263,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "16px",
   },
   conflictCard: {
-    backgroundColor: "#141417",
+    backgroundColor: "var(--bg-panel, #141417)",
     border: "1px solid #27272a",
     borderRadius: "8px",
     padding: "14px",
@@ -277,7 +277,7 @@ const styles: Record<string, React.CSSProperties> = {
   conflictLabel: {
     fontSize: "12px",
     fontWeight: 700,
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   actionRow: {
     display: "flex",
@@ -297,7 +297,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "12px",
   },
   diffPane: {
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     border: "1px solid #27272a",
     borderRadius: "6px",
     padding: "10px",
@@ -305,13 +305,13 @@ const styles: Record<string, React.CSSProperties> = {
   paneHdr: {
     fontSize: "10px",
     fontWeight: 700,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     margin: "0 0 6px",
   },
   codeText: {
     margin: 0,
     fontFamily: "'JetBrains Mono', Consolas, monospace",
     fontSize: "12px",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
   },
 };

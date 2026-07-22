@@ -2,7 +2,7 @@
 // The file count and TODO count are real, but the deep AST dependency analysis is pending implementation.
 import { useState, useEffect } from "react";
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 interface ProjectHealthProps {
   repoPath?: string;
@@ -80,19 +80,19 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
               </div>
               <div style={styles.bdRow}>
                 <span>TODO / FIXME Scan</span>
-                <span style={{ color: todoCount !== null ? "#4ade80" : "#71717a" }}>
+                <span style={{ color: todoCount !== null ? "#4ade80" : "var(--text-muted, #71717a)" }}>
                   {todoCount !== null ? "[PASS]" : loading ? "[SCAN]" : "[SKIP]"}
                 </span>
               </div>
               <div style={styles.bdRow}>
                 <span>Dependency Freshness</span>
-                <span style={{ color: depsStats?.outdated === 0 ? "#4ade80" : depsStats?.outdated! > 0 ? "#f87171" : "#71717a" }}>
+                <span style={{ color: depsStats?.outdated === 0 ? "#4ade80" : depsStats?.outdated! > 0 ? "#f87171" : "var(--text-muted, #71717a)" }}>
                   {depsStats ? (depsStats.outdated === 0 ? "[PASS]" : "[WARN]") : "[SKIP]"}
                 </span>
               </div>
               <div style={styles.bdRow}>
                 <span>AST Graph Index</span>
-                <span style={{ color: "#38bdf8" }}>[LIVE]</span>
+                <span style={{ color: "var(--accent, #38bdf8)" }}>[LIVE]</span>
               </div>
             </div>
 
@@ -114,14 +114,14 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex", flexDirection: "column", height: "100%",
-    backgroundColor: "#09090b", color: "#fafafa",
+    backgroundColor: "var(--bg-base, #09090b)", color: "var(--text-main, #fafafa)",
   },
   header: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "8px 12px", backgroundColor: "#0d0d10", borderBottom: "1px solid #27272a",
+    padding: "8px 12px", backgroundColor: "var(--bg-base, #0d0d10)", borderBottom: "1px solid #27272a",
   },
   title: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.8px" },
-  subtext: { fontSize: "11px", color: "#71717a" },
+  subtext: { fontSize: "11px", color: "var(--text-muted, #71717a)" },
   content: {
     flex: 1, padding: "12px", overflowY: "auto",
     display: "flex", flexDirection: "column", gap: "12px",
@@ -131,23 +131,23 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px",
   },
   metricCard: {
-    backgroundColor: "#141417", border: "1px solid #27272a", borderRadius: "8px",
+    backgroundColor: "var(--bg-panel, #141417)", border: "1px solid #27272a", borderRadius: "8px",
     padding: "12px", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
   },
-  metricVal: { fontSize: "24px", fontWeight: 900, color: "#fafafa", fontFamily: "monospace" },
-  metricLbl: { fontSize: "9px", color: "#71717a", textAlign: "center", letterSpacing: "0.5px" },
+  metricVal: { fontSize: "24px", fontWeight: 900, color: "var(--text-main, #fafafa)", fontFamily: "monospace" },
+  metricLbl: { fontSize: "9px", color: "var(--text-muted, #71717a)", textAlign: "center", letterSpacing: "0.5px" },
   breakdown: {
-    backgroundColor: "#141417", border: "1px solid #27272a",
+    backgroundColor: "var(--bg-panel, #141417)", border: "1px solid #27272a",
     borderRadius: "6px", padding: "12px", display: "flex", flexDirection: "column", gap: "6px",
   },
-  bdHdr: { fontSize: "10px", fontWeight: 700, color: "#71717a", margin: "0 0 4px", letterSpacing: "0.8px" },
+  bdHdr: { fontSize: "10px", fontWeight: 700, color: "var(--text-muted, #71717a)", margin: "0 0 4px", letterSpacing: "0.8px" },
   bdRow: {
     display: "flex", justifyContent: "space-between", fontSize: "11px",
     borderBottom: "1px solid #27272a", paddingBottom: "4px",
   },
   info: {
-    backgroundColor: "#141417", border: "1px solid #27272a",
+    backgroundColor: "var(--bg-panel, #141417)", border: "1px solid #27272a",
     borderRadius: "6px", padding: "12px",
   },
-  infoTxt: { fontSize: "11px", color: "#71717a", margin: 0, lineHeight: "1.5" },
+  infoTxt: { fontSize: "11px", color: "var(--text-muted, #71717a)", margin: 0, lineHeight: "1.5" },
 };

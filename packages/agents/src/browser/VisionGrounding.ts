@@ -36,7 +36,7 @@ export class VisionGrounding {
   }
 
   /**
-   * Generates a mock SVG overlay of bounding boxes for verification rendering.
+   * Generates an SVG overlay of bounding boxes for verification rendering.
    */
   public static generateOverlaySvg(elements: GroundedElement[], width = 1280, height = 800): string {
     const rects = elements

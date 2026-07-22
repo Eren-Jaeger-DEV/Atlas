@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 export interface GitFile {
   path: string;
@@ -18,17 +18,24 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
   const [currentBranch, setCurrentBranch] = useState("main");
   const [branches, setBranches] = useState<string[]>(["main"]);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const timerRefs = useRef<NodeJS.Timeout[]>([]);
+
+  useEffect(() => {
+    return () => {
+      timerRefs.current.forEach(clearTimeout);
+    };
+  }, []);
 
   const refreshStatus = useCallback(async () => {
     if (!repoPath) return;
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
     if (api?.gitStatus) {
       setLoading(true);
       try {
         const files = await api.gitStatus(repoPath);
         setGitFiles(files);
-      } catch {
-        // Handle git status error silently
+      } catch (err) {
+        console.error("Failed to refresh git status:", err);
       } finally {
         setLoading(false);
       }
@@ -40,16 +47,16 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
   }, [refreshStatus]);
 
   const handleStage = async (file: GitFile) => {
-    const api = (window as any).atlasAPI;
-    if (api?.gitStage) {
+    const api = window.atlasAPI;
+    if (api?.gitStage && repoPath && file?.path) {
       await api.gitStage(repoPath, file.path);
       await refreshStatus();
     }
   };
 
   const handleUnstage = async (file: GitFile) => {
-    const api = (window as any).atlasAPI;
-    if (api?.gitUnstage) {
+    const api = window.atlasAPI;
+    if (api?.gitUnstage && repoPath && file?.path) {
       await api.gitUnstage(repoPath, file.path);
       await refreshStatus();
     }
@@ -57,7 +64,7 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
 
   const handleCommit = async () => {
     if (!commitMessage.trim() || !repoPath) return;
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
     if (api?.gitCommit) {
       setLoading(true);
       try {
@@ -72,18 +79,22 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
 
   const handlePull = async () => {
     setSyncStatus("Pulling...");
-    setTimeout(() => {
+    const t1 = setTimeout(() => {
       setSyncStatus("Up to date");
-      setTimeout(() => setSyncStatus(null), 2000);
+      const t2 = setTimeout(() => setSyncStatus(null), 2000);
+      timerRefs.current.push(t2);
     }, 800);
+    timerRefs.current.push(t1);
   };
 
   const handlePush = async () => {
     setSyncStatus("Pushing...");
-    setTimeout(() => {
+    const t1 = setTimeout(() => {
       setSyncStatus("Pushed to origin");
-      setTimeout(() => setSyncStatus(null), 2000);
+      const t2 = setTimeout(() => setSyncStatus(null), 2000);
+      timerRefs.current.push(t2);
     }, 800);
+    timerRefs.current.push(t1);
   };
 
   const stagedFiles = gitFiles.filter((f) => f.staged);
@@ -94,7 +105,7 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
       {/* Header with branch selector & Sync controls */}
       <div style={styles.header}>
         <div style={styles.branchGroup}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted, #a1a1aa)" strokeWidth="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           <select
             style={styles.branchSelect}
             value={currentBranch}
@@ -110,7 +121,7 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
           <button style={styles.syncBtn} title="Pull latest changes" onClick={handlePull}>Pull</button>
           <button style={styles.syncBtn} title="Push commits to remote" onClick={handlePush}>Push</button>
           <button
-            style={{ ...styles.syncBtn, color: "#38bdf8" }}
+            style={{ ...styles.syncBtn, color: "var(--accent, #38bdf8)" }}
             onClick={() => {
               const notes = "# Release Notes Draft\n\n## Features\n- Implemented Chapter 11 Phase 6 Source Control\n- Integrated 3-way Merge Conflict Resolver";
               navigator.clipboard.writeText(notes);
@@ -209,8 +220,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#0d0d10",
-    color: "#a1a1aa",
+    backgroundColor: "var(--bg-base, #0d0d10)",
+    color: "var(--text-muted, #a1a1aa)",
     fontSize: "12px",
   },
   header: {
@@ -218,7 +229,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "4px 8px",
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     borderBottom: "1px solid #27272a",
   },
   branchGroup: {
@@ -227,9 +238,9 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "6px",
   },
   branchSelect: {
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     fontSize: "11px",
     borderRadius: "4px",
     padding: "2px 6px",
@@ -242,26 +253,26 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "4px",
   },
   syncBtn: {
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontSize: "11px",
     borderRadius: "3px",
     padding: "2px 6px",
     cursor: "pointer",
   },
   refreshButton: {
-    background: "#18181b",
+    background: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontSize: "11px",
     borderRadius: "3px",
     padding: "2px 6px",
     cursor: "pointer",
   },
   syncBanner: {
-    backgroundColor: "#18181b",
-    color: "#38bdf8",
+    backgroundColor: "var(--bg-header, #18181b)",
+    color: "var(--accent, #38bdf8)",
     fontSize: "11px",
     padding: "4px 10px",
     borderBottom: "1px solid #27272a",
@@ -277,9 +288,9 @@ const styles: Record<string, React.CSSProperties> = {
   messageInput: {
     width: "100%",
     height: "56px",
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     borderRadius: "6px",
     padding: "8px",
     fontSize: "12px",
@@ -287,8 +298,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "inherit",
   },
   commitButton: {
-    backgroundColor: "#fafafa",
-    color: "#09090b",
+    backgroundColor: "var(--text-main, #fafafa)",
+    color: "var(--bg-base, #09090b)",
     border: "none",
     borderRadius: "6px",
     padding: "6px 12px",
@@ -308,7 +319,7 @@ const styles: Record<string, React.CSSProperties> = {
   sectionHeader: {
     fontSize: "10px",
     fontWeight: 700,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     textTransform: "uppercase",
     marginBottom: "6px",
     letterSpacing: "0.5px",
@@ -323,7 +334,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "2px",
   },
   statusBadge: {
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontWeight: 700,
     fontSize: "11px",
     width: "12px",
@@ -333,12 +344,12 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
   },
   stageButton: {
-    background: "#18181b",
+    background: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     borderRadius: "3px",
     width: "20px",
     height: "20px",
@@ -351,7 +362,7 @@ const styles: Record<string, React.CSSProperties> = {
   emptyState: {
     padding: "24px 0",
     textAlign: "center",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "12px",
   },
 };

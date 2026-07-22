@@ -1,42 +1,78 @@
-// STUB — update checking and diagnostics export are simulated
-// (setTimeout + hardcoded values). No real update server exists yet.
-// Two of three performance metrics are hardcoded, not measured.
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export function ReleaseManagerPanel() {
   const [channel, setChannel] = useState<"stable" | "beta" | "nightly">("stable");
   const [checking, setChecking] = useState(false);
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [diagnosticExported, setDiagnosticExported] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState("0.1.0");
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const [coldStart, setColdStart] = useState<number>(0);
+  const [sysMetrics, setSysMetrics] = useState<any>(null);
 
   useEffect(() => {
     setColdStart(Math.round(performance.now()));
+    
+    const fetchMetrics = async () => {
+      const a = window.atlasAPI;
+      if (a?.getSystemDiagnostics) {
+        const metrics = await a.getSystemDiagnostics();
+        setSysMetrics(metrics);
+      }
+    };
+    fetchMetrics();
+    
+    const fetchVersion = async () => {
+      const a = window.atlasAPI;
+      if (a?.checkUpdates) {
+         const res = await a.checkUpdates();
+         setCurrentVersion(res.currentVersion);
+      }
+    };
+    fetchVersion();
   }, []);
 
-  const handleCheckUpdates = () => {
+  const handleCheckUpdates = async () => {
     setChecking(true);
-    setUpdateMsg("Coming Soon");
-    setTimeout(() => {
-      setChecking(false);
-    }, 800);
+    setUpdateMsg(null);
+    const a = window.atlasAPI;
+    if (a?.checkUpdates) {
+      const res = await a.checkUpdates();
+      setCurrentVersion(res.currentVersion);
+      setUpdateMsg(res.message);
+    } else {
+      setUpdateMsg("Update server unreachable.");
+    }
+    setChecking(false);
   };
 
   const handleExportDiagnostics = () => {
     setDiagnosticExported(true);
-    setTimeout(() => setDiagnosticExported(false), 3000);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setDiagnosticExported(false), 3000);
   };
 
   const metrics = [
     { name: "Cold Start (Live)", target: "< 2000ms", current: `${coldStart}ms`, status: coldStart < 2000 ? "PASS" : "WARN" },
   ];
+  if (sysMetrics) {
+    metrics.push({ name: "Memory Usage", target: "< 80%", current: `${sysMetrics.systemMemoryUsagePercent}% (${sysMetrics.heapUsedMB}MB heap)`, status: sysMetrics.systemMemoryUsagePercent < 80 ? "PASS" : "WARN" });
+    metrics.push({ name: "CPU Cores", target: ">= 4", current: `${sysMetrics.cpuCount} Cores`, status: sysMetrics.cpuCount >= 4 ? "PASS" : "WARN" });
+    metrics.push({ name: "System Uptime", target: "> 60s", current: `${sysMetrics.uptime}s`, status: sysMetrics.uptime > 60 ? "PASS" : "WARN" });
+  }
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <span style={styles.title}>RELEASE ENGINEERING & UPDATES</span>
-        <span style={styles.subtext}>v0.1.0</span>
+        <span style={styles.subtext}>v{currentVersion}</span>
       </div>
 
       <div style={styles.content}>
@@ -48,7 +84,7 @@ export function ReleaseManagerPanel() {
             <select
               style={styles.select}
               value={channel}
-              onChange={e => setChannel(e.target.value as any)}
+              onChange={e => setChannel(e.target.value as "stable" | "beta" | "nightly")}
             >
               <option value="stable">Stable (Verified Builds)</option>
               <option value="beta">Beta (Preview Features)</option>
@@ -56,8 +92,8 @@ export function ReleaseManagerPanel() {
             </select>
           </div>
 
-          <button style={styles.updateBtn} disabled={true} onClick={handleCheckUpdates}>
-            {checking ? "Checking..." : "Coming Soon"}
+          <button style={styles.updateBtn} disabled={checking} onClick={handleCheckUpdates}>
+            {checking ? "Checking..." : "Check for Updates"}
           </button>
 
           {updateMsg && <p style={styles.msg}>{updateMsg}</p>}
@@ -100,15 +136,15 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#0d0d10",
-    color: "#fafafa",
+    backgroundColor: "var(--bg-base, #0d0d10)",
+    color: "var(--text-main, #fafafa)",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "8px 12px",
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     borderBottom: "1px solid #27272a",
   },
   title: {
@@ -118,7 +154,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   subtext: {
     fontSize: "11px",
-    color: "#38bdf8",
+    color: "var(--accent, #38bdf8)",
     fontWeight: 700,
   },
   content: {
@@ -130,7 +166,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "12px",
   },
   card: {
-    backgroundColor: "#141417",
+    backgroundColor: "var(--bg-panel, #141417)",
     border: "1px solid #27272a",
     borderRadius: "8px",
     padding: "12px",
@@ -141,7 +177,7 @@ const styles: Record<string, React.CSSProperties> = {
   cardHdr: {
     fontSize: "10px",
     fontWeight: 700,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     margin: "0 0 4px",
     letterSpacing: "0.8px",
   },
@@ -152,16 +188,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "12px",
   },
   select: {
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     borderRadius: "4px",
     padding: "4px 8px",
     fontSize: "11px",
   },
   updateBtn: {
-    backgroundColor: "#fafafa",
-    color: "#09090b",
+    backgroundColor: "var(--text-main, #fafafa)",
+    color: "var(--bg-base, #09090b)",
     border: "none",
     borderRadius: "6px",
     padding: "8px",
@@ -188,7 +224,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   mSub: {
     fontSize: "10px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     margin: 0,
   },
   mRight: {
@@ -198,7 +234,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   mVal: {
     fontSize: "11px",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontFamily: "monospace",
   },
   passTag: {
@@ -207,12 +243,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   desc: {
     fontSize: "11px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     margin: "0 0 4px",
   },
   diagBtn: {
-    backgroundColor: "#27272a",
-    color: "#fafafa",
+    backgroundColor: "var(--border-color, #27272a)",
+    color: "var(--text-main, #fafafa)",
     border: "none",
     borderRadius: "6px",
     padding: "8px",

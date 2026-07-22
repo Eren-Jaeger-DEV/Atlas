@@ -21,7 +21,7 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
 
   const loadDirectory = useCallback(async (dirPath: string): Promise<FileItem[]> => {
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
     if (!api?.readDir) return [];
     const entries = await api.readDir(dirPath);
     return entries.map((e: any) => ({
@@ -111,7 +111,7 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
 
     const targetPath = `${targetDir}/${filename}`.replace(/\/+/g, "/");
 
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
     if (api?.createFile) {
       await api.createFile(targetPath, false);
       await refreshWorkspace();
@@ -121,10 +121,41 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
 
   const handleDelete = async (item: FileItem) => {
     if (!confirm(`Delete ${item.name}?`)) return;
-    const api = (window as any).atlasAPI;
+    const api = window.atlasAPI;
     if (api?.deleteFile) {
       await api.deleteFile(item.path);
       await refreshWorkspace();
+    }
+  };
+
+  const handleFileDrop = async (e: React.DragEvent, targetDir: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const api = window.atlasAPI;
+    
+    // Internal move
+    const sourcePath = e.dataTransfer.getData("atlas-file");
+    if (sourcePath && sourcePath !== targetDir) {
+      if (api?.moveFile) {
+        const fileName = sourcePath.split(/[/\\]/).pop();
+        await api.moveFile(sourcePath, `${targetDir}/${fileName}`.replace(/\/+/g, "/"));
+        await refreshWorkspace();
+      }
+      return;
+    }
+
+    // External drop (copy)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (api?.copyFile) {
+        for (let i = 0; i < e.dataTransfer.files.length; i++) {
+          const file = e.dataTransfer.files[i] as any;
+          if (file.path) {
+            const fileName = file.path.split(/[/\\]/).pop();
+            await api.copyFile(file.path, `${targetDir}/${fileName}`.replace(/\/+/g, "/"));
+          }
+        }
+        await refreshWorkspace();
+      }
     }
   };
 
@@ -132,6 +163,24 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
     return nodes.map((node) => (
       <div key={node.path}>
         <div
+          draggable
+          onDragStart={(e) => {
+            e.stopPropagation();
+            e.dataTransfer.setData("atlas-file", node.path);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (node.isDirectory) e.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(e) => {
+            if (node.isDirectory) {
+              handleFileDrop(e, node.path);
+            } else {
+              const parentDir = node.path.split(/[/\\]/).slice(0, -1).join("/");
+              handleFileDrop(e, parentDir);
+            }
+          }}
           style={{
             ...styles.treeItem,
             paddingLeft: `${level * 14 + 10}px`,
@@ -165,7 +214,18 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
   };
 
   return (
-    <div style={styles.container}>
+    <div
+      style={styles.container}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDrop={(e) => {
+        if (workspaceRoots && workspaceRoots[0]) {
+          handleFileDrop(e, workspaceRoots[0]);
+        }
+      }}
+    >
       <div style={styles.header}>
         <span style={styles.headerTitle}>EXPLORER</span>
         <div style={styles.actions}>
@@ -204,7 +264,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     height: "100%",
     backgroundColor: "#050505",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     fontSize: "13px",
     userSelect: "none",
   },
@@ -221,7 +281,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "11px",
     fontWeight: 700,
     letterSpacing: "0.8px",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   actions: {
     display: "flex",
@@ -230,7 +290,7 @@ const styles: Record<string, React.CSSProperties> = {
   actionButton: {
     background: "none",
     border: "none",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     padding: "4px",
     cursor: "pointer",
     display: "flex",
@@ -255,21 +315,21 @@ const styles: Record<string, React.CSSProperties> = {
   },
   selectedItem: {
     backgroundColor: "rgba(255, 255, 255, 0.06)",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   label: {
     flex: 1,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontSize: "13px",
     fontFamily: "'Inter', sans-serif",
   },
   deleteButton: {
     background: "none",
     border: "none",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     cursor: "pointer",
     fontSize: "12px",
     opacity: 0,
@@ -281,13 +341,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   emptyText: {
     fontSize: "12px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     marginBottom: "14px",
   },
   openButton: {
-    background: "#fafafa",
+    background: "var(--text-main, #fafafa)",
     border: "none",
-    color: "#09090b",
+    color: "var(--bg-base, #09090b)",
     fontWeight: 600,
     fontSize: "12px",
     padding: "8px 16px",

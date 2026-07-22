@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 interface GraphNode {
   id: string;
@@ -74,8 +74,8 @@ export function DependencyGraph({ repoPath }: DependencyGraphProps) {
       case "function": return "#fbbf24";
       case "class":    return "#60a5fa";
       case "variable": return "#86efac";
-      case "file":     return "#e4e4e7";
-      default:         return "#a1a1aa";
+      case "file":     return "var(--text-main, #e4e4e7)";
+      default:         return "var(--text-muted, #a1a1aa)";
     }
   };
 
@@ -109,7 +109,7 @@ export function DependencyGraph({ repoPath }: DependencyGraphProps) {
                   key={`edge-${i}-${edge.fromId}-${edge.toId}`}
                   x1={source.x} y1={source.y}
                   x2={target.x} y2={target.y}
-                  stroke="#27272a" strokeWidth="1"
+                  stroke="var(--border-color, #27272a)" strokeWidth="1"
                 />
               );
             })}
@@ -124,7 +124,7 @@ export function DependencyGraph({ repoPath }: DependencyGraphProps) {
               >
                 <rect
                   width="88" height="28" rx="5"
-                  fill={selectedNode?.id === n.id ? "#27272a" : "#18181b"}
+                  fill={selectedNode?.id === n.id ? "var(--border-color, #27272a)" : "var(--bg-header, #18181b)"}
                   stroke={kindColor(n.kind)}
                   strokeWidth={selectedNode?.id === n.id ? "1.5" : "1"}
                 />
@@ -159,14 +159,14 @@ export function DependencyGraph({ repoPath }: DependencyGraphProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex", flexDirection: "column", height: "100%",
-    backgroundColor: "#09090b", color: "#fafafa",
+    backgroundColor: "var(--bg-base, #09090b)", color: "var(--text-main, #fafafa)",
   },
   header: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "8px 12px", backgroundColor: "#0d0d10", borderBottom: "1px solid #27272a",
+    padding: "8px 12px", backgroundColor: "var(--bg-base, #0d0d10)", borderBottom: "1px solid #27272a",
   },
   title: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.8px" },
-  subtext: { fontSize: "11px", color: "#71717a" },
+  subtext: { fontSize: "11px", color: "var(--text-muted, #71717a)" },
   graphContainer: {
     flex: 1, position: "relative", overflow: "hidden",
     display: "flex", flexDirection: "column",
@@ -175,9 +175,9 @@ const styles: Record<string, React.CSSProperties> = {
   emptyMsg: { fontSize: "11px", color: "#52525b", margin: "20px 12px" },
   detail: {
     position: "absolute", bottom: "12px", right: "12px",
-    backgroundColor: "#141417", border: "1px solid #27272a",
+    backgroundColor: "var(--bg-panel, #141417)", border: "1px solid #27272a",
     borderRadius: "6px", padding: "10px 12px", minWidth: "200px",
   },
-  detailHdr: { fontSize: "10px", fontWeight: 700, color: "#71717a", margin: "0 0 6px" },
-  detailRow: { fontSize: "11px", color: "#e4e4e7", margin: "0 0 2px" },
+  detailHdr: { fontSize: "10px", fontWeight: 700, color: "var(--text-muted, #71717a)", margin: "0 0 6px" },
+  detailRow: { fontSize: "11px", color: "var(--text-main, #e4e4e7)", margin: "0 0 2px" },
 };

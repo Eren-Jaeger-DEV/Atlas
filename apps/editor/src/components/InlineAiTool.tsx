@@ -9,7 +9,7 @@ interface InlineAiToolProps {
   onClose: () => void;
 }
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 export function InlineAiTool({
   selectedText,
@@ -70,7 +70,7 @@ const styles: Record<string, React.CSSProperties> = {
     top: "10px",
     right: "20px",
     width: "320px",
-    backgroundColor: "#141417",
+    backgroundColor: "var(--bg-panel, #141417)",
     border: "1px solid #27272a",
     borderRadius: "8px",
     boxShadow: "0 12px 32px rgba(0, 0, 0, 0.6)",
@@ -88,13 +88,13 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: "10px",
     fontWeight: 700,
-    color: "#38bdf8",
+    color: "var(--accent, #38bdf8)",
     letterSpacing: "0.8px",
   },
   closeBtn: {
     background: "none",
     border: "none",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "12px",
     cursor: "pointer",
   },
@@ -104,9 +104,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   btn: {
     flex: 1,
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     borderRadius: "4px",
     padding: "6px",
     fontSize: "10px",
@@ -114,7 +114,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   outputBox: {
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     border: "1px solid #27272a",
     borderRadius: "4px",
     padding: "8px",
@@ -122,7 +122,7 @@ const styles: Record<string, React.CSSProperties> = {
   pre: {
     margin: 0,
     fontSize: "11px",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     whiteSpace: "pre-wrap",
     lineHeight: "1.4",
   },

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { SettingsPanel, EditorSettings, DEFAULT_SETTINGS } from "./components/SettingsPanel.js";
 import "./global.css";
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 export function SettingsApp() {
   const [settings, setSettings] = useState<EditorSettings>(DEFAULT_SETTINGS);
@@ -28,7 +28,7 @@ export function SettingsApp() {
   };
 
   return (
-    <div style={{ height: "100vh", backgroundColor: "#000000", color: "#e4e4e7", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100vh", backgroundColor: "#000000", color: "var(--text-main, #e4e4e7)", display: "flex", flexDirection: "column" }}>
       <header style={{ 
         WebkitAppRegion: "drag", 
         padding: "16px 20px", 

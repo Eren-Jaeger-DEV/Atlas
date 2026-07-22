@@ -8,10 +8,10 @@ export function FileIcon({ fileName, isDirectory, isOpen }: FileIconProps) {
   if (isDirectory) {
     return (
       <span style={{ display: "inline-flex", alignItems: "center", marginRight: "6px" }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "4px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted, #71717a)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "4px", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s ease" }}>
           <polyline points="9 18 15 12 9 6" />
         </svg>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted, #a1a1aa)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
         </svg>
       </span>
@@ -43,7 +43,7 @@ export function FileIcon({ fileName, isDirectory, isOpen }: FileIconProps) {
       );
     case "md":
       return (
-        <span style={{ display: "inline-flex", alignItems: "center", color: "#38bdf8", fontSize: "11px", fontWeight: 600, marginRight: "6px", fontFamily: "sans-serif" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", color: "var(--accent, #38bdf8)", fontSize: "11px", fontWeight: 600, marginRight: "6px", fontFamily: "sans-serif" }}>
           MD
         </span>
       );
@@ -68,7 +68,7 @@ export function FileIcon({ fileName, isDirectory, isOpen }: FileIconProps) {
       );
     default:
       return (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "6px" }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted, #71717a)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "6px" }}>
           <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
           <polyline points="13 2 13 9 20 9" />
         </svg>

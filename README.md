@@ -1,12 +1,12 @@
 # Atlas Studio (v1.0.0 General Availability)
 
-**Developer-First Independent IDE Platform**
+**Your codebase. Fully mapped.**
 
-Atlas Studio is a modern, high-performance desktop IDE designed around local-first engineering, deterministic project intelligence, sandboxed extension SDKs, unprivileged AI assistance, and professional developer tools.
+Atlas Studio is a professional, high-performance desktop IDE engineered for complex software architecture. It features a local-first design, deterministic project intelligence, sandboxed extension SDKs, and structurally-aware AI assistance built for enterprise workflows.
 
 ---
 
-## 🌟 Product Pillars
+## Product Pillars
 
 1. **Professional IDE Experience**: High-speed code editing, tabs, split panes, interactive SVG dependency graphs, 3-way merge conflict editor, and integrated terminal.
 2. **Deterministic Project Intelligence**: Fast AST symbol indexing, cycle detection, project health dashboard, and definition peek popovers.
@@ -16,7 +16,7 @@ Atlas Studio is a modern, high-performance desktop IDE designed around local-fir
 
 ---
 
-## 🏗️ Monorepo Architecture
+## Monorepo Architecture
 
 ```
 Atlas Studio Platform
@@ -33,7 +33,7 @@ Atlas Studio Platform
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - **Node.js**: `v20.x` or higher
@@ -61,7 +61,7 @@ pnpm --filter @atlas/editor dev
 
 ---
 
-## 🗺️ Roadmap Status
+## Roadmap Status
 
 We are systematically building features to match and exceed standard editor capabilities, organized in tiers:
 * **Tier 1 — Finish What's Already Started**: Core LSP (WorkspaceEdit multi-file rewrite), Python DAP & Node CDP Debugging, and Extension system features (Completed).
@@ -83,7 +83,7 @@ We are systematically building features to match and exceed standard editor capa
 
 ---
 
-## 📖 Architecture & RFC Documentation
+## Architecture & RFC Documentation
 
 Engineering decisions and architectural evolutions are formally documented as RFCs under [`docs/architecture/`](file:///f:/projects/Atlas/docs/architecture/):
 
@@ -104,7 +104,7 @@ Engineering decisions and architectural evolutions are formally documented as RF
 
 ---
 
-## 📜 License
+## License
 
 Copyright (c) 2026 Atlas Studio. All rights reserved.
 

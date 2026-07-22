@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useStorage } from "./StorageContext";
 
 import type { CommandService, CommandDescriptor } from "@atlas/core";
 
@@ -9,18 +10,22 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ commandService, isOpen, onClose }: CommandPaletteProps) {
+  const storage = useStorage();
   const [search, setSearch] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [recentIds, setRecentIds] = useState<string[]>([]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("atlas_recent_commands");
-      if (stored) setRecentIds(JSON.parse(stored));
-    } catch (err) {
-      console.warn("[WARN] Failed to parse atlas_recent_commands from localStorage:", err);
-    }
-  }, []);
+    const loadRecent = async () => {
+      try {
+        const stored = await storage.getItem("atlas_recent_commands");
+        if (stored) setRecentIds(JSON.parse(stored));
+      } catch (err) {
+        console.warn("[WARN] Failed to parse atlas_recent_commands from storage:", err);
+      }
+    };
+    loadRecent();
+  }, [storage]);
 
   useEffect(() => {
     if (isOpen) {
@@ -29,12 +34,13 @@ export function CommandPalette({ commandService, isOpen, onClose }: CommandPalet
     }
   }, [isOpen]);
 
-  const saveRecent = (id: string) => {
+  const saveRecent = async (id: string) => {
+    let next: string[] = [];
     setRecentIds((prev) => {
-      const next = [id, ...prev.filter((x) => x !== id)].slice(0, 5);
-      localStorage.setItem("atlas_recent_commands", JSON.stringify(next));
+      next = [id, ...prev.filter((x) => x !== id)].slice(0, 5);
       return next;
     });
+    await storage.setItem("atlas_recent_commands", JSON.stringify(next));
   };
 
   if (!isOpen) return null;
@@ -64,7 +70,7 @@ export function CommandPalette({ commandService, isOpen, onClose }: CommandPalet
       <span>
         {text.split("").map((char, idx) =>
           indices.includes(idx) ? (
-            <span key={idx} style={{ color: "#38bdf8", fontWeight: 700 }}>{char}</span>
+            <span key={idx} style={{ color: "var(--accent, #38bdf8)", fontWeight: 700 }}>{char}</span>
           ) : (
             <span key={idx}>{char}</span>
           )
@@ -193,7 +199,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#000000",
     border: "none",
     borderBottom: "1px solid #38bdf8",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     fontSize: "14px",
     outline: "none",
     fontFamily: "inherit",
@@ -223,7 +229,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   itemSelected: {
     backgroundColor: "#38bdf820",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
   },
   category: {
     fontSize: "10px",

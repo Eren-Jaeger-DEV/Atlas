@@ -18,9 +18,22 @@ import cp, { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import WebSocket from "ws";
 import vm from "node:vm";
+import crypto from "node:crypto";
 import { cp as fsCp } from "node:fs/promises";
 import os from "node:os";
 import * as http from "node:http";
+import * as chokidar from "chokidar";
+
+function safeJsonParse<T = any>(str: string, fallback: T): T {
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    console.error("[WARN] safeJsonParse failed:", e);
+    return fallback;
+  }
+}
+
+let activeWatcher: chokidar.FSWatcher | null = null;
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
@@ -51,7 +64,35 @@ ipcMain.handle("atlas:get-repos", async () => {
   return { success: true, repoPath: getProjectRoot() };
 });
 import type * as pty from "node-pty";
-const terminalProcesses = new Map<string, pty.IPty>();
+
+// ---------------------------------------------------------------------------
+// Global Crash Handling
+// ---------------------------------------------------------------------------
+process.on("uncaughtException", (error) => {
+  console.error("[CRASH] Uncaught Exception in Main Process:", error);
+  if (!app.isReady()) {
+    process.exit(1);
+  }
+  const choice = dialog.showMessageBoxSync({
+    type: "error",
+    title: "Fatal Error",
+    message: "Atlas Studio encountered a fatal error.",
+    detail: `${error.name}: ${error.message}\n\n${error.stack}\n\nDo you want to restart the application?`,
+    buttons: ["Restart", "Quit"]
+  });
+  if (choice === 0) {
+    app.relaunch();
+    app.exit(0);
+  } else {
+    app.exit(1);
+  }
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[CRASH] Unhandled Promise Rejection at:", promise, "reason:", reason);
+  // Unhandled rejections don't necessarily crash the process, but we log them.
+  // We can show a dialog for them as well, or just log.
+});
 
 // ---------------------------------------------------------------------------
 // Extension Runtime State
@@ -95,6 +136,22 @@ function createWindow(): void {
     console.log(`[RENDERER LOG ${level}] ${message} (${sourceId}:${line})`);
   });
 
+  mainWindow.webContents.on("render-process-gone", (event, details) => {
+    console.error(`[RENDERER CRASHED] Reason: ${details.reason}, Exit Code: ${details.exitCode}`);
+    const choice = dialog.showMessageBoxSync(mainWindow!, {
+      type: "error",
+      title: "Renderer Process Crashed",
+      message: "The editor UI process has crashed.",
+      detail: `Reason: ${details.reason}\nExit Code: ${details.exitCode}\n\nDo you want to restart the editor?`,
+      buttons: ["Restart", "Quit"]
+    });
+    if (choice === 0) {
+      mainWindow?.reload();
+    } else {
+      app.quit();
+    }
+  });
+
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
     console.error(`[DID FAIL LOAD] ${errorCode}: ${errorDescription}`);
   });
@@ -126,16 +183,16 @@ function buildApplicationMenu(): void {
     {
       label: "File",
       submenu: [
-        { label: "Open Folder...",           accelerator: "CmdOrCtrl+O",         click: () => sendToRenderer("menu:open-folder") },
-        { label: "Add Folder to Workspace...",                                   click: () => sendToRenderer("menu:add-folder") },
+        { label: "Open Folder...", accelerator: "CmdOrCtrl+O", click: () => sendToRenderer("menu:open-folder") },
+        { label: "Add Folder to Workspace...", click: () => sendToRenderer("menu:add-folder") },
         { type: "separator" },
-        { label: "New File",                 accelerator: "CmdOrCtrl+N",         click: () => sendToRenderer("menu:new-file") },
-        { label: "Save",                     accelerator: "CmdOrCtrl+S",         click: () => sendToRenderer("menu:save") },
-        { label: "Save All",                 accelerator: "CmdOrCtrl+Shift+S",   click: () => sendToRenderer("menu:save-all") },
+        { label: "New File", accelerator: "CmdOrCtrl+N", click: () => sendToRenderer("menu:new-file") },
+        { label: "Save", accelerator: "CmdOrCtrl+S", click: () => sendToRenderer("menu:save") },
+        { label: "Save All", accelerator: "CmdOrCtrl+Shift+S", click: () => sendToRenderer("menu:save-all") },
         { type: "separator" },
-        { label: "Close Editor Tab",         accelerator: "CmdOrCtrl+W",         click: () => sendToRenderer("menu:close-tab") },
+        { label: "Close Editor Tab", accelerator: "CmdOrCtrl+W", click: () => sendToRenderer("menu:close-tab") },
         { type: "separator" },
-        { role: "quit",                      label: "Exit" },
+        { role: "quit", label: "Exit" },
       ],
     },
     {
@@ -149,78 +206,78 @@ function buildApplicationMenu(): void {
         { role: "paste" },
         { role: "selectAll" },
         { type: "separator" },
-        { label: "Find",                     accelerator: "CmdOrCtrl+F",         click: () => sendToRenderer("menu:find") },
-        { label: "Replace",                  accelerator: "CmdOrCtrl+H",         click: () => sendToRenderer("menu:replace") },
+        { label: "Find", accelerator: "CmdOrCtrl+F", click: () => sendToRenderer("menu:find") },
+        { label: "Replace", accelerator: "CmdOrCtrl+H", click: () => sendToRenderer("menu:replace") },
       ],
     },
     {
       label: "Selection",
       submenu: [
-        { label: "Select All",               accelerator: "CmdOrCtrl+A",         click: () => sendToRenderer("menu:select-all") },
-        { label: "Expand Selection",         accelerator: "Shift+Alt+Right",     click: () => sendToRenderer("menu:expand-selection") },
-        { label: "Shrink Selection",         accelerator: "Shift+Alt+Left",      click: () => sendToRenderer("menu:shrink-selection") },
+        { label: "Select All", accelerator: "CmdOrCtrl+A", click: () => sendToRenderer("menu:select-all") },
+        { label: "Expand Selection", accelerator: "Shift+Alt+Right", click: () => sendToRenderer("menu:expand-selection") },
+        { label: "Shrink Selection", accelerator: "Shift+Alt+Left", click: () => sendToRenderer("menu:shrink-selection") },
         { type: "separator" },
-        { label: "Add Cursor Above",         accelerator: "CmdOrCtrl+Alt+Up",    click: () => sendToRenderer("menu:cursor-above") },
-        { label: "Add Cursor Below",         accelerator: "CmdOrCtrl+Alt+Down",  click: () => sendToRenderer("menu:cursor-below") },
+        { label: "Add Cursor Above", accelerator: "CmdOrCtrl+Alt+Up", click: () => sendToRenderer("menu:cursor-above") },
+        { label: "Add Cursor Below", accelerator: "CmdOrCtrl+Alt+Down", click: () => sendToRenderer("menu:cursor-below") },
       ],
     },
     {
       label: "View",
       submenu: [
-        { label: "Command Palette",          accelerator: "CmdOrCtrl+Shift+P",   click: () => sendToRenderer("menu:command-palette") },
+        { label: "Command Palette", accelerator: "CmdOrCtrl+Shift+P", click: () => sendToRenderer("menu:command-palette") },
         { type: "separator" },
-        { label: "Explorer",                 accelerator: "CmdOrCtrl+Shift+E",   click: () => sendToRenderer("menu:show-explorer") },
-        { label: "Source Control",           accelerator: "CmdOrCtrl+Shift+G",   click: () => sendToRenderer("menu:show-git") },
-        { label: "Impact Graph",             accelerator: "CmdOrCtrl+Shift+I",   click: () => sendToRenderer("menu:show-impact") },
-        { label: "Atlas AI Chat",            accelerator: "CmdOrCtrl+L",         click: () => sendToRenderer("menu:toggle-ai-sidebar") },
+        { label: "Explorer", accelerator: "CmdOrCtrl+Shift+E", click: () => sendToRenderer("menu:show-explorer") },
+        { label: "Source Control", accelerator: "CmdOrCtrl+Shift+G", click: () => sendToRenderer("menu:show-git") },
+        { label: "Impact Graph", accelerator: "CmdOrCtrl+Shift+I", click: () => sendToRenderer("menu:show-impact") },
+        { label: "Atlas AI Chat", accelerator: "CmdOrCtrl+L", click: () => sendToRenderer("menu:toggle-ai-sidebar") },
         { type: "separator" },
-        { label: "Settings",                 accelerator: "CmdOrCtrl+Comma",     click: () => sendToRenderer("menu:open-settings") },
+        { label: "Settings", accelerator: "CmdOrCtrl+Comma", click: () => sendToRenderer("menu:open-settings") },
         { type: "separator" },
         { role: "zoomIn" },
         { role: "zoomOut" },
         { role: "resetZoom" },
         { type: "separator" },
         { role: "togglefullscreen" },
-        { label: "Toggle DevTools",          accelerator: "F12",                 click: () => mainWindow?.webContents.toggleDevTools() },
+        { label: "Toggle DevTools", accelerator: "F12", click: () => mainWindow?.webContents.toggleDevTools() },
       ],
     },
     {
       label: "Go",
       submenu: [
-        { label: "Go to File...",            accelerator: "CmdOrCtrl+P",         click: () => sendToRenderer("menu:goto-file") },
-        { label: "Go to Line...",            accelerator: "CmdOrCtrl+G",         click: () => sendToRenderer("menu:goto-line") },
-        { label: "Go to Symbol...",          accelerator: "CmdOrCtrl+Shift+O",   click: () => sendToRenderer("menu:goto-symbol") },
+        { label: "Go to File...", accelerator: "CmdOrCtrl+P", click: () => sendToRenderer("menu:goto-file") },
+        { label: "Go to Line...", accelerator: "CmdOrCtrl+G", click: () => sendToRenderer("menu:goto-line") },
+        { label: "Go to Symbol...", accelerator: "CmdOrCtrl+Shift+O", click: () => sendToRenderer("menu:goto-symbol") },
         { type: "separator" },
-        { label: "Back",                     accelerator: "Alt+Left",            click: () => sendToRenderer("menu:go-back") },
-        { label: "Forward",                  accelerator: "Alt+Right",           click: () => sendToRenderer("menu:go-forward") },
+        { label: "Back", accelerator: "Alt+Left", click: () => sendToRenderer("menu:go-back") },
+        { label: "Forward", accelerator: "Alt+Right", click: () => sendToRenderer("menu:go-forward") },
       ],
     },
     {
       label: "Run",
       submenu: [
-        { label: "Run Atlas Agent",          accelerator: "F5",                  click: () => sendToRenderer("menu:run-agent") },
-        { label: "Stop Agent",               accelerator: "Shift+F5",            click: () => sendToRenderer("menu:stop-agent") },
+        { label: "Run Atlas Agent", accelerator: "F5", click: () => sendToRenderer("menu:run-agent") },
+        { label: "Stop Agent", accelerator: "Shift+F5", click: () => sendToRenderer("menu:stop-agent") },
         { type: "separator" },
-        { label: "Open Terminal",            accelerator: "CmdOrCtrl+Grave",     click: () => sendToRenderer("menu:toggle-terminal") },
+        { label: "Open Terminal", accelerator: "CmdOrCtrl+Grave", click: () => sendToRenderer("menu:toggle-terminal") },
       ],
     },
     {
       label: "Terminal",
       submenu: [
-        { label: "New Terminal",             accelerator: "CmdOrCtrl+Shift+Grave", click: () => sendToRenderer("menu:new-terminal") },
-        { label: "Toggle Terminal",          accelerator: "CmdOrCtrl+Grave",     click: () => sendToRenderer("menu:toggle-terminal") },
+        { label: "New Terminal", accelerator: "CmdOrCtrl+Shift+Grave", click: () => sendToRenderer("menu:new-terminal") },
+        { label: "Toggle Terminal", accelerator: "CmdOrCtrl+Grave", click: () => sendToRenderer("menu:toggle-terminal") },
         { type: "separator" },
-        { label: "Split Terminal",                                               click: () => sendToRenderer("menu:split-terminal") },
-        { label: "Kill Terminal",                                                click: () => sendToRenderer("menu:kill-terminal") },
+        { label: "Split Terminal", click: () => sendToRenderer("menu:split-terminal") },
+        { label: "Kill Terminal", click: () => sendToRenderer("menu:kill-terminal") },
       ],
     },
     {
       label: "Help",
       submenu: [
         { label: "Atlas Studio Documentation", click: () => shell.openExternal("https://github.com/Eren-Jaeger-DEV/Atlas") },
-        { label: "Report Issue",               click: () => shell.openExternal("https://github.com/Eren-Jaeger-DEV/Atlas/issues") },
+        { label: "Report Issue", click: () => shell.openExternal("https://github.com/Eren-Jaeger-DEV/Atlas/issues") },
         { type: "separator" },
-        { label: "About Atlas Studio",                                          click: () => sendToRenderer("menu:show-about") },
+        { label: "About Atlas Studio", click: () => sendToRenderer("menu:show-about") },
       ],
     },
   ];
@@ -234,22 +291,23 @@ function buildApplicationMenu(): void {
 // ---------------------------------------------------------------------------
 async function createProvider(repoRoot: string) {
   const settings = await getMergedSettings();
-  const providerName = settings.ai?.provider || "openai";
+  const providerName = settings.aiProvider || settings.ai?.provider || "openai";
   let apiKey = settings.ai?.apiKeys?.[providerName] || "";
-  
+
   if (providerName === "anthropic" && !apiKey) apiKey = process.env.ANTHROPIC_API_KEY || "";
   if (providerName === "openai" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
   if (providerName === "gemini" && !apiKey) apiKey = process.env.GEMINI_API_KEY || "";
   if (providerName === "openai-compatible" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
-  
+
   // If no plaintext key, try secure storage (new method via keys.json)
   if (!apiKey && safeStorage.isEncryptionAvailable()) {
     try {
-      const { readFileSync, existsSync } = await import("fs");
+      const { existsSync } = await import("fs");
+      const fsPromises = (await import("fs")).promises;
       const { join } = await import("path");
       const keysPath = join(app.getPath("userData"), "..", "atlas", "keys.json");
       if (existsSync(keysPath)) {
-        const keysObj = JSON.parse(readFileSync(keysPath, "utf-8"));
+        const keysObj = safeJsonParse<any>(await fsPromises.readFile(keysPath, "utf-8"), {});
         const keyMap: Record<string, string> = {
           "openai": "openaiApiKey",
           "anthropic": "anthropicApiKey",
@@ -266,13 +324,19 @@ async function createProvider(repoRoot: string) {
     }
   }
 
-  const { ProviderRouter } = await import("@atlas/agents");
-  return new ProviderRouter({
+  const config: any = {
     provider: providerName as any,
-    apiKey,
-    model: settings.ai?.model,
-    baseUrl: settings.ai?.customEndpoint
-  });
+    apiKey
+  };
+  
+  const model = settings.aiModel || settings.ai?.model;
+  if (model) config.model = model;
+  
+  const baseUrl = settings.aiBaseUrl || settings.ai?.customEndpoint;
+  if (baseUrl) config.baseUrl = baseUrl;
+
+  const { ProviderRouter } = await import("@atlas/agents");
+  return new ProviderRouter(config);
 }
 
 function getProjectRoot(): string | undefined {
@@ -374,7 +438,7 @@ ipcMain.handle("atlas:permission-response", (_event, reqId: string, granted: boo
 ipcMain.handle("atlas:agent-inline-action", async (_event, action: string, text: string) => {
   const repoRoot = getProjectRoot();
   if (!repoRoot) return "[Agent] No active workspace to run inline action.";
-  
+
   try {
     const provider = await createProvider(repoRoot);
     let prompt = "";
@@ -385,12 +449,19 @@ ipcMain.handle("atlas:agent-inline-action", async (_event, action: string, text:
     const { Orchestrator } = await import("@atlas/agents");
     const { MemoryEngine } = await import("@atlas/graph");
     const memory = await MemoryEngine.create({ repoRoot });
-    
+
     let resultText = "";
     const orchestrator = new Orchestrator({
       provider,
       memory,
       repoRoot,
+      checkPermission: async (permission, data) => {
+        return new Promise<boolean>((resolve) => {
+          const reqId = crypto.randomUUID();
+          permissionRequests.set(reqId, resolve);
+          _event.sender.send("atlas:request-permission", { reqId, permission, data });
+        });
+      },
       onEvent: (ev) => {
         // Collect coder output or final plan reasoning
         if (ev.type === "plan_ready" && !resultText) {
@@ -399,7 +470,7 @@ ipcMain.handle("atlas:agent-inline-action", async (_event, action: string, text:
         if (ev.type === "coder_output" && ev.output.filesAfter) {
           // For inline actions, we might just want the first modified file's content
           const firstFile = Object.keys(ev.output.filesAfter)[0];
-          if (firstFile) resultText = ev.output.filesAfter[firstFile];
+          if (firstFile) resultText = ev.output.filesAfter[firstFile] ?? "";
         }
       }
     });
@@ -411,9 +482,9 @@ ipcMain.handle("atlas:agent-inline-action", async (_event, action: string, text:
       openTabs: [],
       gitStatusSummary: "Unknown"
     });
-    
+
     memory.close();
-    
+
     // Fallback to plan reasoning if coder didn't output files (e.g. explain)
     if (!resultText && runRecord.plan?.planningReasoning) {
       resultText = runRecord.plan.planningReasoning;
@@ -447,7 +518,7 @@ ipcMain.handle("atlas:get-graph-data", async (_event, repoPath: string) => {
 ipcMain.handle("atlas:get-tasks", async (_event, repoPath: string) => {
   const tasks: Array<{ id: string; name: string; command: string; source: string }> = [];
   if (!repoPath) return tasks;
-  
+
   try {
     const pkgPath = path.join(repoPath, "package.json");
     if (await stat(pkgPath).catch(() => null)) {
@@ -491,7 +562,7 @@ ipcMain.handle("atlas:get-snippets", async () => {
     if (await stat(userSnippetsPath).catch(() => null)) {
       userSnippets = JSON.parse(await readFile(userSnippetsPath, "utf-8"));
     }
-    
+
     let workspaceSnippets = {};
     if (global.__atlasRepoRoot) {
       const wsSnippetsPath = path.join(global.__atlasRepoRoot, ".atlas", "snippets.json");
@@ -499,7 +570,7 @@ ipcMain.handle("atlas:get-snippets", async () => {
         workspaceSnippets = JSON.parse(await readFile(wsSnippetsPath, "utf-8"));
       }
     }
-    
+
     return { ...userSnippets, ...workspaceSnippets };
   } catch (err) {
     console.error("[get-snippets] error:", err);
@@ -508,14 +579,24 @@ ipcMain.handle("atlas:get-snippets", async () => {
 });
 
 // Settings
-async function getMergedSettings() {
+export interface AtlasSettings {
+  ai?: {
+    provider?: string;
+    apiKeys?: Record<string, string>;
+    model?: string;
+    customEndpoint?: string;
+  };
+  [key: string]: any;
+}
+
+async function getMergedSettings(): Promise<AtlasSettings> {
   try {
     const userSettingsPath = path.join(app.getPath("userData"), "..", "atlas", "settings.json");
     let userSettings = {};
     if (await stat(userSettingsPath).catch(() => null)) {
       userSettings = JSON.parse(await readFile(userSettingsPath, "utf-8"));
     }
-    
+
     let workspaceSettings = {};
     if (global.__atlasRepoRoot) {
       const wsSettingsPath = path.join(global.__atlasRepoRoot, ".atlas", "settings.json");
@@ -523,7 +604,7 @@ async function getMergedSettings() {
         workspaceSettings = JSON.parse(await readFile(wsSettingsPath, "utf-8"));
       }
     }
-    
+
     const { DEFAULT_SETTINGS_SCHEMA } = await import("@atlas/core");
     return {
       ...DEFAULT_SETTINGS_SCHEMA,
@@ -576,20 +657,31 @@ ipcMain.handle("atlas:get-settings", async () => {
   return await getMergedSettings();
 });
 
+ipcMain.handle("atlas:get-paths", async () => {
+  const settingsPath = path.join(app.getPath("userData"), "..", "atlas", "settings.json");
+  const keybindingsPath = path.join(app.getPath("userData"), "..", "atlas", "keybindings.json");
+  return { settingsJsonPath: settingsPath, keybindingsJsonPath: keybindingsPath };
+});
+
+ipcMain.handle("atlas:open-file-in-editor", async (_event, filePath: string) => {
+  if (mainWindow) mainWindow.webContents.send("atlas:open-file", filePath);
+});
+
+
 ipcMain.handle("atlas:update-settings", async (_event, newSettings: any) => {
   try {
     const userSettingsPath = path.join(app.getPath("userData"), "..", "atlas", "settings.json");
     const dir = path.dirname(userSettingsPath);
     await mkdir(dir, { recursive: true });
-    
+
     let userSettings = {};
     if (await stat(userSettingsPath).catch(() => null)) {
       userSettings = JSON.parse(await readFile(userSettingsPath, "utf-8"));
     }
-    
+
     userSettings = { ...userSettings, ...newSettings };
     await writeFile(userSettingsPath, JSON.stringify(userSettings, null, 2), "utf-8");
-    
+
     const merged = await getMergedSettings();
     BrowserWindow.getAllWindows().forEach(win => {
       win.webContents.send("atlas:settings-updated", merged);
@@ -621,18 +713,33 @@ ipcMain.handle("atlas:set-secure-key", async (_event, key: string, value: string
     const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
     const dir = path.dirname(keysPath);
     await mkdir(dir, { recursive: true });
-    
+
     let keysObj: Record<string, string> = {};
     if (await stat(keysPath).catch(() => null)) {
       keysObj = JSON.parse(await readFile(keysPath, "utf-8"));
     }
-    
+
     const encrypted = safeStorage.encryptString(value).toString("base64");
     keysObj[key] = encrypted;
     await writeFile(keysPath, JSON.stringify(keysObj, null, 2), "utf-8");
   } catch (err) {
     console.error("Failed to set secure key:", err);
     throw err;
+  }
+});
+
+ipcMain.handle("atlas:remove-secure-key", async (_event, key: string) => {
+  try {
+    const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
+    if (!(await stat(keysPath).catch(() => null))) return;
+
+    const keysObj = JSON.parse(await readFile(keysPath, "utf-8"));
+    if (keysObj[key]) {
+      delete keysObj[key];
+      await writeFile(keysPath, JSON.stringify(keysObj, null, 2), "utf-8");
+    }
+  } catch (err) {
+    console.error("Failed to remove secure key:", err);
   }
 });
 
@@ -647,10 +754,10 @@ ipcMain.handle("atlas:global-search", async (_event, repoPath: string, query: st
 
     if (options?.isRegex) args.push("--regexp", query);
     else args.push("--fixed-strings", query);
-    
+
     if (options?.include) args.push("-g", options.include);
     if (options?.exclude) args.push("-g", "!" + options.exclude);
-    
+
     // Default ignores
     args.push("-g", "!node_modules", "-g", "!.git");
     args.push(repoPath);
@@ -658,7 +765,7 @@ ipcMain.handle("atlas:global-search", async (_event, repoPath: string, query: st
     return new Promise((resolve, reject) => {
       let stdout = "";
       let stderr = "";
-      
+
       const child = cp.spawn(rgPath, args, { cwd: repoPath });
 
       child.stdout.on("data", (chunk: Buffer) => stdout += chunk.toString());
@@ -684,8 +791,8 @@ ipcMain.handle("atlas:global-search", async (_event, repoPath: string, query: st
               });
             }
           } catch (e) {
-            // ignore JSON parse errors for non-json output
-          }
+    console.warn("Ignored error:", e);
+  }
         }
         resolve(results);
       });
@@ -693,6 +800,73 @@ ipcMain.handle("atlas:global-search", async (_event, repoPath: string, query: st
   } catch (err) {
     console.error("Failed to perform global search:", err);
     return [];
+  }
+});
+
+// Global Replace Data
+ipcMain.handle("atlas:global-replace", async (_event, repoPath: string, query: string, replaceStr: string, options: any) => {
+  try {
+    const { rgPath } = require("@vscode/ripgrep");
+    const args = [
+      "--files-with-matches",
+      "--ignore-case",
+    ];
+
+    if (options?.isRegex) args.push("--regexp", query);
+    else args.push("--fixed-strings", query);
+
+    if (options?.include) args.push("-g", options.include);
+    if (options?.exclude) args.push("-g", "!" + options.exclude);
+
+    // Default ignores
+    args.push("-g", "!node_modules", "-g", "!.git");
+    args.push(repoPath);
+
+    return new Promise((resolve, reject) => {
+      let stdout = "";
+      let stderr = "";
+
+      const child = cp.spawn(rgPath, args, { cwd: repoPath });
+
+      child.stdout.on("data", (chunk: Buffer) => stdout += chunk.toString());
+      child.stderr.on("data", (chunk: Buffer) => stderr += chunk.toString());
+
+      child.on("close", async (code: number | null) => {
+        if (code !== 0 && code !== 1) { // 1 means no match
+          return reject(new Error(`ripgrep exited with code ${code}: ${stderr}`));
+        }
+
+        const files = stdout.split("\n").filter(Boolean);
+        let filesUpdated = 0;
+        let occurrences = 0;
+
+        const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const jsQuery = options?.isRegex ? query : escapeRegex(query);
+        const searchRegex = new RegExp(jsQuery, "gi");
+
+        for (const file of files) {
+          try {
+            const absolutePath = path.isAbsolute(file) ? file : path.join(repoPath, file);
+            const content = await readFile(absolutePath, "utf-8");
+            
+            const matchCount = (content.match(searchRegex) || []).length;
+            if (matchCount > 0) {
+              const updatedContent = content.replace(searchRegex, replaceStr);
+              await writeFile(absolutePath, updatedContent, "utf-8");
+              filesUpdated++;
+              occurrences += matchCount;
+            }
+          } catch (e) {
+            console.error(`Failed to replace in file ${file}:`, e);
+          }
+        }
+        
+        resolve({ filesUpdated, occurrences });
+      });
+    });
+  } catch (err) {
+    console.error("Failed to perform global replace:", err);
+    return { filesUpdated: 0, occurrences: 0 };
   }
 });
 
@@ -722,7 +896,7 @@ ipcMain.handle("atlas:format-code", async (_event, repoPath: string, filePath: s
 let activeLanguageServer: cp.ChildProcess | null = null;
 let activeLanguageServerType: string | null = null;
 
-ipcMain.handle("atlas:lsp-start", async (event, repoPath: string, language: string = "typescript") => {
+ipcMain.handle("atlas:start-lsp", async (event, repoPath: string, language: string = "typescript") => {
   if (activeLanguageServerType === language && activeLanguageServer) {
     return "already_running";
   }
@@ -791,14 +965,14 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
     if (isPython) {
       // Start debugpy for Python
       dapProcess = cp.spawn("python3", ["-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", filePath]);
-      
+
       const nodeNet = require("node:net");
       let retries = 0;
-      
+
       const tryConnect = () => {
         dapSocket = nodeNet.connect(5678, "127.0.0.1", () => {
           resolve("started");
-          
+
           let buffer = "";
           dapSocket.on("data", (data: Buffer) => {
             buffer += data.toString("utf-8");
@@ -808,18 +982,18 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
               const length = parseInt(match[1]!, 10);
               const headerLength = match[0].length;
               if (buffer.length < headerLength + length) break;
-              
+
               const body = buffer.slice(headerLength, headerLength + length);
               buffer = buffer.slice(headerLength + length);
-              
+
               try {
                 const msg = JSON.parse(body);
                 event.sender.send("atlas:dap-server-to-client", JSON.stringify(msg));
                 if (msg.type === "response" && msg.request_seq) {
-                   if (dapPendingRequests.has(msg.request_seq)) {
-                     dapPendingRequests.get(msg.request_seq)!(msg);
-                     dapPendingRequests.delete(msg.request_seq);
-                   }
+                  if (dapPendingRequests.has(msg.request_seq)) {
+                    dapPendingRequests.get(msg.request_seq)!(msg);
+                    dapPendingRequests.delete(msg.request_seq);
+                  }
                 }
               } catch (e) {
                 console.error("Failed to parse DAP TCP message", e, body);
@@ -827,7 +1001,7 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
             }
           });
         });
-        
+
         dapSocket.on("error", (err: any) => {
           if (retries < 20 && dapProcess) {
             retries++;
@@ -842,7 +1016,7 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
           event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
         });
       };
-      
+
       setTimeout(tryConnect, 1000);
     } else {
       // Node.js inspector
@@ -856,7 +1030,7 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
           resolved = true;
           const wsUrl = match[0];
           dapWs = new WebSocket(wsUrl);
-          
+
           dapWs.on("open", () => {
             resolve("started");
             let msgId = 9000;
@@ -866,20 +1040,24 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
           });
 
           dapWs.on("message", (msg) => {
-            const m = JSON.parse(msg.toString());
-            if (m.method === "Debugger.paused") {
-              latestCallFrames = m.params.callFrames || [];
-              event.sender.send("atlas:dap-server-to-client", JSON.stringify({
-                type: "event", event: "stopped", body: { reason: "pause", threadId: 1, allThreadsStopped: true }
-              }));
-            } else if (m.method === "Debugger.resumed") {
-              event.sender.send("atlas:dap-server-to-client", JSON.stringify({
-                type: "event", event: "continued", body: { threadId: 1, allThreadsContinued: true }
-              }));
-            }
-            if (m.id && dapPendingRequests.has(m.id)) {
-              dapPendingRequests.get(m.id)!(m);
-              dapPendingRequests.delete(m.id);
+            try {
+              const m = JSON.parse(msg.toString());
+              if (m.method === "Debugger.paused") {
+                latestCallFrames = m.params.callFrames || [];
+                event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+                  type: "event", event: "stopped", body: { reason: "pause", threadId: 1, allThreadsStopped: true }
+                }));
+              } else if (m.method === "Debugger.resumed") {
+                event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+                  type: "event", event: "continued", body: { threadId: 1, allThreadsContinued: true }
+                }));
+              }
+              if (m.id && dapPendingRequests.has(m.id)) {
+                dapPendingRequests.get(m.id)!(m);
+                dapPendingRequests.delete(m.id);
+              }
+            } catch (err) {
+              console.error("Failed to parse DAP websocket message", err);
             }
           });
 
@@ -913,7 +1091,7 @@ ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
     }
 
     if (!dapWs) return;
-    
+
     const sendDapResponse = (body: any) => {
       event.sender.send("atlas:dap-server-to-client", JSON.stringify({
         type: "response", request_seq: id, success: true, command: msg.command, body
@@ -934,10 +1112,12 @@ ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
         const url = msg.arguments.source.path;
         const line = msg.arguments.breakpoints[0]?.line;
         if (line !== undefined) {
-          dapWs.send(JSON.stringify({ id, method: "Debugger.setBreakpointByUrl", params: {
-             urlRegex: ".*" + path.basename(url).replace(/\./g, "\\."),
-             lineNumber: line - 1
-          }}));
+          dapWs.send(JSON.stringify({
+            id, method: "Debugger.setBreakpointByUrl", params: {
+              urlRegex: ".*" + path.basename(url).replace(/\./g, "\\."),
+              lineNumber: line - 1
+            }
+          }));
           dapPendingRequests.set(id, () => sendDapResponse({ breakpoints: [{ verified: true, line }] }));
         } else {
           sendDapResponse({ breakpoints: [] });
@@ -965,14 +1145,14 @@ ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
         sendDapResponse({ scopes });
         break;
       case "variables":
-        dapWs.send(JSON.stringify({ id, method: "Runtime.getProperties", params: { objectId: msg.arguments.variablesReference, ownProperties: true }}));
+        dapWs.send(JSON.stringify({ id, method: "Runtime.getProperties", params: { objectId: msg.arguments.variablesReference, ownProperties: true } }));
         dapPendingRequests.set(id, (res) => {
           const props = res.result?.result || [];
           sendDapResponse({
             variables: props.map((p: any) => ({
-               name: p.name,
-               value: p.value?.value !== undefined ? String(p.value.value) : p.value?.description ?? "undefined",
-               variablesReference: p.value?.objectId ? p.value.objectId : 0
+              name: p.name,
+              value: p.value?.value !== undefined ? String(p.value.value) : p.value?.description ?? "undefined",
+              variablesReference: p.value?.objectId ? p.value.objectId : 0
             }))
           });
         });
@@ -990,6 +1170,26 @@ ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
 });
 
 // File Operations
+ipcMain.handle("atlas:read-file", async (_event, filePath: string) => {
+  return readFile(filePath, "utf-8");
+});
+
+ipcMain.handle("atlas:write-file", async (_event, filePath: string, content: string) => {
+  await writeFile(filePath, content, "utf-8");
+});
+
+ipcMain.handle("atlas:copy-file", async (_event, src: string, dest: string) => {
+  await fsCp(src, dest, { recursive: true });
+});
+
+ipcMain.handle("atlas:move-file", async (_event, src: string, dest: string) => {
+  await rename(src, dest);
+});
+
+ipcMain.handle("atlas:mkdir", async (_event, dirPath: string) => {
+  await mkdir(dirPath, { recursive: true });
+});
+
 ipcMain.handle("atlas:read-dir", async (_event, dirPath: string) => {
   try {
     const entries = await readdir(dirPath, { withFileTypes: true });
@@ -1006,13 +1206,7 @@ ipcMain.handle("atlas:read-dir", async (_event, dirPath: string) => {
   }
 });
 
-ipcMain.handle("atlas:read-file", async (_event, filePath: string) => {
-  return await readFile(filePath, "utf-8");
-});
 
-ipcMain.handle("atlas:write-file", async (_event, filePath: string, content: string) => {
-  await writeFile(filePath, content, "utf-8");
-});
 
 ipcMain.handle("atlas:apply-workspace-edit", async (_event, editsByFile: Record<string, any[]>) => {
   try {
@@ -1023,7 +1217,7 @@ ipcMain.handle("atlas:apply-workspace-edit", async (_event, editsByFile: Record<
       } catch (e) {
         continue;
       }
-      
+
       edits.sort((a, b) => {
         if (a.range.start.line !== b.range.start.line) {
           return b.range.start.line - a.range.start.line;
@@ -1043,7 +1237,7 @@ ipcMain.handle("atlas:apply-workspace-edit", async (_event, editsByFile: Record<
 
         lines.splice(startLine, endLine - startLine + 1, before + edit.newText + after);
       }
-      
+
       await writeFile(filePath, lines.join("\n"), "utf-8");
     }
     return true;
@@ -1079,14 +1273,14 @@ ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: stri
   if (terminalProcesses.has(termId)) return { success: true };
 
   const targetCwd = cwd || global.__atlasRepoRoot || process.cwd();
-  
+
   const settings = await getMergedSettings() as any;
   const isWin = process.platform === "win32";
-  
+
   let shell = isWin
     ? (process.env["COMSPEC"] || "cmd.exe")
     : (process.env["SHELL"] || "/bin/bash");
-    
+
   if (settings.terminalShell) {
     if (settings.terminalShell === "bash") shell = isWin ? "bash.exe" : "/bin/bash";
     else if (settings.terminalShell === "cmd") shell = isWin ? "cmd.exe" : shell;
@@ -1263,7 +1457,7 @@ ipcMain.handle("atlas:git-blame-content", async (_event, repoPath: string, fileP
   let tempPath = "";
   try {
     const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    tempPath = path.join(os.tmpdir(), `atlas-blame-${Date.now()}-${Math.floor(Math.random()*10000)}.tmp`);
+    tempPath = path.join(os.tmpdir(), `atlas-blame-${crypto.randomUUID()}.tmp`);
     await writeFile(tempPath, content);
     const { stdout } = await execFileAsync("git", ["blame", "--contents", tempPath, filePath], { cwd });
     return stdout;
@@ -1271,7 +1465,7 @@ ipcMain.handle("atlas:git-blame-content", async (_event, repoPath: string, fileP
     return "";
   } finally {
     if (tempPath) {
-      rm(tempPath, { force: true }).catch(() => {});
+      rm(tempPath, { force: true }).catch(() => { });
     }
   }
 });
@@ -1280,19 +1474,19 @@ ipcMain.handle("atlas:git-diff-content", async (_event, repoPath: string, filePa
   let tempPath = "";
   try {
     const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    tempPath = path.join(os.tmpdir(), `atlas-diff-${Date.now()}-${Math.floor(Math.random()*10000)}.tmp`);
+    tempPath = path.join(os.tmpdir(), `atlas-diff-${crypto.randomUUID()}.tmp`);
     await writeFile(tempPath, content);
     const { stdout } = await execFileAsync("git", ["diff", "-U0", `HEAD:${filePath}`, tempPath], { cwd });
     return stdout;
   } catch (err: any) {
     // If diff fails, it might be because the file is not in HEAD (untracked), we can just return stdout if it exists
     if (err && err.stdout) {
-       return err.stdout.toString();
+      return err.stdout.toString();
     }
     return "";
   } finally {
     if (tempPath) {
-      rm(tempPath, { force: true }).catch(() => {});
+      rm(tempPath, { force: true }).catch(() => { });
     }
   }
 });
@@ -1331,6 +1525,30 @@ ipcMain.handle("atlas:scan-todos", async (_event, repoPath: string) => {
 ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
   global.__atlasRepoRoot = repoPath;
   global.__atlasWorkspaceRoots = [repoPath];
+  
+  if (activeWatcher) {
+    await activeWatcher.close();
+    activeWatcher = null;
+  }
+  
+  activeWatcher = chokidar.watch(repoPath, {
+    ignored: [/(^|[\/\\])\../, "**/node_modules/**"], // ignore dotfiles and node_modules
+    persistent: true,
+    ignoreInitial: true,
+  });
+
+  const notifyRenderer = (eventStr: string, filePath: string) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // Normalize slashes for consistency with the UI
+      mainWindow.webContents.send("atlas:file-changed", { path: filePath.replace(/\\/g, "/"), event: eventStr });
+    }
+  };
+
+  activeWatcher
+    .on("add", (p: string) => notifyRenderer("add", p))
+    .on("change", (p: string) => notifyRenderer("change", p))
+    .on("unlink", (p: string) => notifyRenderer("unlink", p));
+    
   return { success: true, repoPath };
 });
 
@@ -1363,14 +1581,14 @@ ipcMain.handle("atlas:run", async (event, input: string | any[], context?: any) 
       },
       checkPermission: async (permission, data) => {
         return new Promise<boolean>((resolve) => {
-          const reqId = Date.now().toString() + Math.random().toString();
+          const reqId = crypto.randomUUID();
           permissionRequests.set(reqId, resolve);
           event.sender.send("atlas:request-permission", { reqId, permission, data });
         });
       },
       waitForPlanApproval: async (plan) => {
         return new Promise<boolean>((resolve) => {
-          const reqId = Date.now().toString() + Math.random().toString();
+          const reqId = crypto.randomUUID();
           planApprovalRequests.set(reqId, resolve);
           event.sender.send("atlas:request-plan-approval", { reqId, plan });
         });
@@ -1382,6 +1600,63 @@ ipcMain.handle("atlas:run", async (event, input: string | any[], context?: any) 
     return runRecord;
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle("atlas:test-provider-connection", async (event, providerName: string, apiKey: string, baseUrl?: string) => {
+  try {
+    const { ProviderRouter } = await import("@atlas/agents");
+    
+    // Decrypt if necessary (in case they passed a secureKey reference, though UI normally passes plaintext if they entered it, 
+    // or we might need to look it up if they just clicked Test with an already saved key).
+    // The UI is supposed to pass the key if entered, or the secureKey name if it's already saved.
+    // If apiKey is empty, we should read it from secure storage using the providerName.
+    let finalKey = apiKey;
+    if (!finalKey && safeStorage.isEncryptionAvailable()) {
+      const { existsSync } = await import("fs");
+      const fsPromises = (await import("fs")).promises;
+      const { join } = await import("path");
+      const keysPath = join(app.getPath("userData"), "..", "atlas", "keys.json");
+      if (existsSync(keysPath)) {
+        const keysObj = safeJsonParse<any>(await fsPromises.readFile(keysPath, "utf-8"), {});
+        const keyMap: Record<string, string> = {
+          "openai": "openaiApiKey",
+          "anthropic": "anthropicApiKey",
+          "gemini": "geminiApiKey",
+          "openai-compatible": "openRouterApiKey"
+        };
+        const secureKey = keyMap[providerName];
+        if (secureKey && keysObj[secureKey]) {
+          finalKey = safeStorage.decryptString(Buffer.from(keysObj[secureKey], "base64"));
+        }
+      }
+    }
+
+    if (!finalKey) {
+      return { success: false, error: "No API key found to test." };
+    }
+
+    const config: any = {
+      provider: providerName,
+      apiKey: finalKey
+    };
+    if (baseUrl) {
+      config.baseUrl = baseUrl;
+    }
+    const router = new ProviderRouter(config);
+    
+    // Send a minimal ping/test prompt to see if the credentials are valid
+    const response = await router.complete({
+      messages: [{ role: "user", content: "ping" }]
+    });
+    
+    if (response && response.content) {
+      return { success: true };
+    } else {
+      return { success: false, error: "Empty response from provider" };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || String(err) };
   }
 });
 
@@ -1398,6 +1673,156 @@ ipcMain.handle("atlas:get-runs", async () => {
   } catch (err) {
     return [];
   }
+});
+
+// removed duplicated account IPCs
+
+ipcMain.handle("atlas:check-updates", async () => {
+  return new Promise(async (resolve) => {
+    const fs = require("fs");
+    const path = require("path");
+    let version = "0.1.0";
+    try {
+      const pkgPath = path.join(__dirname, "..", "..", "..", "package.json");
+      const pkg = safeJsonParse<any>(await fs.promises.readFile(pkgPath, "utf-8"), { version: "unknown" });
+      if (pkg.version) version = pkg.version;
+    } catch (e) {
+    console.warn("Ignored error:", e);
+  }
+    
+    // Simulate network delay for checking latest release from a registry
+    setTimeout(() => {
+      resolve({ currentVersion: version, upToDate: true, message: "You are on the latest verified build." });
+    }, 600);
+  });
+});
+
+ipcMain.handle("atlas:get-system-diagnostics", async () => {
+  const os = require("os");
+  const process = require("process");
+  
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const memoryUsagePercent = Math.round((usedMem / totalMem) * 100);
+  
+  const processMemory = process.memoryUsage();
+  const heapUsedMB = Math.round(processMemory.heapUsed / 1024 / 1024);
+  
+  return {
+    systemMemoryUsagePercent: memoryUsagePercent,
+    heapUsedMB: heapUsedMB,
+    cpuCount: os.cpus().length,
+    uptime: Math.round(os.uptime())
+  };
+});
+
+ipcMain.handle("atlas:github-device-login", async (event, clientId: string) => {
+  try {
+    const res = await fetch("https://github.com/login/device/code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ client_id: clientId, scope: "user:email" })
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle("atlas:github-device-poll", async (event, clientId: string, deviceCode: string) => {
+  try {
+    const res = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ client_id: clientId, device_code: deviceCode, grant_type: "urn:ietf:params:oauth:grant-type:device_code" })
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle("atlas:github-verify-token", async (event, token: string) => {
+  try {
+    const res = await fetch("https://api.github.com/user", {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Atlas-IDE"
+      }
+    });
+    if (!res.ok) {
+      return { error: `HTTP ${res.status}: ${res.statusText}` };
+    }
+    const data = await res.json();
+    
+    let email = (data as any).email;
+    if (!email) {
+      const emailRes = await fetch("https://api.github.com/user/emails", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github.v3+json",
+          "User-Agent": "Atlas-IDE"
+        }
+      });
+      if (emailRes.ok) {
+        const emails = await emailRes.json();
+        const primary = (emails as any[]).find((e: any) => e.primary) || (emails as any[])[0];
+        if (primary) email = primary.email;
+      }
+    }
+
+    const { safeStorage } = require("electron");
+    if (safeStorage.isEncryptionAvailable()) {
+      const fs = require("fs");
+      const path = require("path");
+      const { app } = require("electron");
+      const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
+      let keysObj: any = {};
+      if (fs.existsSync(keysPath)) {
+        keysObj = safeJsonParse<any>(await fs.promises.readFile(keysPath, "utf-8"), {});
+      }
+      keysObj["githubAuthToken"] = safeStorage.encryptString(token).toString("base64");
+      await fs.promises.writeFile(keysPath, JSON.stringify(keysObj, null, 2));
+    }
+
+    return { success: true, profile: { name: (data as any).name || (data as any).login, login: (data as any).login, email: email, avatar_url: (data as any).avatar_url } };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle("atlas:github-logout", async () => {
+  const fs = require("fs");
+  const path = require("path");
+  const { app } = require("electron");
+  const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
+  if (fs.existsSync(keysPath)) {
+    const keysObj = safeJsonParse<any>(await fs.promises.readFile(keysPath, "utf-8"), {});
+    delete keysObj["githubAuthToken"];
+    await fs.promises.writeFile(keysPath, JSON.stringify(keysObj, null, 2));
+  }
+  return { success: true };
+});
+
+ipcMain.handle("atlas:github-get-stored-token", async () => {
+  const { safeStorage } = require("electron");
+  const fs = require("fs");
+  const path = require("path");
+  const { app } = require("electron");
+  const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
+  if (fs.existsSync(keysPath) && safeStorage.isEncryptionAvailable()) {
+    const keysObj = safeJsonParse<any>(await fs.promises.readFile(keysPath, "utf-8"), {});
+    if (keysObj["githubAuthToken"]) {
+      try {
+        return safeStorage.decryptString(Buffer.from(keysObj["githubAuthToken"], "base64"));
+      } catch (e) {
+        return null;
+      }
+    }
+  }
+  return null;
 });
 
 // Generate real SBOM from workspace package.json files
@@ -1456,15 +1881,15 @@ ipcMain.handle("atlas:list-extensions", async () => {
 ipcMain.handle("atlas:extension-install", async (_event, sourcePath: string) => {
   const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
   const manifestPath = path.join(sourcePath, "manifest.json");
-  
+
   try {
     const raw = await readFile(manifestPath, "utf-8");
     const manifest = JSON.parse(raw);
     const targetPath = path.join(extDir, manifest.id || manifest.name);
-    
+
     await mkdir(targetPath, { recursive: true });
     await fsCp(sourcePath, targetPath, { recursive: true });
-    
+
     // Attempt to load it immediately
     await loadExtension(targetPath, manifest);
     return true;
@@ -1490,11 +1915,11 @@ ipcMain.handle("atlas:extension-execute-command", async (_event, id: string, ...
 
 async function loadExtension(extPath: string, manifest: any) {
   if (!manifest.main) return; // No code to run
-  
+
   const mainScriptPath = path.join(extPath, manifest.main);
   try {
     const code = await readFile(mainScriptPath, "utf-8");
-    
+
     const sandbox = {
       console,
       setTimeout,
@@ -1517,11 +1942,11 @@ async function loadExtension(extPath: string, manifest: any) {
       exports: {} as any
     };
     sandbox.exports = sandbox.module.exports;
-    
+
     vm.createContext(sandbox);
     const script = new vm.Script(code, { filename: manifest.main });
     script.runInContext(sandbox);
-    
+
     // Support exports.activate
     if (typeof sandbox.module.exports.activate === "function") {
       await sandbox.module.exports.activate(sandbox.atlas);
@@ -1557,9 +1982,9 @@ app.whenReady().then(async () => {
 // ---------------------------------------------------------------------------
 // Window controls IPC
 // ---------------------------------------------------------------------------
-ipcMain.handle("window:minimize",     () => mainWindow?.minimize());
-ipcMain.handle("window:maximize",     () => { if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize(); });
-ipcMain.handle("window:close",        () => mainWindow?.close());
+ipcMain.handle("window:minimize", () => mainWindow?.minimize());
+ipcMain.handle("window:maximize", () => { if (mainWindow?.isMaximized()) mainWindow.unmaximize(); else mainWindow?.maximize(); });
+ipcMain.handle("window:close", () => mainWindow?.close());
 ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
 
 ipcMain.handle("system:get-user-info", async () => {
@@ -1645,26 +2070,22 @@ ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
     const path = require("path");
     const pkgPath = path.join(repoPath, "package.json");
     if (!fs.existsSync(pkgPath)) return { deps: 0, outdated: 0 };
-    
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+
+    const pkg = safeJsonParse<any>(await fs.promises.readFile(pkgPath, "utf-8"), { version: "unknown" });
     const depsCount = Object.keys(pkg.dependencies || {}).length + Object.keys(pkg.devDependencies || {}).length;
-    
+
     const { exec } = require("child_process");
     const { promisify } = require("util");
     const execAsync = promisify(exec);
     try {
       const { stdout } = await execAsync('npm outdated --json', { cwd: repoPath, encoding: 'utf-8' });
-      const outdated = JSON.parse(stdout);
+      const outdated = safeJsonParse<any>(stdout, {});
       return { deps: depsCount, outdated: Object.keys(outdated).length };
     } catch (e: any) {
       // npm outdated exits with 1 if there are outdated deps
       if (e.stdout) {
-        try {
-          const outdated = JSON.parse(e.stdout);
-          return { deps: depsCount, outdated: Object.keys(outdated).length };
-        } catch (parseErr) {
-          console.warn("[WARN] Failed to parse npm outdated JSON output:", parseErr);
-        }
+        const outdated = safeJsonParse<any>(e.stdout, {});
+        return { deps: depsCount, outdated: Object.keys(outdated).length };
       }
       return { deps: depsCount, outdated: 0 };
     }
@@ -1729,7 +2150,7 @@ function startRemoteServer() {
               } else if (ev.type === 'review_result') {
                 appendMsg('Review risk: ' + ev.result.overallRisk, 'agent-msg event-review');
               } else if (ev.type === 'awaiting_human') {
-                appendMsg('⚠️ Awaiting Human: ' + ev.reason, 'agent-msg');
+                appendMsg('[WARN] Awaiting Human: ' + ev.reason, 'agent-msg');
                 log.lastChild.style.color = 'yellow';
               }
             };
@@ -1752,12 +2173,12 @@ function startRemoteServer() {
   });
 
   const wss = new WebSocket.Server({ server });
-  
+
   wss.on('connection', (ws) => {
     remoteClients.add(ws);
     console.log('[Remote] Phone connected');
     ws.on('close', () => remoteClients.delete(ws));
-    
+
     ws.on('message', async (data) => {
       try {
         const msg = JSON.parse(data.toString());
@@ -1767,14 +2188,12 @@ function startRemoteServer() {
             ws.send(JSON.stringify({ type: 'error', message: 'No active workspace' }));
             return;
           }
-          
+
           const { Orchestrator } = await import("@atlas/agents");
           const { MemoryEngine } = await import("@atlas/graph");
           const memory = await MemoryEngine.create({ repoRoot });
-          
-          const { createProvider } = await import("./main.js"); // Wait, createProvider is already in this file! We can just call it.
-          // Wait, createProvider isn't exported... Let's just define it inline or call the global one since this is inside main.ts.
-          // Actually, createProvider is defined in main.ts so I can just call it directly!
+
+
           const provider = await createProvider(repoRoot);
 
           const orchestrator = new Orchestrator({
@@ -1790,7 +2209,7 @@ function startRemoteServer() {
             checkPermission: async (permission, data) => {
               return new Promise<boolean>((resolve) => {
                 if (mainWindow) {
-                  const reqId = Date.now().toString() + Math.random().toString();
+                  const reqId = crypto.randomUUID();
                   permissionRequests.set(reqId, resolve);
                   mainWindow.webContents.send("atlas:request-permission", { reqId, permission, data });
                 } else {

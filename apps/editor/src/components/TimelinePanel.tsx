@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 interface CommitRecord {
   hash: string;
@@ -86,7 +86,7 @@ export function TimelinePanel({ repoPath }: TimelinePanelProps) {
 
   const getEventColor = (type: string) => {
     switch (type) {
-      case "commit": return "#38bdf8";
+      case "commit": return "var(--accent, #38bdf8)";
       case "test": return "#4ade80";
       case "security": return "#f87171";
       case "graph": return "#a78bfa";
@@ -144,14 +144,14 @@ export function TimelinePanel({ repoPath }: TimelinePanelProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex", flexDirection: "column", height: "100%",
-    backgroundColor: "#09090b", color: "#fafafa",
+    backgroundColor: "var(--bg-base, #09090b)", color: "var(--text-main, #fafafa)",
   },
   header: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "8px 12px", backgroundColor: "#0d0d10", borderBottom: "1px solid #27272a",
+    padding: "8px 12px", backgroundColor: "var(--bg-base, #0d0d10)", borderBottom: "1px solid #27272a",
   },
   title: { fontSize: "11px", fontWeight: 700, letterSpacing: "0.8px" },
-  subtext: { fontSize: "11px", color: "#71717a" },
+  subtext: { fontSize: "11px", color: "var(--text-muted, #71717a)" },
   content: {
     flex: 1, padding: "12px", overflowY: "auto",
   },
@@ -185,7 +185,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   timelineLine: {
     width: "2px",
-    backgroundColor: "#27272a",
+    backgroundColor: "var(--border-color, #27272a)",
     flex: 1,
     marginTop: "-4px",
     marginBottom: "-4px",
@@ -208,11 +208,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   timelineTime: {
     fontSize: "10px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
   },
   timelineDesc: {
     fontSize: "12px",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     lineHeight: "1.4",
   }
 };

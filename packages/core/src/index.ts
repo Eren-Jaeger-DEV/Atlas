@@ -67,7 +67,8 @@ export { ExtensionManager, type InstalledExtension, type AtlasExtensionModule } 
 export { AccountService, type UserProfile } from "./cloud/AccountService.js";
 export { LocalTokenStore } from "./cloud/LocalTokenStore.js";
 export { ProfileManager, type WorkspaceProfile } from "./cloud/ProfileManager.js";
-export { CloudSyncEngine, type SyncPayload } from "./cloud/CloudSyncEngine.js";
+export { CloudSyncEngine, type SyncPayload, type StorageProvider } from "./cloud/CloudSyncEngine.js";
+export { BrowserStorageProvider } from "./cloud/BrowserStorageProvider.js";
 export { CollaborationService, type TeamMember, type ActivityItem } from "./cloud/CollaborationService.js";
 
 // Release Engineering & Distribution

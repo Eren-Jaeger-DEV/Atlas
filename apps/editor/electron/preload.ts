@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.invoke("atlas:get-secure-key", key),
   setSecureKey: (key: string, value: string): Promise<void> =>
     ipcRenderer.invoke("atlas:set-secure-key", key, value),
+  removeSecureKey: (key: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:remove-secure-key", key),
+
 
   // Memory / graph
   impact: (filePath: string, symbolName?: string): Promise<ImpactResult> =>
@@ -35,6 +38,12 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.invoke("atlas:add-repo", repoPath),
 
   // File Operations
+  onFileChanged: (handler: (payload: { path: string; event: string }) => void) => {
+    const listener = (_ipcEvent: any, payload: { path: string; event: string }) => handler(payload);
+    ipcRenderer.on("atlas:file-changed", listener);
+    return () => ipcRenderer.off("atlas:file-changed", listener);
+  },
+
   readDir: (dirPath: string): Promise<Array<{ name: string; path: string; isDirectory: boolean }>> =>
     ipcRenderer.invoke("atlas:read-dir", dirPath),
 
@@ -52,6 +61,12 @@ contextBridge.exposeInMainWorld("atlasAPI", {
 
   renameFile: (oldPath: string, newPath: string): Promise<void> =>
     ipcRenderer.invoke("atlas:rename-file", oldPath, newPath),
+
+  copyFile: (srcPath: string, destPath: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:copy-file", srcPath, destPath),
+
+  moveFile: (srcPath: string, destPath: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:move-file", srcPath, destPath),
 
   getSnippets: (): Promise<Record<string, any>> =>
     ipcRenderer.invoke("atlas:get-snippets"),
@@ -210,6 +225,34 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.invoke("atlas:open-settings-window"),
   getSettings: (): Promise<any> =>
     ipcRenderer.invoke("atlas:get-settings"),
+  getPaths: (): Promise<{ settingsJsonPath: string, keybindingsJsonPath: string }> =>
+    ipcRenderer.invoke("atlas:get-paths"),
+  openFileInEditor: (filePath: string) =>
+    ipcRenderer.invoke("atlas:open-file-in-editor", filePath),
+    
+  checkUpdates: (): Promise<{ currentVersion: string; upToDate: boolean; message: string }> =>
+    ipcRenderer.invoke("atlas:check-updates"),
+  getSystemDiagnostics: (): Promise<{ systemMemoryUsagePercent: number; heapUsedMB: number; cpuCount: number; uptime: number }> =>
+    ipcRenderer.invoke("atlas:get-system-diagnostics"),
+
+  githubDeviceLogin: (clientId: string): Promise<any> =>
+    ipcRenderer.invoke("atlas:github-device-login", clientId),
+  githubDevicePoll: (clientId: string, deviceCode: string): Promise<any> =>
+    ipcRenderer.invoke("atlas:github-device-poll", clientId, deviceCode),
+  githubVerifyToken: (token: string): Promise<any> =>
+    ipcRenderer.invoke("atlas:github-verify-token", token),
+  githubLogout: (): Promise<any> =>
+    ipcRenderer.invoke("atlas:github-logout"),
+  githubGetStoredToken: (): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:github-get-stored-token"),
+
+
+
+  onOpenFileInEditor: (handler: (filePath: string) => void) => {
+    const listener = (_e: any, filePath: string) => handler(filePath);
+    ipcRenderer.on("atlas:open-external-file", listener);
+    return () => ipcRenderer.off("atlas:open-external-file", listener);
+  },
   updateSettings: (settings: any): Promise<void> =>
     ipcRenderer.invoke("atlas:update-settings", settings),
   onSettingsUpdated: (handler: (settings: any) => void) => {
@@ -243,21 +286,17 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   testProviderConnection: (providerName: string, apiKey: string, baseUrl?: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("atlas:test-provider-connection", providerName, apiKey, baseUrl),
 
-  // Secure token storage sync
-  getSecureKeySync: (key: string): string | null =>
-    ipcRenderer.sendSync("atlas:get-secure-key-sync", key),
-  setSecureKeySync: (key: string, value: string): void =>
-    ipcRenderer.sendSync("atlas:set-secure-key-sync", key, value),
-  removeSecureKeySync: (key: string): void =>
-    ipcRenderer.sendSync("atlas:remove-secure-key-sync", key),
+
 
   // Graph Data
   getGraphData: (repoPath: string): Promise<{ nodes: any[], edges: any[] }> =>
     ipcRenderer.invoke("atlas:get-graph-data", repoPath),
 
-  // Search
+  // Search & Replace
   globalSearch: (repoPath: string, query: string, options?: any): Promise<any[]> =>
     ipcRenderer.invoke("atlas:global-search", repoPath, query, options),
+  globalReplace: (repoPath: string, query: string, replaceStr: string, options?: any): Promise<{ filesUpdated: number, occurrences: number }> =>
+    ipcRenderer.invoke("atlas:global-replace", repoPath, query, replaceStr, options),
 
   // Formatting
   formatCode: (repoPath: string, filePath: string, content: string): Promise<string> =>

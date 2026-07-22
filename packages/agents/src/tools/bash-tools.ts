@@ -14,11 +14,19 @@ const execAsync = promisify(exec);
 export async function runCommandTool(
   command: string,
   cwd: string,
-  repoRoot: string
+  repoRoot: string,
+  onCheckPermission?: (permission: string, data: any) => Promise<boolean>
 ): Promise<string> {
   const resolvedCwd = path.resolve(repoRoot, cwd);
   if (!resolvedCwd.startsWith(path.resolve(repoRoot))) {
     return `[Error: Path escapes repo root: ${cwd}]`;
+  }
+
+  if (onCheckPermission) {
+    const granted = await onCheckPermission("workspace.execute", { command, cwd: resolvedCwd });
+    if (!granted) {
+      return `[Error: Permission denied to run command '${command}']`;
+    }
   }
 
   try {

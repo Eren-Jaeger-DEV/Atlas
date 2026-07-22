@@ -1,268 +1,333 @@
-import { useState, useEffect, useMemo } from "react";
-import { AccountService, CloudSyncEngine } from "@atlas/core";
+import { useState, useMemo } from "react";
+import styled from "styled-components";
+import { CloudSyncEngine } from "@atlas/core";
+import { useGithubAuth } from "../hooks/useGithubAuth";
+import { useGitActivity } from "../hooks/useGitActivity";
+import { useStorage } from "./StorageContext";
 
-const api = () => (window as any).atlasAPI;
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--bg-base, #0d0d10);
+  color: var(--text-main, #fafafa);
+`;
 
-export function AccountPanel() {
-  const accountService = useMemo(() => new AccountService(), []);
-  const cloudSyncEngine = useMemo(() => new CloudSyncEngine(), []);
+const Header = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: var(--bg-base, #09090b);
+  border-bottom: 1px solid #27272a;
+`;
 
-  const [userName, setUserName] = useState("Developer");
-  const [userEmail, setUserEmail] = useState("developer@local");
-  const [signedIn, setSignedIn] = useState(accountService.isAuthenticated());
+const Title = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+`;
+
+const Subtext = styled.span<{ $offline?: boolean }>`
+  font-size: 11px;
+  color: ${props => props.$offline ? "var(--text-muted, #71717a)" : "#4ade80"};
+`;
+
+const Content = styled.div`
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
+const UserCard = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--bg-panel, #141417);
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+`;
+
+const Avatar = styled.div`
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--accent, #38bdf8);
+  color: var(--bg-base, #09090b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 16px;
+`;
+
+const AvatarImg = styled.img`
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+`;
+
+const UserMeta = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+`;
+
+const UserName = styled.p`
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 2px;
+  color: var(--text-main, #fafafa);
+`;
+
+const UserEmail = styled.p`
+  font-size: 11px;
+  color: var(--text-muted, #71717a);
+  margin: 0 0 4px;
+`;
+
+const PlanBadge = styled.span`
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent, #38bdf8);
+  background-color: rgba(56, 189, 248, 0.1);
+  padding: 1px 5px;
+  border-radius: 3px;
+  width: fit-content;
+`;
+
+const AuthBtn = styled.button`
+  background-color: var(--border-color, #27272a);
+  color: var(--text-main, #fafafa);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+`;
+
+const LoginContainer = styled.div`
+  background-color: var(--bg-panel, #141417);
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+`;
+
+const TabBtn = styled.button<{ $active?: boolean }>`
+  flex: 1;
+  background-color: var(--bg-base, #09090b);
+  color: var(--text-main, #fafafa);
+  border: 1px solid #27272a;
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: ${props => props.$active ? 1 : 0.5};
+`;
+
+const Input = styled.input`
+  background-color: var(--bg-base, #09090b);
+  border: 1px solid #27272a;
+  color: var(--text-main, #fafafa);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  outline: none;
+`;
+
+const Section = styled.div`
+  background-color: var(--bg-panel, #141417);
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const SecHdr = styled.p`
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted, #71717a);
+  margin: 0 0 4px;
+  letter-spacing: 0.8px;
+`;
+
+const Row = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+`;
+
+const ActivityRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #27272a;
+  padding-bottom: 4px;
+`;
+
+const ActMsg = styled.p`
+  font-size: 11px;
+  color: var(--text-main, #e4e4e7);
+  margin: 0 0 2px;
+`;
+
+const ActTime = styled.p`
+  font-size: 9px;
+  color: var(--text-muted, #71717a);
+  margin: 0;
+`;
+
+export function AccountPanel({ repoPath }: { repoPath?: string }) {
+  const storage = useStorage();
+
+  const cloudSyncEngine = useMemo(() => {
+    // Injecting the provided StorageProvider to satisfy the DI architecture.
+    return new CloudSyncEngine(storage);
+  }, [storage]);
+  
+  // Custom hooks
+  const { userName, userEmail, activities } = useGitActivity(repoPath);
+  const { 
+    isGithubAuth, githubProfile, loginError, 
+    isPolling, deviceCodeRes, handlePatLogin, 
+    startDeviceFlow, handleLogout 
+  } = useGithubAuth();
+
+  // Local UI state
+  const [showLoginUI, setShowLoginUI] = useState(false);
+  const [authMode, setAuthMode] = useState<"pat" | "device">("pat");
+  const [patToken, setPatToken] = useState("");
+  const [clientId, setClientId] = useState("");
   const [syncEnabled, setSyncEnabled] = useState(cloudSyncEngine.isSyncEnabled());
-  const [activities, setActivities] = useState<Array<{ author: string; action: string; time: string }>>([]);
 
-  useEffect(() => {
-    async function loadIdentity() {
-      const a = api();
-      if (!a) return;
-
-      try {
-        if (a.getGitConfig) {
-          const cfg = await a.getGitConfig();
-          if (cfg.name) setUserName(cfg.name);
-          if (cfg.email) setUserEmail(cfg.email);
-        } else if (a.getSystemUserInfo) {
-          const info = await a.getSystemUserInfo();
-          if (info.username) setUserName(info.username);
-        }
-      } catch {
-        // Fallback to local
-      }
-
-      try {
-        if (a.gitLog) {
-          const logs = await a.gitLog(localStorage.getItem("atlas_last_repo") || "", 5);
-          if (logs && logs.length > 0) {
-            setActivities(
-              logs.map((l: any) => ({
-                author: l.author || "Developer",
-                action: l.message,
-                time: l.date,
-              }))
-            );
-          }
-        }
-      } catch {
-        // Fallback
-      }
-    }
-    loadIdentity();
-  }, []);
-
-  const handleAuthToggle = async () => {
-    if (signedIn) {
-      accountService.signOut();
-      setSignedIn(false);
-    } else {
-      await accountService.signIn(userEmail, userName);
-      setSignedIn(true);
-    }
-  };
-
-  const handleSyncToggle = (checked: boolean) => {
+  const onSyncToggle = (checked: boolean) => {
     cloudSyncEngine.setSyncEnabled(checked);
     setSyncEnabled(checked);
   };
 
+  const displayName = isGithubAuth ? githubProfile?.name || githubProfile?.login : userName;
+  const displayEmail = isGithubAuth ? githubProfile?.email || `@${githubProfile?.login}` : userEmail;
+
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <span style={styles.title}>ACCOUNT & TEAM COLLABORATION</span>
-        <span style={styles.subtext}>
-          {signedIn && syncEnabled ? "[PASS] Online & Synced" : signedIn ? "[PASS] Online (Sync Disabled)" : "[WARN] Offline"}
-        </span>
-      </div>
+    <Container>
+      <Header>
+        <Title>ACCOUNT & TEAM COLLABORATION</Title>
+        <Subtext $offline={!isGithubAuth}>
+          {isGithubAuth && syncEnabled ? "[PASS] Online & Synced" : isGithubAuth ? "[PASS] Online (Sync Disabled)" : "[WARN] Offline (Local Mode)"}
+        </Subtext>
+      </Header>
 
-      <div style={styles.content}>
+      <Content>
         {/* User Card */}
-        <div style={styles.userCard}>
-          <div style={styles.avatar}>{userName.charAt(0).toUpperCase()}</div>
-          <div style={styles.userMeta}>
-            <p style={styles.userName}>{userName}</p>
-            <p style={styles.userEmail}>{userEmail}</p>
-            <span style={styles.planBadge}>Local Developer</span>
-          </div>
+        <UserCard>
+          {isGithubAuth && githubProfile?.avatar_url ? (
+            <AvatarImg src={githubProfile.avatar_url} alt="Avatar" />
+          ) : (
+            <Avatar>{displayName?.charAt(0).toUpperCase()}</Avatar>
+          )}
+          <UserMeta>
+            <UserName>{displayName}</UserName>
+            <UserEmail>{displayEmail}</UserEmail>
+            <PlanBadge>{isGithubAuth ? "GitHub Authenticated" : "Local Developer"}</PlanBadge>
+          </UserMeta>
 
-          <button style={styles.authBtn} onClick={handleAuthToggle}>
-            {signedIn ? "Sign Out" : "Sign In"}
-          </button>
-        </div>
+          <AuthBtn onClick={() => isGithubAuth ? handleLogout() : setShowLoginUI(!showLoginUI)}>
+            {isGithubAuth ? "Sign Out" : (showLoginUI ? "Cancel" : "Sign In with GitHub")}
+          </AuthBtn>
+        </UserCard>
+
+        {/* Login UI */}
+        {showLoginUI && !isGithubAuth && (
+          <LoginContainer>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+              <TabBtn $active={authMode === "pat"} onClick={() => setAuthMode("pat")}>Personal Token</TabBtn>
+              <TabBtn $active={authMode === "device"} onClick={() => setAuthMode("device")}>Device Flow</TabBtn>
+            </div>
+
+            {loginError && <p style={{ color: "#ef4444", fontSize: "11px", marginBottom: "8px" }}>{loginError}</p>}
+
+            {authMode === "pat" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <Input 
+                  type="password" 
+                  value={patToken} 
+                  onChange={e => setPatToken(e.target.value)} 
+                  placeholder="ghp_..." 
+                />
+                <AuthBtn onClick={() => handlePatLogin(patToken)}>Verify & Sign In</AuthBtn>
+                <p style={{fontSize: "10px", color: "var(--text-muted)"}}>Create a classic PAT with `user` and `repo` scopes on GitHub.</p>
+              </div>
+            )}
+
+            {authMode === "device" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {!deviceCodeRes ? (
+                  <>
+                    <Input 
+                      type="text" 
+                      value={clientId} 
+                      onChange={e => setClientId(e.target.value)} 
+                      placeholder="OAuth App Client ID" 
+                    />
+                    <AuthBtn onClick={() => startDeviceFlow(clientId)}>Start Device Flow</AuthBtn>
+                    <p style={{fontSize: "10px", color: "var(--text-muted)"}}>Provide your GitHub OAuth App Client ID to start the flow.</p>
+                  </>
+                ) : (
+                  <div style={{ backgroundColor: "var(--bg-base)", padding: "12px", borderRadius: "4px", textAlign: "center" }}>
+                    <p style={{ fontSize: "11px", marginBottom: "8px" }}>1. Open <strong>{deviceCodeRes.verification_uri}</strong></p>
+                    <p style={{ fontSize: "11px", marginBottom: "8px" }}>2. Enter this code:</p>
+                    <h2 style={{ letterSpacing: "2px", margin: "8px 0" }}>{deviceCodeRes.user_code}</h2>
+                    <p style={{ fontSize: "11px", color: "#38bdf8" }}>{isPolling ? "Waiting for authorization..." : ""}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </LoginContainer>
+        )}
 
         {/* Sync Selector */}
-        <div style={styles.section}>
-          <p style={styles.secHdr}>WORKSPACE PROFILES & SYNC</p>
-
-          <div style={styles.row}>
+        <Section>
+          <SecHdr>WORKSPACE PROFILES & SYNC</SecHdr>
+          <Row>
             <span>Cloud Settings Sync</span>
             <input
               type="checkbox"
               checked={syncEnabled}
-              onChange={e => handleSyncToggle(e.target.checked)}
+              onChange={e => onSyncToggle(e.target.checked)}
             />
-          </div>
-        </div>
+          </Row>
+        </Section>
 
         {/* Dynamic Activity Log */}
-        <div style={styles.section}>
-          <p style={styles.secHdr}>RECENT WORKSPACE GIT ACTIVITY</p>
+        <Section>
+          <SecHdr>RECENT WORKSPACE GIT ACTIVITY</SecHdr>
           {activities.length === 0 ? (
-            <p style={styles.noAct}>No recent git commits found in active workspace.</p>
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", margin: 0 }}>
+              No recent git commits found in active workspace.
+            </p>
           ) : (
             activities.map((a, idx) => (
-              <div key={idx} style={styles.activityRow}>
-                <p style={styles.actMsg}>
+              <ActivityRow key={idx}>
+                <ActMsg>
                   <strong>{a.author}</strong> {a.action}
-                </p>
-                <p style={styles.actTime}>{a.time}</p>
-              </div>
+                </ActMsg>
+                <ActTime>{a.time}</ActTime>
+              </ActivityRow>
             ))
           )}
-        </div>
-      </div>
-    </div>
+        </Section>
+      </Content>
+    </Container>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    backgroundColor: "#0d0d10",
-    color: "#fafafa",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "8px 12px",
-    backgroundColor: "#09090b",
-    borderBottom: "1px solid #27272a",
-  },
-  title: {
-    fontSize: "11px",
-    fontWeight: 700,
-    letterSpacing: "0.8px",
-  },
-  subtext: {
-    fontSize: "11px",
-    color: "#4ade80",
-  },
-  content: {
-    flex: 1,
-    padding: "12px",
-    overflowY: "auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-  },
-  userCard: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    backgroundColor: "#141417",
-    border: "1px solid #27272a",
-    borderRadius: "8px",
-    padding: "12px",
-  },
-  avatar: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    backgroundColor: "#38bdf8",
-    color: "#09090b",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 900,
-    fontSize: "16px",
-  },
-  userMeta: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-  },
-  userName: {
-    fontSize: "13px",
-    fontWeight: 700,
-    margin: "0 0 2px",
-    color: "#fafafa",
-  },
-  userEmail: {
-    fontSize: "11px",
-    color: "#71717a",
-    margin: "0 0 4px",
-  },
-  planBadge: {
-    fontSize: "9px",
-    fontWeight: 700,
-    color: "#38bdf8",
-    backgroundColor: "rgba(56, 189, 248, 0.1)",
-    padding: "1px 5px",
-    borderRadius: "3px",
-    width: "fit-content",
-  },
-  authBtn: {
-    backgroundColor: "#27272a",
-    color: "#fafafa",
-    border: "none",
-    borderRadius: "4px",
-    padding: "4px 10px",
-    fontSize: "11px",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  section: {
-    backgroundColor: "#141417",
-    border: "1px solid #27272a",
-    borderRadius: "6px",
-    padding: "12px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
-  secHdr: {
-    fontSize: "10px",
-    fontWeight: 700,
-    color: "#71717a",
-    margin: "0 0 4px",
-    letterSpacing: "0.8px",
-  },
-  row: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    fontSize: "12px",
-  },
-  select: {
-    backgroundColor: "#18181b",
-    border: "1px solid #27272a",
-    color: "#fafafa",
-    borderRadius: "4px",
-    padding: "3px 8px",
-    fontSize: "11px",
-  },
-  activityRow: {
-    display: "flex",
-    flexDirection: "column",
-    borderBottom: "1px solid #27272a",
-    paddingBottom: "4px",
-  },
-  actMsg: {
-    fontSize: "11px",
-    color: "#e4e4e7",
-    margin: "0 0 2px",
-  },
-  actTime: {
-    fontSize: "9px",
-    color: "#71717a",
-    margin: 0,
-  },
-  noAct: {
-    fontSize: "11px",
-    color: "#71717a",
-    margin: 0,
-  },
-};

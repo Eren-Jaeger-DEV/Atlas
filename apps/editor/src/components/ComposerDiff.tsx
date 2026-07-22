@@ -51,8 +51,8 @@ export function ComposerDiff({
     },
     header: {
       padding: "12px 16px",
-      backgroundColor: "#27272a",
-      color: "#e4e4e7",
+      backgroundColor: "var(--border-color, #27272a)",
+      color: "var(--text-main, #e4e4e7)",
       fontSize: "13px",
       fontWeight: 500,
       display: "flex",
@@ -81,7 +81,7 @@ export function ComposerDiff({
     },
     btnReject: {
       background: "transparent",
-      color: "#e4e4e7",
+      color: "var(--text-main, #e4e4e7)",
       border: "1px solid #52525b",
       padding: "6px 12px",
       borderRadius: "4px",
@@ -97,8 +97,8 @@ export function ComposerDiff({
     tab: (isActive: boolean) => ({
       padding: "8px 16px",
       fontSize: "12px",
-      color: isActive ? "#fff" : "#a1a1aa",
-      backgroundColor: isActive ? "#27272a" : "transparent",
+      color: isActive ? "#fff" : "var(--text-muted, #a1a1aa)",
+      backgroundColor: isActive ? "var(--border-color, #27272a)" : "transparent",
       borderRight: "1px solid #3f3f46",
       cursor: "pointer",
       whiteSpace: "nowrap" as const,

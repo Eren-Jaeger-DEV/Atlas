@@ -17,6 +17,7 @@ import initSqlJs from "sql.js";
 import type { Database } from "sql.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { GraphNode, GraphEdge } from "@atlas/core";
 
 // ---------------------------------------------------------------------------
@@ -441,7 +442,7 @@ export class GraphDB {
   // -------------------------------------------------------------------------
   
   logTaskEvent(runId: string, taskId: string, eventType: string, payload: any): void {
-    const id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    const id = randomUUID();
     this.run(
       `INSERT INTO task_events (id, run_id, task_id, event_type, payload, created_at)
        VALUES ($id, $runId, $taskId, $eventType, $payload, $createdAt)`,

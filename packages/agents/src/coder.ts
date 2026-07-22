@@ -140,7 +140,8 @@ async function handleCoderToolCall(
       return runCommandTool(
         String(toolArgs["command"] ?? ""),
         String(toolArgs["cwd"] ?? "."),
-        repoRoot
+        repoRoot,
+        ctx.onCheckPermission
       );
     default:
       return `Unknown tool: ${toolName}`;

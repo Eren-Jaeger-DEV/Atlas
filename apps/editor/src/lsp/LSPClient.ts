@@ -5,7 +5,7 @@ import { AbstractMessageWriter } from "vscode-jsonrpc/lib/messageWriter.js";
 import { DataCallback, Message } from "vscode-jsonrpc";
 import { logToOutput } from "../components/OutputPanel.js";
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 class IpcMessageWriter extends AbstractMessageWriter {
   async write(msg: Message): Promise<void> {
@@ -99,12 +99,12 @@ export async function initLSPClient(repoPath: string, language: string = "typesc
 
   client.onRequest("workspace/applyEdit", async (params: any) => {
     try {
-      const editsByFile: Record<string, any[]> = {};
+      const editsByFile: Record<string, monaco.languages.TextEdit[]> = {};
       if (params.edit.changes) {
         for (const [uri, edits] of Object.entries(params.edit.changes)) {
           const fsPath = monaco.Uri.parse(uri).fsPath;
           const filePath = fsPath ? fsPath : monaco.Uri.parse(uri).path;
-          editsByFile[filePath] = edits as any[];
+          editsByFile[filePath] = edits as unknown as monaco.languages.TextEdit[];
         }
       }
       if (params.edit.documentChanges) {
@@ -134,14 +134,14 @@ export function getLSPClient() {
   return client;
 }
 
-export async function fetchDocumentSymbols(filePath: string): Promise<any[]> {
+export async function fetchDocumentSymbols(filePath: string): Promise<monaco.languages.DocumentSymbol[]> {
   if (!client) return [];
   try {
     const uri = monaco.Uri.file(filePath).toString();
     const result = await client.sendRequest("textDocument/documentSymbol", {
       textDocument: { uri }
     });
-    return (result as any[]) || [];
+    return (result as unknown as monaco.languages.DocumentSymbol[]) || [];
   } catch (err) {
     console.error("Failed to fetch document symbols:", err);
     return [];

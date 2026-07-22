@@ -18,13 +18,21 @@ export interface SyncPayload {
   timestamp: number;
 }
 
+export interface StorageProvider {
+  getItem(key: string): Promise<string | null> | string | null;
+  setItem(key: string, value: string): Promise<void> | void;
+  removeItem(key: string): Promise<void> | void;
+}
+
 export class CloudSyncEngine {
   private syncEnabled: boolean = true;
   private lastSyncTime: number = 0;
   private eventBus: EventBus;
+  private storage: StorageProvider;
   private readonly storageKey = "atlas_local_sync_payload";
 
-  constructor(eventBus: EventBus = EventBus.getInstance()) {
+  constructor(storage: StorageProvider, eventBus: EventBus = EventBus.getInstance()) {
+    this.storage = storage;
     this.eventBus = eventBus;
   }
 
@@ -41,13 +49,13 @@ export class CloudSyncEngine {
   }
 
   /**
-   * Persist settings to localStorage (survives restarts, no network required).
+   * Persist settings to storage provider.
    */
   public async pushSync(payload: SyncPayload): Promise<boolean> {
     if (!this.syncEnabled) return false;
     try {
       const data: SyncPayload = { ...payload, timestamp: Date.now() };
-      localStorage.setItem(this.storageKey, JSON.stringify(data));
+      await this.storage.setItem(this.storageKey, JSON.stringify(data));
       this.lastSyncTime = data.timestamp;
       this.eventBus.emit("SettingsChanged", payload.settings as any);
       return true;
@@ -57,12 +65,12 @@ export class CloudSyncEngine {
   }
 
   /**
-   * Restore settings from localStorage. Returns null if nothing has been synced yet.
+   * Restore settings from storage provider. Returns null if nothing has been synced yet.
    */
   public async pullSync(): Promise<SyncPayload | null> {
     if (!this.syncEnabled) return null;
     try {
-      const raw = localStorage.getItem(this.storageKey);
+      const raw = await this.storage.getItem(this.storageKey);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as SyncPayload;
       this.lastSyncTime = parsed.timestamp ?? 0;
@@ -72,8 +80,8 @@ export class CloudSyncEngine {
     }
   }
 
-  public clearSync(): void {
-    localStorage.removeItem(this.storageKey);
+  public async clearSync(): Promise<void> {
+    await this.storage.removeItem(this.storageKey);
     this.lastSyncTime = 0;
   }
 }

@@ -107,6 +107,7 @@ export class Orchestrator {
       await Promise.all(readyTasks.map(async (task) => {
         try {
           dag.updateTaskStatus(task.id, "RUNNING");
+          this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
           
           if (task.type === "CODE") {
             this.emit({ type: "state_change", state: "CODING", runId });
@@ -126,6 +127,7 @@ export class Orchestrator {
             // e.g. dag.addTask(...)
             
             dag.updateTaskStatus(task.id, "COMPLETED", coderOutput);
+            this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
             this.config.memory.logTaskEvent(runId, task.id, "complete", { success: true });
           }
           
@@ -140,10 +142,12 @@ export class Orchestrator {
             
             if (testResult.status === "passed") {
                dag.updateTaskStatus(task.id, "COMPLETED", testResult);
+               this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
                this.config.memory.logTaskEvent(runId, task.id, "complete", { success: true });
             } else {
                // Mark failed (will halt DAG)
                dag.updateTaskStatus(task.id, "FAILED", testResult, "Tests failed");
+               this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
                this.config.memory.logTaskEvent(runId, task.id, "failed", { reason: "Tests failed" });
             }
           }
@@ -163,6 +167,7 @@ export class Orchestrator {
             const results = { ast: astRes, terminal: termRes, vision: visRes };
             
             dag.updateTaskStatus(task.id, "COMPLETED", results);
+            this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
             this.config.memory.logTaskEvent(runId, task.id, "complete", { success: passed, results });
           }
           
@@ -170,6 +175,7 @@ export class Orchestrator {
           
         } catch (err) {
           dag.updateTaskStatus(task.id, "FAILED", null, String(err));
+          this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
         }
       }));
     }
@@ -205,8 +211,8 @@ export class Orchestrator {
         activeFilePath: context?.activeFilePath || "<Not Provided>",
         activeContent: context?.activeContent || "<Not Provided>",
         openTabs: context?.openTabs || [],
-        cursorLine: (context as any)?.cursorLine,
-        cursorSymbol: (context as any)?.cursorSymbol,
+        cursorLine: context?.cursorLine,
+        cursorSymbol: context?.cursorSymbol,
         gitStatusSummary: context?.gitStatusSummary || "Unknown",
         terminalHistory: context?.terminalHistory,
         diagnostics: context?.diagnostics
@@ -242,18 +248,18 @@ export class Orchestrator {
         const isLikelyTask = /add|create|update|refactor|fix|change|remove|delete|implement|write/i.test(lastMsg);
         
         if (!isLikelyTask) {
-          const developerProfile = (this.config.memory as any).getDeveloperProfile?.("default");
+          const developerProfile = this.config.memory.getDeveloperProfile?.("default");
           const profileContext = developerProfile ? `\n[Developer Profile Preferences]\n${developerProfile}\n` : "";
           
           const chatContext = `You are a helpful AI coding assistant in Atlas Studio.\nContext:\n${ctx.promptContext}${skillsContext}${profileContext}\n`;
           
           let semanticChatMsgs: any[] = [];
-          if ((this.config.memory as any).vectorSearchChat) {
-             const semanticNodes = await (this.config.memory as any).vectorSearchChat(goal, 5);
-             semanticChatMsgs = semanticNodes.map((n: any) => ({ role: "system", content: `[Past Chat Memory - Session ${n.sessionId}] ${n.role}: ${n.content}` }));
+          if (this.config.memory.vectorSearchChat) {
+             const semanticNodes = await this.config.memory.vectorSearchChat(goal, 5);
+             semanticNodes.forEach((n: any) => { semanticChatMsgs.push({ role: "system", content: `[Past Chat Memory - Session ${n.sessionId}] ${n.role}: ${n.content}` }) });
           }
 
-          const pastChatNodes = (this.config.memory as any).getChatNodes?.(this.brain.getSessionId()) || [];
+          const pastChatNodes = this.config.memory.getChatNodes?.(this.brain.getSessionId()) || [];
           const pastChatMsgs = pastChatNodes.slice(-10).map((n: any) => ({ role: n.role, content: n.content }));
           
           const chatMsgs = (input as { role: string; text: string }[]).map(m => ({
@@ -289,8 +295,8 @@ export class Orchestrator {
              
              if (tc.name === "update_developer_profile") {
                 const prefs = tc.arguments?.preferences as string || "";
-                if ((this.config.memory as any).upsertDeveloperProfile) {
-                   (this.config.memory as any).upsertDeveloperProfile("default", prefs);
+                if (this.config.memory.upsertDeveloperProfile) {
+                   this.config.memory.upsertDeveloperProfile("default", prefs);
                 }
                 allMessages.push({ role: "tool", content: "Profile updated successfully.", toolCallId: tc.id });
              } else {
@@ -305,10 +311,10 @@ export class Orchestrator {
           }
 
           // Save to memory
-          if ((this.config.memory as any).logChatNode) {
+          if (this.config.memory.logChatNode) {
              const sessionId = this.brain.getSessionId();
-             (this.config.memory as any).logChatNode({ id: `${runId}-user`, sessionId, role: "user", content: goal, createdAt: Date.now() });
-             (this.config.memory as any).logChatNode({ id: `${runId}-agent`, sessionId, role: "assistant", content: chatRes.content, createdAt: Date.now() + 1 });
+             this.config.memory.logChatNode({ id: `${runId}-user`, sessionId, role: "user", content: goal, createdAt: Date.now() });
+             this.config.memory.logChatNode({ id: `${runId}-agent`, sessionId, role: "assistant", content: chatRes.content, createdAt: Date.now() + 1 });
           }
           
           return {
@@ -329,7 +335,7 @@ export class Orchestrator {
         ? `\n[Known Bug Patterns to Avoid]\n${bugPatterns.map(bp => `- Error: ${bp.errorSignature}\n  Solution: ${bp.solution}`).join("\n")}`
         : "";
 
-      const developerProfile = (this.config.memory as any).getDeveloperProfile?.("default");
+      const developerProfile = this.config.memory.getDeveloperProfile?.("default");
       const profileContext = developerProfile ? `\n[Developer Profile Preferences]\n${developerProfile}\n` : "";
 
       const enrichedGoal = `[System Context]\n${ctx.promptContext}${bugContext}${skillsContext}${profileContext}\n\nUser Goal: ${goal}`;
@@ -350,7 +356,7 @@ export class Orchestrator {
         plan.steps.forEach(step => {
           mdPlan += `### ${step.order + 1}. ${step.title}\n${step.description}\n\n`;
         });
-        this.brain.writeArtifact("implementation_plan.md", mdPlan);
+        await this.brain.writeArtifact("implementation_plan.md", mdPlan);
 
         this.emit({ type: "awaiting_human", reason: "Plan generated in artifacts. Waiting for approval.", runId });
         
@@ -416,6 +422,7 @@ export class Orchestrator {
           data: { step }
         });
       }
+      this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
 
       // Execute DAG initial pass
       await this.executeDAG(dag, runId, commonOpts, { coderOutputs, testResults });

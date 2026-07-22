@@ -18,7 +18,7 @@ export function AboutAtlasModal({ onClose }: AboutAtlasModalProps) {
         </div>
 
         <div style={styles.body}>
-          <p style={styles.tagline}>Developer-First Independent IDE Platform</p>
+          <p style={styles.tagline}>Your codebase. Fully mapped.</p>
 
           <div style={styles.grid}>
             <div style={styles.box}>
@@ -72,7 +72,7 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 99999,
   },
   modal: {
-    backgroundColor: "#141417",
+    backgroundColor: "var(--bg-panel, #141417)",
     border: "1px solid #27272a",
     borderRadius: "12px",
     width: "520px",
@@ -87,7 +87,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: "14px",
     padding: "20px",
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     borderBottom: "1px solid #27272a",
     position: "relative",
   },
@@ -100,12 +100,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "20px",
     fontWeight: 900,
     margin: "0 0 2px",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   badge: {
     fontSize: "10px",
     fontWeight: 700,
-    color: "#38bdf8",
+    color: "var(--accent, #38bdf8)",
     backgroundColor: "rgba(56, 189, 248, 0.1)",
     padding: "2px 8px",
     borderRadius: "4px",
@@ -117,7 +117,7 @@ const styles: Record<string, React.CSSProperties> = {
     right: "16px",
     background: "none",
     border: "none",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "14px",
     cursor: "pointer",
   },
@@ -130,7 +130,7 @@ const styles: Record<string, React.CSSProperties> = {
   tagline: {
     fontSize: "13px",
     fontWeight: 600,
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     margin: 0,
   },
   grid: {
@@ -139,7 +139,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "10px",
   },
   box: {
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     border: "1px solid #27272a",
     borderRadius: "6px",
     padding: "8px 10px",
@@ -147,18 +147,18 @@ const styles: Record<string, React.CSSProperties> = {
   label: {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     margin: "0 0 2px",
     letterSpacing: "0.8px",
   },
   val: {
     fontSize: "11px",
     fontWeight: 600,
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     margin: 0,
   },
   pillars: {
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
     borderRadius: "8px",
     padding: "12px",
@@ -166,7 +166,7 @@ const styles: Record<string, React.CSSProperties> = {
   pilHdr: {
     fontSize: "10px",
     fontWeight: 700,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     margin: "0 0 8px",
     letterSpacing: "0.8px",
   },
@@ -182,16 +182,16 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "center",
     padding: "12px 20px",
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     borderTop: "1px solid #27272a",
   },
   copy: {
     fontSize: "10px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
   },
   okBtn: {
-    backgroundColor: "#fafafa",
-    color: "#09090b",
+    backgroundColor: "var(--text-main, #fafafa)",
+    color: "var(--bg-base, #09090b)",
     border: "none",
     borderRadius: "6px",
     padding: "6px 16px",

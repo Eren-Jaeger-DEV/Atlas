@@ -1,4 +1,4 @@
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 export interface DAPEvent {
   event: string;

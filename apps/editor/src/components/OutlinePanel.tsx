@@ -81,7 +81,7 @@ function SymbolItem({ symbol, level, onSymbolClick, activeLine }: { symbol: Docu
         
         <SymbolIcon kind={symbol.kind} />
         
-        <span style={{ ...styles.name, color: isActive ? "#38bdf8" : "#e4e4e7" }}>
+        <span style={{ ...styles.name, color: isActive ? "var(--accent, #38bdf8)" : "var(--text-main, #e4e4e7)" }}>
           {symbol.name}
         </span>
         {symbol.detail && (
@@ -109,7 +109,7 @@ function SymbolItem({ symbol, level, onSymbolClick, activeLine }: { symbol: Docu
 function SymbolIcon({ kind }: { kind: number }) {
   // Mapping based on LSP SymbolKind
   // 5: Class, 6: Method, 12: Function, 13: Variable, 11: Interface, 7: Property, 14: Constant, 22: EnumMember
-  let color = "#71717a";
+  let color = "var(--text-muted, #71717a)";
   let text = "?";
 
   switch (kind) {
@@ -126,7 +126,7 @@ function SymbolIcon({ kind }: { kind: number }) {
     case 11: // Interface
       color = "#34d399"; text = "I"; break;
     case 7: // Property
-      color = "#38bdf8"; text = "P"; break;
+      color = "var(--accent, #38bdf8)"; text = "P"; break;
     case 10: // Enum
       color = "#f43f5e"; text = "E"; break;
     default:
@@ -150,7 +150,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   empty: {
     padding: "16px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "12px",
     textAlign: "center",
   },
@@ -160,7 +160,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "4px 8px",
     fontSize: "12px",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     userSelect: "none",
   },
   chevron: {
@@ -170,7 +170,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: "16px",
     height: "16px",
     marginRight: "4px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     transition: "transform 0.15s ease",
   },
   icon: {
@@ -188,7 +188,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginRight: "8px",
   },
   detail: {
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "11px",
     whiteSpace: "nowrap",
     overflow: "hidden",

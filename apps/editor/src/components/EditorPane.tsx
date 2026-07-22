@@ -23,6 +23,7 @@ interface EditorPaneProps {
   onChange?: (content: string) => void;
   onCursorChange?: (lineContent: string, line: number, col: number) => void;
   onSymbolsChange?: (symbols: any[], currentSymbol?: string) => void;
+  onEditorMount?: (editor: any) => void;
   settings?: EditorSettings;
 }
 
@@ -73,6 +74,7 @@ export function EditorPane({
   onChange,
   onCursorChange,
   onSymbolsChange,
+  onEditorMount,
   settings,
 }: EditorPaneProps) {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -183,7 +185,7 @@ export function EditorPane({
     }
 
     const content = editor.getValue();
-    const a = (window as any).atlasAPI;
+    const a = window.atlasAPI;
     if (!a) return;
 
     try {
@@ -250,6 +252,7 @@ export function EditorPane({
 
   const handleMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
+    if (onEditorMount) onEditorMount(editor);
     monacoRef.current = monaco;
 
     SnippetManager.initialize(monaco).catch(console.error);
@@ -279,21 +282,21 @@ export function EditorPane({
       ],
       colors: {
         "editor.background": "#000000",
-        "editor.foreground": "#e4e4e7",
+        "editor.foreground": "var(--text-main, #e4e4e7)",
         "editorLineNumber.foreground": "#475569",
-        "editorLineNumber.activeForeground": "#38bdf8",
+        "editorLineNumber.activeForeground": "var(--accent, #38bdf8)",
         "editor.lineHighlightBackground": "#38bdf810",
         "editor.selectionBackground": "#38bdf830",
         "editor.inactiveSelectionBackground": "#38bdf815",
-        "editorCursor.foreground": "#38bdf8",
+        "editorCursor.foreground": "var(--accent, #38bdf8)",
         "editorGutter.background": "#000000",
         "editorWidget.background": "#050505",
-        "editorWidget.border": "#38bdf8",
+        "editorWidget.border": "var(--accent, #38bdf8)",
         "editorSuggestWidget.background": "#050505",
-        "editorSuggestWidget.border": "#38bdf8",
+        "editorSuggestWidget.border": "var(--accent, #38bdf8)",
         "editorSuggestWidget.selectedBackground": "#38bdf830",
         "editorIndentGuide.background1": "#38bdf830",
-        "editorIndentGuide.activeBackground1": "#38bdf8",
+        "editorIndentGuide.activeBackground1": "var(--accent, #38bdf8)",
         "scrollbar.shadow": "#00000000",
         "scrollbarSlider.background": "#38bdf830",
         "scrollbarSlider.hoverBackground": "#38bdf850",
@@ -320,13 +323,13 @@ export function EditorPane({
         "editor.background": "#0b0f19",
         "editor.foreground": "#f1f5f9",
         "editorLineNumber.foreground": "#475569",
-        "editorLineNumber.activeForeground": "#38bdf8",
+        "editorLineNumber.activeForeground": "var(--accent, #38bdf8)",
         "editor.lineHighlightBackground": "#38bdf810",
         "editor.selectionBackground": "#ff79c625",
         "editorCursor.foreground": "#ff79c6",
         "editorGutter.background": "#0b0f19",
         "editorWidget.background": "#0b0f19",
-        "editorWidget.border": "#38bdf8",
+        "editorWidget.border": "var(--accent, #38bdf8)",
       }
     });
 
@@ -376,31 +379,33 @@ export function EditorPane({
       ],
       colors: {
         "editor.background": "#ffffff",
-        "editor.foreground": "#18181b",
-        "editorLineNumber.foreground": "#a1a1aa",
+        "editor.foreground": "var(--bg-header, #18181b)",
+        "editorLineNumber.foreground": "var(--text-muted, #a1a1aa)",
         "editorLineNumber.activeForeground": "#7c3aed",
         "editor.lineHighlightBackground": "#f4f4f5",
         "editor.selectionBackground": "#add6ff",
         "editorCursor.foreground": "#7c3aed",
         "editorGutter.background": "#ffffff",
-        "editorWidget.background": "#fafafa",
-        "editorWidget.border": "#e4e4e7",
+        "editorWidget.background": "var(--text-main, #fafafa)",
+        "editorWidget.border": "var(--text-main, #e4e4e7)",
       }
     });
 
-    const initialTheme = settings?.theme ?? "obsidian";
-    monaco.editor.setTheme(initialTheme);
+    const tmTheme = (window as any).atlasTheme === 'custom' ? 'custom-imported-theme' : (settings?.theme ?? "obsidian");
+    monaco.editor.setTheme(tmTheme);
 
     // TypeScript compiler options — strict mode
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      strict: true,
-      jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
-      allowSyntheticDefaultImports: true,
-      esModuleInterop: true,
-    });
+    if (monaco.languages.typescript) {
+      monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+        target: monaco.languages.typescript.ScriptTarget.ESNext,
+        module: monaco.languages.typescript.ModuleKind.ESNext,
+        moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+        strict: true,
+        jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+        allowSyntheticDefaultImports: true,
+        esModuleInterop: true,
+      });
+    }
 
     // Cursor position -> line content callback
     editor.onDidChangeCursorPosition((e) => {
@@ -713,23 +718,23 @@ const s: Record<string, React.CSSProperties> = {
     height: "100%",
     width: "100%",
     position: "relative",
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
   },
   ctrlBar: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     height: "24px",
-    backgroundColor: "#0d0d10",
+    backgroundColor: "var(--bg-base, #0d0d10)",
     borderBottom: "1px solid #27272a",
     padding: "0 8px",
     fontSize: "11px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     flexShrink: 0,
   },
   filePath: {
     fontFamily: "monospace",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
   },
   ctrlActions: {
     display: "flex",
@@ -739,7 +744,7 @@ const s: Record<string, React.CSSProperties> = {
   langBadge: {
     fontSize: "9px",
     fontWeight: 700,
-    color: "#38bdf8",
+    color: "var(--accent, #38bdf8)",
     backgroundColor: "rgba(56,189,248,0.08)",
     padding: "1px 6px",
     borderRadius: "3px",
@@ -750,7 +755,7 @@ const s: Record<string, React.CSSProperties> = {
   ctrlBtn: {
     background: "none",
     border: "none",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: "11px",
     cursor: "pointer",
     padding: "0 4px",
@@ -764,7 +769,7 @@ const s: Record<string, React.CSSProperties> = {
     position: "absolute",
     top: "28px",
     right: "16px",
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
     borderRadius: "6px",
     padding: "6px 8px",
@@ -781,9 +786,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   findInput: {
     flex: 1,
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     border: "1px solid #27272a",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     borderRadius: "4px",
     padding: "3px 8px",
     fontSize: "12px",
@@ -797,19 +802,19 @@ const s: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     background: "none",
     border: "1px solid #27272a",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     borderRadius: "3px",
     cursor: "pointer",
     fontSize: "11px",
   },
   findBtnOn: {
     backgroundColor: "rgba(255,255,255,0.1)",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   findActBtn: {
-    backgroundColor: "#27272a",
+    backgroundColor: "var(--border-color, #27272a)",
     border: "none",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     borderRadius: "3px",
     padding: "2px 8px",
     fontSize: "11px",

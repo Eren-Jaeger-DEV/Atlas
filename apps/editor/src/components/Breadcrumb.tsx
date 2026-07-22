@@ -39,10 +39,10 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     height: "24px",
     padding: "0 12px",
-    backgroundColor: "#0d0d10",
+    backgroundColor: "var(--bg-base, #0d0d10)",
     borderBottom: "1px solid #27272a",
     fontSize: "11px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     userSelect: "none",
     overflowX: "auto",
   },
@@ -56,10 +56,10 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#52525b",
   },
   part: {
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
   },
   activePart: {
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
     fontWeight: 600,
   },
 };

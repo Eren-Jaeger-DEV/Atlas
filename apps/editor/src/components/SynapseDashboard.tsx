@@ -17,19 +17,15 @@ export function SynapseDashboard({ events }: SynapseDashboardProps) {
       }
       // If we have detailed DAG events
       if (ev.type === "dag_update") {
-         taskMap.set(ev.taskId, { ...taskMap.get(ev.taskId), ...ev.data });
+         if (ev.nodes && Array.isArray(ev.nodes)) {
+           ev.nodes.forEach((node: any) => taskMap.set(node.id, node));
+         } else if (ev.taskId) {
+           taskMap.set(ev.taskId, { ...taskMap.get(ev.taskId), ...ev.data });
+         }
       }
     });
 
-    // Mock DAG for UI demonstration if no real DAG events are emitted yet
-    if (taskMap.size === 0) {
-      return [
-        { id: "CODE-1", type: "CODE", status: "COMPLETED" },
-        { id: "VERIFY-1", type: "VERIFY", status: "RUNNING" },
-        { id: "TEST-1", type: "TEST", status: "PENDING" },
-      ];
-    }
-
+    // No fallback mock DAG! We only show real events.
     return Array.from(taskMap.values());
   }, [events]);
 
@@ -69,7 +65,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "auto"
   },
   title: {
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontSize: "14px",
     fontWeight: 600,
     margin: 0,
@@ -81,7 +77,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: "8px",
     padding: "12px",
-    backgroundColor: "#09090b",
+    backgroundColor: "var(--bg-base, #09090b)",
     borderRadius: "8px",
     border: "1px solid #27272a"
   },
@@ -89,12 +85,12 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 12px",
     borderRadius: "6px",
     borderLeft: "4px solid #52525b",
-    backgroundColor: "#18181b",
+    backgroundColor: "var(--bg-header, #18181b)",
     display: "flex",
     flexDirection: "column",
     gap: "4px"
   },
-  status_PENDING: { borderLeftColor: "#71717a" },
+  status_PENDING: { borderLeftColor: "var(--text-muted, #71717a)" },
   status_RUNNING: { borderLeftColor: "#3b82f6" },
   status_COMPLETED: { borderLeftColor: "#22c55e" },
   status_FAILED: { borderLeftColor: "#ef4444" },
@@ -104,18 +100,18 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center"
   },
   nodeType: {
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     fontSize: "12px",
     fontWeight: 600
   },
   nodeStatus: {
     fontSize: "10px",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     textTransform: "uppercase"
   },
   nodeId: {
     fontSize: "11px",
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontFamily: "monospace"
   },
   logs: {
@@ -125,7 +121,7 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1
   },
   logsTitle: {
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     fontSize: "12px",
     fontWeight: 500,
     margin: 0
@@ -135,7 +131,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "12px",
     borderRadius: "6px",
     border: "1px solid #27272a",
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     fontSize: "11px",
     fontFamily: "monospace",
     flex: 1,

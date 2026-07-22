@@ -3,6 +3,7 @@
  */
 
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from "@google/generative-ai";
+import { randomUUID } from "node:crypto";
 import type {
   ILLMProvider,
   LLMRequest,
@@ -77,7 +78,7 @@ export class GeminiProvider implements ILLMProvider {
     for (const part of response.candidates?.[0]?.content?.parts ?? []) {
       if (part.functionCall) {
         toolCalls.push({
-          id: `gemini-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          id: `gemini-${randomUUID()}`,
           name: part.functionCall.name,
           arguments: part.functionCall.args as Record<string, unknown>,
         });

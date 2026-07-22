@@ -24,12 +24,22 @@ import { TimelinePanel } from "./components/TimelinePanel.js";
 import { MergeConflictEditor } from "./components/MergeConflictEditor.js";
 import { AiSafetyModal } from "./components/AiSafetyModal.js";
 import { InlineAiTool } from "./components/InlineAiTool.js";
+import { PlanApprovalModal } from "./components/PlanApprovalModal.js";
 import { AccountPanel } from "./components/AccountPanel.js";
 import { ReleaseManagerPanel } from "./components/ReleaseManagerPanel.js";
 import { AboutAtlasModal } from "./components/AboutAtlasModal.js";
+import { KeybindingsPanel, DEFAULT_KEYBINDINGS } from "./components/KeybindingsPanel.js";
+import { ThemeSelectorPanel } from "./components/ThemeSelectorPanel.js";
+import { ThemeManager } from "./components/ThemeManager.js";
 import { OutlinePanel, DocumentSymbol } from "./components/OutlinePanel.js";
+import { Tooltip } from "./components/Tooltip.js";
 import logoImg from "./assets/logo.png";
-import { CommandService } from "@atlas/core";
+import { CommandService, BrowserStorageProvider } from "@atlas/core";
+const storageProvider = new BrowserStorageProvider();
+function getSync(key: string) {
+  const res = storageProvider.getItem(key);
+  return res instanceof Promise ? null : res;
+}
 
 interface EditorTab { 
   filePath: string;
@@ -47,15 +57,15 @@ interface MenuItem { label: string; shortcut?: string; action?: () => void; sepa
 
 function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', color: '#e4e4e7', backgroundColor: '#000000', fontFamily: 'system-ui' }}>
-      <div style={{ fontSize: '48px', marginBottom: '16px', color: '#fbbf24' }}>⚠️</div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', color: 'var(--text-main, #e4e4e7)', backgroundColor: '#000000', fontFamily: 'system-ui' }}>
+      <div style={{ fontSize: '48px', marginBottom: '16px', color: '#fbbf24' }}>[WARN]</div>
       <p style={{ maxWidth: '400px', textAlign: 'center', lineHeight: '1.5', marginBottom: '24px' }}>
         The file is not displayed in the text editor because it is either binary or uses an unsupported text encoding.
       </p>
       <button 
-        style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#e4e4e7', border: '1px solid #27272a', borderRadius: '2px', cursor: 'pointer' }}
+        style={{ padding: '8px 16px', backgroundColor: 'transparent', color: 'var(--text-main, #e4e4e7)', border: '1px solid #27272a', borderRadius: '2px', cursor: 'pointer' }}
         onClick={onOpenAnyway}
-        onMouseOver={e => e.currentTarget.style.backgroundColor = '#27272a'}
+        onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--border-color, #27272a)'}
         onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
       >
         Open Anyway
@@ -64,14 +74,14 @@ function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
   );
 }
 
-const api = () => (window as any).atlasAPI;
+const api = () => window.atlasAPI;
 
 export function App() {
   const [repoPath, setRepoPath]             = useState<string | undefined>(() => {
-    const last = localStorage.getItem("atlas_last_repo");
+    const last = getSync("atlas_last_repo");
     if (last) return last;
     try {
-      const stored = JSON.parse(localStorage.getItem("atlas_workspace_roots") || "[]");
+      const stored = JSON.parse(getSync("atlas_workspace_roots") || "[]");
       if (Array.isArray(stored) && stored.length > 0) return stored[0];
     } catch (err) {
       console.warn("[WARN] Failed to parse atlas_workspace_roots from localStorage:", err);
@@ -80,9 +90,9 @@ export function App() {
   });
   const [workspaceRoots, setWorkspaceRoots] = useState<string[]>(() => {
     try { 
-      const stored = JSON.parse(localStorage.getItem("atlas_workspace_roots") || "[]");
+      const stored = JSON.parse(getSync("atlas_workspace_roots") || "[]");
       if (Array.isArray(stored) && stored.length > 0) return stored;
-      const lastRepo = localStorage.getItem("atlas_last_repo");
+      const lastRepo = getSync("atlas_last_repo");
       return lastRepo ? [lastRepo] : [];
     } catch (err) {
       console.warn("[WARN] Failed to parse atlas_workspace_roots for initial state:", err);
@@ -90,7 +100,7 @@ export function App() {
     }
   });
   const [recentProjects, setRecentProjects] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem("atlas_recent_projects") || "[]"); } catch { return []; }
+    try { return JSON.parse(getSync("atlas_recent_projects") || "[]"); } catch { return []; }
   });
   const [activeSidebar, setActiveSidebar]   = useState<SidebarView>("explorer");
   const [bottomTab, setBottomTab]           = useState<BottomTab>("terminal");
@@ -106,8 +116,13 @@ export function App() {
   const [showMergeConflict, setShowMergeConflict]   = useState(false);
   const [showAiSafety, setShowAiSafety]             = useState(false);
   const [aiSafetyData, setAiSafetyData]             = useState<any>(null);
+  
+  // Plan Approval state
+  const [pendingPlanApproval, setPendingPlanApproval] = useState<{ reqId: string, plan: any } | null>(null);
   const [showInlineAi, setShowInlineAi]             = useState(false);
   const [showAboutModal, setShowAboutModal]         = useState(false);
+  const [showKeybindings, setShowKeybindings]       = useState(false);
+  const [showThemeSelector, setShowThemeSelector]   = useState(false);
   const [activeCursorPos, setActiveCursorPos]       = useState({ line: 1, col: 1 });
   const [sidebarWidth, setSidebarWidth]             = useState(240);
   const [rightSidebarWidth, setRightSidebarWidth]   = useState(320);
@@ -127,6 +142,86 @@ export function App() {
   const menuRef = useRef<HTMLDivElement>(null);
   const activeTab = tabs[activeTabIndex];
   const splitTab = tabs[splitTabIndex];
+  const isWorkspaceLoaded = useRef(false);
+  const activeEditorRef = useRef<any>(null);
+  const splitEditorRef = useRef<any>(null);
+
+  // Load Workspace State
+  useEffect(() => {
+    if (!repoPath) return;
+    isWorkspaceLoaded.current = false;
+    try {
+      const saved = getSync("atlas_workspace_state_" + repoPath);
+      if (saved) {
+        const state = JSON.parse(saved);
+        if (state.tabs && Array.isArray(state.tabs)) {
+          const restoredTabs: EditorTab[] = state.tabs.map((path: string) => ({
+            filePath: path,
+            content: "",
+            language: determineLanguage(path),
+            isDirty: false
+          }));
+          setTabs(restoredTabs);
+          setActiveTabIndex(state.activeTabIndex || 0);
+          
+          restoredTabs.forEach((tab, index) => {
+            api().readFile(tab.filePath).then((content: string) => {
+              setTabs(curr => {
+                const updated = [...curr];
+                if (updated[index] && updated[index].filePath === tab.filePath) {
+                  updated[index] = { ...updated[index], content };
+                }
+                return updated;
+              });
+            }).catch(() => {});
+          });
+        } else {
+          setTabs([]);
+          setActiveTabIndex(0);
+        }
+        if (state.isSplit !== undefined) setIsSplit(state.isSplit);
+        if (state.splitTabIndex !== undefined) setSplitTabIndex(state.splitTabIndex);
+        if (state.activeSidebar !== undefined) setActiveSidebar(state.activeSidebar);
+        if (state.ui) {
+          if (state.ui.showBottomPanel !== undefined) setShowBottomPanel(Boolean(state.ui.showBottomPanel));
+          if (state.ui.showRightAiSidebar !== undefined) setShowRightAiSidebar(Boolean(state.ui.showRightAiSidebar));
+          if (state.ui.sidebarWidth !== undefined) setSidebarWidth(Number(state.ui.sidebarWidth));
+          if (state.ui.rightSidebarWidth !== undefined) setRightSidebarWidth(Number(state.ui.rightSidebarWidth));
+          if (state.ui.bottomPanelHeight !== undefined) setBottomPanelHeight(Number(state.ui.bottomPanelHeight));
+        }
+      } else {
+        setTabs([]);
+        setActiveTabIndex(0);
+        setIsSplit(false);
+      }
+    } catch (err) {
+      console.warn("Failed to restore workspace state:", err);
+    }
+    isWorkspaceLoaded.current = true;
+  }, [repoPath]);
+
+  // Save Workspace State
+  useEffect(() => {
+    if (!repoPath || !isWorkspaceLoaded.current) return;
+    const timer = setTimeout(() => {
+      const state = {
+        tabs: tabs.map(t => t.filePath),
+        activeTabIndex,
+        isSplit,
+        splitTabIndex,
+        activeSidebar,
+        ui: {
+          showBottomPanel,
+          showRightAiSidebar,
+          sidebarWidth,
+          rightSidebarWidth,
+          bottomPanelHeight
+        }
+      };
+      storageProvider.setItem("atlas_workspace_state_" + repoPath, JSON.stringify(state));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [repoPath, tabs, activeTabIndex, isSplit, splitTabIndex, activeSidebar, showBottomPanel, showRightAiSidebar, sidebarWidth, rightSidebarWidth, bottomPanelHeight]);
 
   useEffect(() => {
     if (!repoPath) return;
@@ -181,10 +276,10 @@ export function App() {
   const saveRecentProject = useCallback((path: string) => {
     setRecentProjects(prev => {
       const updated = [path, ...prev.filter(p => p !== path)].slice(0, 10);
-      localStorage.setItem("atlas_recent_projects", JSON.stringify(updated));
+      storageProvider.setItem("atlas_recent_projects", JSON.stringify(updated));
       return updated;
     });
-    localStorage.setItem("atlas_last_repo", path);
+    storageProvider.setItem("atlas_last_repo", path);
   }, []);
 
   const handleSelectRepo = useCallback(async () => {
@@ -193,7 +288,7 @@ export function App() {
     if (sel) {
       setRepoPath(sel);
       setWorkspaceRoots([sel]);
-      localStorage.setItem("atlas_workspace_roots", JSON.stringify([sel]));
+      storageProvider.setItem("atlas_workspace_roots", JSON.stringify([sel]));
       saveRecentProject(sel);
     }
   }, [saveRecentProject]);
@@ -205,7 +300,7 @@ export function App() {
       setWorkspaceRoots(prev => {
         if (prev.includes(sel)) return prev;
         const next = [...prev, sel];
-        localStorage.setItem("atlas_workspace_roots", JSON.stringify(next));
+        storageProvider.setItem("atlas_workspace_roots", JSON.stringify(next));
         return next;
       });
       if (!repoPath) {
@@ -218,7 +313,7 @@ export function App() {
   const handleOpenRecent = (path: string) => {
     setRepoPath(path);
     setWorkspaceRoots([path]);
-    localStorage.setItem("atlas_workspace_roots", JSON.stringify([path]));
+    storageProvider.setItem("atlas_workspace_roots", JSON.stringify([path]));
     saveRecentProject(path);
   };
 
@@ -228,17 +323,40 @@ export function App() {
     let contentToSave = activeTab.content;
     
     // Format on save
-    if (settings.formatOnSave && api()?.formatCode && repoPath) {
-      try {
-        contentToSave = await api().formatCode(repoPath, activeTab.filePath, contentToSave);
-      } catch (err) {
-        console.error("Format on save failed:", err);
+    if (settings.formatOnSave) {
+      const editor = activeEditorRef.current;
+      if (editor) {
+        try {
+          await editor.getAction('editor.action.formatDocument')?.run();
+          contentToSave = editor.getValue();
+        } catch (err) {
+          console.error("Format on save failed:", err);
+        }
       }
     }
     
     await api().writeFile(activeTab.filePath, contentToSave);
     setTabs(p => p.map((t,i) => i===activeTabIndex ? {...t, content: contentToSave, isDirty:false} : t));
-  }, [activeTab, activeTabIndex, settings.formatOnSave, repoPath]);
+  }, [activeTab, activeTabIndex, settings.formatOnSave]);
+
+  useEffect(() => {
+    if (settings.autoSave === "afterDelay" && activeTab?.isDirty) {
+      const timer = setTimeout(() => {
+        handleSave();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [settings.autoSave, activeTab?.isDirty, activeTab?.content, handleSave]);
+
+  useEffect(() => {
+    if (settings.autoSave === "onFocusChange") {
+      const handleBlur = () => {
+        if (activeTab?.isDirty) handleSave();
+      };
+      window.addEventListener("blur", handleBlur);
+      return () => window.removeEventListener("blur", handleBlur);
+    }
+  }, [settings.autoSave, activeTab, handleSave]);
 
   const handleOpenSettings = () => {
     api()?.openSettingsWindow?.();
@@ -349,27 +467,87 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    ThemeManager.getInstance().setStorageProvider(storageProvider);
+    ThemeManager.getInstance().loadSavedTheme();
+  }, []);
+
+  useEffect(() => {
+    const tm = ThemeManager.getInstance();
+    if (settings.theme === "custom" && settings.customThemeColors) {
+      tm.setCustomTheme(settings.customThemeColors);
+    } else if (settings.theme === "light") {
+      tm.setLightMode();
+    } else {
+      tm.setDarkMode(); // obsidian, midnight, monokai handle variants internally or we just default to dark UI
+    }
+  }, [settings.theme, settings.customThemeColors]);
+
+  useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      const ctrl = e.ctrlKey || e.metaKey;
-      if (ctrl && e.shiftKey && e.key.toLowerCase()==="p") { e.preventDefault(); setShowCommandPalette(p=>!p); }
-      else if (ctrl && e.key===",")                        { e.preventDefault(); handleOpenSettings(); }
-      else if (ctrl && e.key.toLowerCase()==="l")          { e.preventDefault(); setShowRightAiSidebar(p=>!p); }
-      else if (ctrl && e.key.toLowerCase()==="k")          { e.preventDefault(); setShowCommandPalette(p=>!p); }
-      else if (ctrl && e.key.toLowerCase()==="s")          { e.preventDefault(); handleSave(); }
-      else if (ctrl && e.key.toLowerCase()==="\\")         { e.preventDefault(); setIsSplit(p=>!p); }
-      else if (ctrl && e.key.toLowerCase()==="i")          { e.preventDefault(); setShowInlineAi(p=>!p); }
-      else if (e.key==="F5") { 
+      // First, get custom keybindings
+      let customBindings: Record<string, string> = {};
+      try {
+        const saved = getSync("atlas_keybindings");
+        if (saved) customBindings = JSON.parse(saved);
+      } catch (err) {
+        console.warn("Failed to parse custom keybindings:", err);
+      }
+
+      const getShortcut = (id: string) => {
+        return customBindings[id] || DEFAULT_KEYBINDINGS.find(k => k.id === id)?.defaultKey || "";
+      };
+
+      const matchesCombo = (combo: string, evt: KeyboardEvent) => {
+        const shortcut = combo.toLowerCase();
+        if (!shortcut) return false;
+        const parts = shortcut.split("+").map(p => p.trim());
+        const needsCtrl = parts.includes("ctrl") || parts.includes("meta");
+        const needsShift = parts.includes("shift");
+        const needsAlt = parts.includes("alt");
+        
+        const hasCtrl = evt.ctrlKey || evt.metaKey;
+        if (needsCtrl !== hasCtrl) return false;
+        if (needsShift !== evt.shiftKey) return false;
+        if (needsAlt !== evt.altKey) return false;
+        
+        const keyPart = parts[parts.length - 1];
+        if (keyPart === "esc" && evt.key.toLowerCase() === "escape") return true;
+        if (evt.key.toLowerCase() === keyPart) return true;
+        return false;
+      };
+
+      const matchesShortcut = (id: string, evt: KeyboardEvent) => {
+        return matchesCombo(getShortcut(id), evt);
+      };
+
+
+
+      if (matchesShortcut("commandPalette", e)) { e.preventDefault(); setShowCommandPalette(p=>!p); }
+      else if (matchesShortcut("settings", e)) { e.preventDefault(); handleOpenSettings(); }
+      else if (matchesShortcut("keybindings", e)) { e.preventDefault(); setShowKeybindings(true); }
+      else if (matchesShortcut("toggleAi", e)) { e.preventDefault(); setShowRightAiSidebar(p=>!p); }
+      else if (matchesShortcut("save", e)) { e.preventDefault(); handleSave(); }
+      else if (matchesShortcut("splitEditor", e)) { e.preventDefault(); setIsSplit(p=>!p); }
+      else if (matchesShortcut("inlineAi", e)) { e.preventDefault(); setShowInlineAi(p=>!p); }
+      else if (matchesShortcut("explorer", e)) { e.preventDefault(); setActiveSidebar("explorer"); }
+      else if (matchesShortcut("search", e)) { e.preventDefault(); setActiveSidebar("search"); }
+      else if (matchesShortcut("git", e)) { e.preventDefault(); setActiveSidebar("git"); }
+      else if (matchesShortcut("extensions", e)) { e.preventDefault(); setActiveSidebar("extensions"); }
+      else if (matchesShortcut("toggleTerminal", e)) { e.preventDefault(); setShowBottomPanel(p=>!p); }
+      else if (matchesShortcut("debug", e)) {
          e.preventDefault(); 
          if (tabs[activeTabIndex]?.filePath) {
            setActiveSidebar("debug");
            api()?.startDap(tabs[activeTabIndex].filePath);
          }
       }
-      else if (e.key==="Escape")                           { setOpenMenu(null); setShowCommandPalette(false); setShowInlineAi(false); setShowAboutModal(false); }
+      else if (e.key === "Escape") { 
+         setOpenMenu(null); setShowCommandPalette(false); setShowInlineAi(false); setShowAboutModal(false); setShowKeybindings(false);
+      }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [handleSave]);
+  }, [handleSave, tabs, activeTabIndex, activeSidebar, showBottomPanel, showRightAiSidebar, showCommandPalette, showInlineAi, showAboutModal, showKeybindings]);
 
   useEffect(() => {
     const a = api(); if (!a?.onMenuAction) return;
@@ -384,6 +562,13 @@ export function App() {
       else if (action==="menu:toggle-terminal")   setShowBottomPanel(p=>!p);
     });
   }, [handleSelectRepo]);
+
+  useEffect(() => {
+    const a = api(); if (!a?.onOpenFileInEditor) return;
+    return a.onOpenFileInEditor((filePath: string) => {
+      handleOpenFile(filePath);
+    });
+  }, [handleOpenFile]);
 
   const menus: Record<string, MenuItem[]> = {
     File: [
@@ -437,6 +622,9 @@ export function App() {
       } }
     ],
     Help: [
+      { label:"Color Theme",       shortcut:"Ctrl+K Ctrl+T", action:()=>setShowThemeSelector(true) },
+      { label:"Keyboard Shortcuts", shortcut:"Ctrl+K Ctrl+S", action:()=>setShowKeybindings(true) },
+      { label:"separator", separator:true },
       { label:"About Atlas Studio", shortcut:"",             action:()=>setShowAboutModal(true) },
       { label:"Command Palette",   shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
     ],
@@ -465,6 +653,8 @@ export function App() {
       commandService.registerCommand("show-search", "Search", () => setActiveSidebar("search"), "Ctrl+Shift+F"),
       commandService.registerCommand("show-git", "Source Control", () => setActiveSidebar("git"), "Ctrl+Shift+G"),
       commandService.registerCommand("toggle-ai", "Toggle AI Chat", () => setShowRightAiSidebar(p=>!p), "Ctrl+L"),
+      commandService.registerCommand("open-keybindings", "Open Keyboard Shortcuts", () => setShowKeybindings(true), "Ctrl+K Ctrl+S"),
+      commandService.registerCommand("open-theme-selector", "Color Theme", () => setShowThemeSelector(true), "Ctrl+K Ctrl+T"),
     ];
     return () => unregisters.forEach(fn => fn());
   }, [commandService, handleSelectRepo]);
@@ -477,6 +667,36 @@ export function App() {
     });
     return () => unreg?.();
   }, [commandService]);
+
+  // File System Watcher (Hot Reloading)
+  useEffect(() => {
+    if (!(api() as any).onFileChanged) return;
+    return (api() as any).onFileChanged(async ({ path, event }: { path: string; event: string }) => {
+      if (event === "change") {
+        setTabs((prevTabs) => {
+          const tabIndex = prevTabs.findIndex((t) => {
+             return t.filePath.replace(/\\/g, "/") === path;
+          });
+          if (tabIndex === -1) return prevTabs;
+          
+          const tab = prevTabs[tabIndex];
+          if (!tab || tab.isDirty) return prevTabs;
+          
+          api().readFile(tab.filePath).then((newContent: string) => {
+            setTabs((currentTabs) => {
+              const i = currentTabs.findIndex((t) => t.filePath.replace(/\\/g, "/") === path);
+              if (i === -1 || !currentTabs[i] || currentTabs[i]!.isDirty) return currentTabs;
+              const next = [...currentTabs];
+              next[i] = { ...currentTabs[i]!, content: newContent };
+              return next;
+            });
+          }).catch((err: any) => console.error("Hot reload failed:", err));
+          
+          return prevTabs;
+        });
+      }
+    });
+  }, []);
 
   // Tasks registration
   useEffect(() => {
@@ -508,12 +728,21 @@ export function App() {
       setAiSafetyData(req);
       setShowAiSafety(true);
     };
-    if ((window as any).atlasAPI) {
+    
+    const handlePlanApprovalRequest = (payload: { reqId: string, plan: any }) => {
+      setPendingPlanApproval(payload);
+    };
+
+    if (window.atlasAPI) {
       const ipc = (window as any).electron?.ipcRenderer;
       if (ipc) {
         ipc.on("atlas:request-permission", handleRequestPermission);
+        
+        const cleanupPlanReq = window.atlasAPI.onRequestPlanApproval(handlePlanApprovalRequest);
+
         return () => {
           ipc.removeListener("atlas:request-permission", handleRequestPermission);
+          cleanupPlanReq();
         };
       }
     }
@@ -523,7 +752,7 @@ export function App() {
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
 
   return (
-    <div style={s.root} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+    <div style={s.root}>
 
       <header style={s.titlebar}>
         <div ref={menuRef} style={{ ...s.tbLeft, ...nodrag }}>
@@ -565,38 +794,56 @@ export function App() {
         </div>
 
         <div style={{ ...s.tbRight, ...nodrag }}>
-          <button style={s.iconBtn} title="Search (Ctrl+K)" onClick={()=>setShowCommandPalette(true)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </button>
-          <button style={{...s.iconBtn, ...(isSplit ? s.iconOn : {})}} title="Toggle Split Editor (Ctrl+\)" onClick={()=>setIsSplit(p=>!p)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
-          </button>
-          <button style={s.iconBtn} title="Toggle Explorer" onClick={()=>setActiveSidebar("explorer")}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-          </button>
-          <button style={{...s.iconBtn,...(showBottomPanel?s.iconOn:{})}} title="Toggle Terminal" onClick={()=>setShowBottomPanel(p=>!p)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="3" y1="16" x2="21" y2="16"/></svg>
-          </button>
-          <button style={{...s.iconBtn,...(showRightAiSidebar?s.iconOn:{})}} title="Toggle AI Chat (Ctrl+L)" onClick={()=>setShowRightAiSidebar(p=>!p)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-          </button>
-          <button style={s.iconBtn} title="Settings (Ctrl+,)" onClick={handleOpenSettings}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
-          </button>
+          <Tooltip content="Search (Ctrl+K)" position="bottom">
+            <button style={s.iconBtn} onClick={()=>setShowCommandPalette(true)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="Toggle Split Editor (Ctrl+\)" position="bottom">
+            <button style={{...s.iconBtn, ...(isSplit ? s.iconOn : {})}} onClick={()=>setIsSplit(p=>!p)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="Toggle Explorer" position="bottom">
+            <button style={s.iconBtn} onClick={()=>setActiveSidebar("explorer")}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="Toggle Terminal" position="bottom">
+            <button style={{...s.iconBtn,...(showBottomPanel?s.iconOn:{})}} onClick={()=>setShowBottomPanel(p=>!p)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="3" y1="16" x2="21" y2="16"/></svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="Toggle AI Chat (Ctrl+L)" position="bottom">
+            <button style={{...s.iconBtn,...(showRightAiSidebar?s.iconOn:{})}} onClick={()=>setShowRightAiSidebar(p=>!p)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="Settings (Ctrl+,)" position="bottom">
+            <button style={s.iconBtn} onClick={handleOpenSettings}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+            </button>
+          </Tooltip>
           <div style={s.winSep}/>
-          <button style={s.wc} title="Minimize" onClick={()=>api()?.windowMinimize()}>
-            <svg width="10" height="1" viewBox="0 0 10 1"><line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" strokeWidth="1.5"/></svg>
-          </button>
-          <button style={s.wc} title="Maximize" onClick={()=>api()?.windowMaximize()}>
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.75" y="0.75" width="8.5" height="8.5" rx="0.5" stroke="currentColor" strokeWidth="1.5"/></svg>
-          </button>
-          <button style={{...s.wc,...s.wcClose}} title="Close" onClick={()=>api()?.windowClose()}>
-            <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5"/></svg>
-          </button>
+          <Tooltip content="Minimize" position="bottom">
+            <button style={s.wc} onClick={()=>api()?.windowMinimize()}>
+              <svg width="10" height="1" viewBox="0 0 10 1"><line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="Maximize" position="bottom">
+            <button style={s.wc} onClick={()=>api()?.windowMaximize()}>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.75" y="0.75" width="8.5" height="8.5" rx="0.5" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+          </Tooltip>
+          <Tooltip content="Close" position="bottom">
+            <button style={{...s.wc,...s.wcClose}} onClick={()=>api()?.windowClose()}>
+              <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5"/></svg>
+            </button>
+          </Tooltip>
         </div>
       </header>
 
-      <div style={s.body}>
+      <div style={{...s.body, flexDirection: settings.sidebarPosition === "right" ? "row-reverse" : "row"}}>
         <nav style={s.actBar}>
           <div style={s.actTop}>
             {([
@@ -614,21 +861,25 @@ export function App() {
               {id:"extensions",lbl:"Market",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
               {id:"ai",        lbl:"Agent",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
             ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
-              <button key={id} style={{...s.actBtn,...(activeSidebar===id?s.actOn:{})}} onClick={()=>setActiveSidebar(id)} title={lbl}>
-                <span style={{ opacity: activeSidebar===id ? 1 : 0.6 }}>{icon}</span>
-              </button>
+              <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
+                <button style={{...s.actBtn,...(activeSidebar===id?s.actOn:{})}} onClick={()=>setActiveSidebar(id)}>
+                  <span style={{ opacity: activeSidebar===id ? 1 : 0.6 }}>{icon}</span>
+                </button>
+              </Tooltip>
             ))}
           </div>
           <div style={s.actBot}>
-            <button style={s.actBtn} onClick={handleOpenSettings} title="Settings">
-              <span style={{ opacity: 0.6 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
-              </span>
-            </button>
+            <Tooltip content="Settings" position={settings.sidebarPosition === "right" ? "left" : "right"}>
+              <button style={s.actBtn} onClick={handleOpenSettings}>
+                <span style={{ opacity: 0.6 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+                </span>
+              </button>
+            </Tooltip>
           </div>
         </nav>
 
-        <aside style={{ ...s.sidebar, width: `${sidebarWidth}px` }}>
+        <aside style={{ ...s.sidebar, width: `${sidebarWidth}px`, borderRight: settings.sidebarPosition === "right" ? "none" : "1px solid #27272a", borderLeft: settings.sidebarPosition === "right" ? "1px solid #27272a" : "none" }}>
           {activeSidebar==="explorer"   && <FileExplorer workspaceRoots={workspaceRoots} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo} onAddFolder={handleAddFolder}/>}
           {activeSidebar==="search"     && <GlobalSearchPanel workspaceRoot={repoPath!} onFileSelect={(f, l) => handleOpenFile(f, l)} />}
           {activeSidebar==="git"        && <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff}/>}
@@ -638,8 +889,8 @@ export function App() {
           {activeSidebar==="impact"     && <ImpactPanel filePath={activeTab?.filePath} symbolName={cursorSymbol}/>}
           {activeSidebar==="graph"      && <DependencyGraph repoPath={repoPath}/>}
           {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
-          {activeSidebar==="health"     && <ProjectHealth repoPath={repoPath}/>}
-          {activeSidebar==="account"    && <AccountPanel />}
+          {activeSidebar==="health"     && <ProjectHealth repoPath={repoPath} />}
+          {activeSidebar==="account"    && <AccountPanel repoPath={repoPath} />}
           {activeSidebar==="release"    && <ReleaseManagerPanel />}
           {activeSidebar==="extensions" && <ExtensionGallery />}
           {activeSidebar==="ai"         && (
@@ -659,7 +910,8 @@ export function App() {
 
         <div style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} />
 
-        <div style={s.center}>
+        <div style={{...s.center, flexDirection: settings.terminalPosition === "right" ? "row" : "column"}} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
           <div style={s.tabBar}>
             {tabs.map((tab,i)=>(
               <div key={tab.filePath} style={{...s.tab,...(i===activeTabIndex&&!activeDiff?s.tabOn:{})}} onClick={()=>{setActiveDiff(null);setActiveTabIndex(i);}}>
@@ -721,6 +973,9 @@ export function App() {
                           setActiveSymbols(symbols);
                           if(currentSymbol) setCursorSymbol(currentSymbol);
                         }}
+                        onEditorMount={(editor) => {
+                          activeEditorRef.current = editor;
+                        }}
                         settings={settings}
                       />
                       )
@@ -744,6 +999,9 @@ export function App() {
                           targetLine={splitTab.targetLine}
                           targetColumn={splitTab.targetColumn}
                           onChange={c=>setTabs(p=>p.map((t,i)=>i===splitTabIndex?{...t,content:c,isDirty:true}:t))}
+                          onEditorMount={(editor) => {
+                            splitEditorRef.current = editor;
+                          }}
                           settings={settings}
                         />
                       )
@@ -797,11 +1055,12 @@ export function App() {
               </div>
             )}
           </div>
+          </div>
 
-          {showBottomPanel && <div style={s.resizerY} onMouseDown={e => { e.preventDefault(); draggingRef.current = "bottom"; document.body.style.cursor = "row-resize"; }} />}
+          {showBottomPanel && <div style={settings.terminalPosition === "right" ? s.resizerX : s.resizerY} onMouseDown={e => { e.preventDefault(); draggingRef.current = "bottom"; document.body.style.cursor = settings.terminalPosition === "right" ? "col-resize" : "row-resize"; }} />}
 
           {showBottomPanel && (
-            <div style={{ ...s.dock, height: `${bottomPanelHeight}px` }}>
+            <div style={{ ...s.dock, width: settings.terminalPosition === "right" ? `${bottomPanelHeight}px` : undefined, height: settings.terminalPosition === "right" ? "100%" : `${bottomPanelHeight}px`, borderTop: settings.terminalPosition === "right" ? "none" : "1px solid var(--border-color, #27272a)", borderLeft: settings.terminalPosition === "right" ? "1px solid var(--border-color, #27272a)" : "none" }}>
               <div style={s.dockTabs}>
                 {(["terminal","problems","output","ai"] as BottomTab[]).map(t=>(
                   <button key={t} style={{...s.dockTab,...(bottomTab===t?s.dockOn:{})}} onClick={()=>setBottomTab(t)}>
@@ -825,11 +1084,15 @@ export function App() {
       </div>
 
       {showAboutModal && <AboutAtlasModal onClose={()=>setShowAboutModal(false)} />}
+      
+      {showKeybindings && <KeybindingsPanel onClose={() => setShowKeybindings(false)} />}
+
+      {showThemeSelector && <ThemeSelectorPanel onClose={() => setShowThemeSelector(false)} />}
 
       {showAiSafety && aiSafetyData && (
         <AiSafetyModal
-          filePath={aiSafetyData.data?.filePath || "unknown"}
-          proposedCode={aiSafetyData.data?.proposedCode || "// No code proposed"}
+          filePath={aiSafetyData.data?.filePath || "Unknown target"}
+          proposedCode={aiSafetyData.data?.content || "No preview"}
           onApprove={() => {
             api()?.respondPermission(aiSafetyData.reqId, true);
             setShowAiSafety(false);
@@ -839,6 +1102,22 @@ export function App() {
             api()?.respondPermission(aiSafetyData.reqId, false);
             setShowAiSafety(false);
             setAiSafetyData(null);
+          }}
+        />
+      )}
+
+      {/* Plan Approval Modal */}
+      {pendingPlanApproval && (
+        <PlanApprovalModal
+          reqId={pendingPlanApproval.reqId}
+          plan={pendingPlanApproval.plan}
+          onApprove={(reqId) => {
+            api()?.sendPlanDecision(reqId, true);
+            setPendingPlanApproval(null);
+          }}
+          onReject={(reqId) => {
+            api()?.sendPlanDecision(reqId, false);
+            setPendingPlanApproval(null);
           }}
         />
       )}
@@ -858,25 +1137,25 @@ export function App() {
 }
 
 const s: Record<string,React.CSSProperties> = {
-  root:{ display:"flex",flexDirection:"column",height:"100vh",width:"100vw",backgroundColor:"#000000",color:"#e4e4e7",fontFamily:"Inter,-apple-system,'Segoe UI',sans-serif",overflow:"hidden",userSelect:"none" },
+  root:{ display:"flex",flexDirection:"column",height:"100vh",width:"100vw",backgroundColor:"#000000",color:"var(--text-main, #e4e4e7)",fontFamily:"Inter,-apple-system,'Segoe UI',sans-serif",overflow:"hidden",userSelect:"none" },
   titlebar:{ display:"flex",alignItems:"center",height:"28px",backgroundColor:"#000000",borderBottom:"1px solid #27272a",flexShrink:0,WebkitAppRegion:"drag" } as any,
   tbLeft:{ display:"flex",alignItems:"center",flexShrink:0,paddingLeft:"6px",gap:"0" },
   logo:{ width:"16px",height:"16px",objectFit:"contain",marginRight:"6px",flexShrink:0 },
   menuWrapper:{ position:"relative" as const },
-  menuItem:{ background:"none",border:"none",color:"#a1a1aa",fontSize:"12px",padding:"0 8px",height:"28px",cursor:"pointer",display:"flex",alignItems:"center",whiteSpace:"nowrap" as const,transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)" },
-  menuItemOn:{ backgroundColor:"#27272a",color:"#fafafa" },
+  menuItem:{ background:"none",border:"none",color:"var(--text-muted, #a1a1aa)",fontSize:"12px",padding:"0 8px",height:"28px",cursor:"pointer",display:"flex",alignItems:"center",whiteSpace:"nowrap" as const,transition:"all 0.2s cubic-bezier(0.4,0,0.2,1)" },
+  menuItemOn:{ backgroundColor:"var(--border-color, #27272a)",color:"var(--text-main, #fafafa)" },
   dropdown:{ position:"absolute" as const,top:"28px",left:"0",backgroundColor:"#050505",border:"1px solid #27272a",minWidth:"220px",zIndex:9999,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",padding:"4px 0",WebkitAppRegion:"no-drag" } as any,
 
-  dropItem:{ display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",color:"#e4e4e7",fontSize:"12px",padding:"5px 16px",cursor:"pointer",textAlign:"left" as const,gap:"24px",transition:"background 0.15s" },
+  dropItem:{ display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",color:"var(--text-main, #e4e4e7)",fontSize:"12px",padding:"5px 16px",cursor:"pointer",textAlign:"left" as const,gap:"24px",transition:"background 0.15s" },
   dropDisabled:{ color:"#52525b",cursor:"default" },
-  dropSep:{ height:"1px",backgroundColor:"#27272a",margin:"3px 8px" },
+  dropSep:{ height:"1px",backgroundColor:"var(--border-color, #27272a)",margin:"3px 8px" },
   dropShortcut:{ color:"#94a3b8",fontSize:"11px",flexShrink:0 },
   tbCenter:{ position:"absolute" as const,left:"50%",transform:"translateX(-50%)",pointerEvents:"none" },
   centerTxt:{ fontSize:"12px",color:"#94a3b8",whiteSpace:"nowrap" as const },
   tbRight:{ display:"flex",alignItems:"center",marginLeft:"auto",gap:"0" },
   iconBtn:{ width:"28px",height:"28px",background:"none",border:"none",color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"0",transition:"color 0.2s" },
-  iconOn:{ color:"#fafafa" },
-  winSep:{ width:"1px",height:"14px",backgroundColor:"#27272a",margin:"0 4px" },
+  iconOn:{ color:"var(--text-main, #fafafa)" },
+  winSep:{ width:"1px",height:"14px",backgroundColor:"var(--border-color, #27272a)",margin:"0 4px" },
   wc:{ width:"46px",height:"28px",background:"none",border:"none",color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s" },
   wcClose:{ },
   body:{ display:"flex",flex:1,overflow:"hidden" },
@@ -884,7 +1163,7 @@ const s: Record<string,React.CSSProperties> = {
   actTop:{ display:"flex",flexDirection:"column",gap:"0",alignItems:"center" },
   actBot:{ display:"flex",flexDirection:"column",alignItems:"center" },
   actBtn:{ width:"48px",padding:"10px 0",border:"none",background:"transparent",color:"#64748b",cursor:"pointer",display:"flex",flexDirection:"column" as const,alignItems:"center",gap:"4px",borderRadius:"0",transition:"color 0.1s" },
-  actOn:{ color:"#fafafa",borderLeft:"2px solid #38bdf8" },
+  actOn:{ color:"var(--text-main, #fafafa)",borderLeft:"2px solid #38bdf8" },
   actLbl:{ display:"none" },
   sidebar:{ backgroundColor:"#000000",borderRight:"1px solid #27272a",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0 },
   resizerX: { width: "4px", backgroundColor: "transparent", cursor: "col-resize", zIndex: 10, transition: "background-color 0.2s" },
@@ -892,34 +1171,34 @@ const s: Record<string,React.CSSProperties> = {
   center:{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" },
   tabBar:{ display:"flex",height:"35px",backgroundColor:"#000000",borderBottom:"1px solid #27272a",overflowX:"auto" as const,flexShrink:0 },
   tab:{ display:"flex",alignItems:"center",gap:"5px",padding:"0 12px",minWidth:"80px",maxWidth:"160px",backgroundColor:"#000000",borderRight:"1px solid #27272a",color:"#94a3b8",fontSize:"13px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0,transition:"all 0.1s" },
-  tabOn:{ backgroundColor:"#09090b",color:"#e4e4e7",borderTop:"2px solid #38bdf8" },
+  tabOn:{ backgroundColor:"var(--bg-base, #09090b)",color:"var(--text-main, #e4e4e7)",borderTop:"2px solid #38bdf8" },
   tabName:{ flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,fontWeight:400 },
-  tabDot:{ color:"#fafafa",fontSize:"14px" },
+  tabDot:{ color:"var(--text-main, #fafafa)",fontSize:"14px" },
   tabX:{ fontSize:"12px",opacity:0.5,padding:"0 2px",cursor:"pointer",transition:"opacity 0.2s" },
   editorArea:{ flex:1,overflow:"hidden",position:"relative" as const },
   splitPlaceholder:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:"#64748b",fontSize:"12px",backgroundColor:"#000000" },
   welcome:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",backgroundColor:"#000000",position:"relative" as const },
   welcomeLogoBg:{ position:"absolute" as const,width:"400px",height:"400px",objectFit:"contain",opacity:0.02,pointerEvents:"none" as const,top:"50%",left:"50%",transform:"translate(-50%, -50%)" },
   welcomeCard:{ display:"flex",flexDirection:"column",alignItems:"flex-start",padding:"20px",maxWidth:"400px",width:"100%",zIndex:1 },
-  welcomeH2:{ margin:"0 0 8px",fontSize:"22px",fontWeight:400,color:"#fafafa" },
+  welcomeH2:{ margin:"0 0 8px",fontSize:"22px",fontWeight:400,color:"var(--text-main, #fafafa)" },
   welcomeP:{ margin:"0 0 24px",fontSize:"13px",color:"#64748b" },
   welcomeRow:{ display:"flex",flexDirection:"column" as const,gap:"8px",width:"100%",alignItems:"flex-start" },
-  wBtnLink:{ background:"transparent",border:"none",color:"#38bdf8",padding:"0",fontSize:"13px",cursor:"pointer",textDecoration:"none",transition:"color 0.1s" },
+  wBtnLink:{ background:"transparent",border:"none",color:"var(--accent, #38bdf8)",padding:"0",fontSize:"13px",cursor:"pointer",textDecoration:"none",transition:"color 0.1s" },
   recentBox:{ marginTop:"32px",width:"100%",display:"flex",flexDirection:"column",gap:"4px" },
-  recentHdr:{ fontSize:"11px",fontWeight:600,color:"#e4e4e7",margin:"0 0 6px" },
+  recentHdr:{ fontSize:"11px",fontWeight:600,color:"var(--text-main, #e4e4e7)",margin:"0 0 6px" },
   recentItem:{ display:"flex",flexDirection:"column" as const,alignItems:"flex-start",backgroundColor:"transparent",border:"none",padding:"6px 0",cursor:"pointer",textAlign:"left" as const,transition:"opacity 0.2s" },
-  recentName:{ fontSize:"13px",color:"#38bdf8",marginBottom:"2px" },
+  recentName:{ fontSize:"13px",color:"var(--accent, #38bdf8)",marginBottom:"2px" },
   recentPath:{ fontSize:"11px",color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,width:"100%" },
   dock:{ backgroundColor:"#000000",borderTop:"1px solid #27272a",display:"flex",flexDirection:"column",flexShrink:0 },
   dockTabs:{ display:"flex",height:"24px",backgroundColor:"#000000",borderBottom:"1px solid #27272a",flexShrink:0 },
   dockTab:{ background:"none",border:"none",borderBottom:"1px solid transparent",borderRight:"1px solid transparent",color:"#94a3b8",padding:"0 12px",fontSize:"11px",cursor:"pointer",transition:"color 0.1s" },
-  dockOn:{ color:"#fafafa",borderBottom:"1px solid #38bdf8" },
+  dockOn:{ color:"var(--text-main, #fafafa)",borderBottom:"1px solid #38bdf8" },
   dockContent:{ flex:1,overflow:"hidden" },
   log:{ padding:"6px 12px",fontFamily:"'JetBrains Mono',Consolas,monospace",fontSize:"12px",overflowY:"auto" as const,height:"100%" },
-  logLine:{ color:"#e4e4e7",lineHeight:"1.6",margin:0 },
+  logLine:{ color:"var(--text-main, #e4e4e7)",lineHeight:"1.6",margin:0 },
   logDim:{ color:"#52525b",margin:0 },
   agentPane:{ display:"flex",flexDirection:"column",height:"100%",padding:"10px",gap:"8px" },
-  paneHdr:{ fontSize:"11px",fontWeight:700,letterSpacing:"0.8px",color:"#e4e4e7",margin:0 },
-  agentArea:{ flex:1,maxHeight:"100px",backgroundColor:"#1a1a1e",border:"1px solid #27272a",color:"#e4e4e7",borderRadius:"6px",padding:"8px",fontSize:"12px",resize:"none" as const,fontFamily:"inherit" },
-  agentBtn:{ backgroundColor:"#e4e4e7",color:"#09090b",border:"none",borderRadius:"6px",padding:"8px",fontWeight:700,fontSize:"12px",cursor:"pointer" },
+  paneHdr:{ fontSize:"11px",fontWeight:700,letterSpacing:"0.8px",color:"var(--text-main, #e4e4e7)",margin:0 },
+  agentArea:{ flex:1,maxHeight:"100px",backgroundColor:"#1a1a1e",border:"1px solid #27272a",color:"var(--text-main, #e4e4e7)",borderRadius:"6px",padding:"8px",fontSize:"12px",resize:"none" as const,fontFamily:"inherit" },
+  agentBtn:{ backgroundColor:"var(--text-main, #e4e4e7)",color:"var(--bg-base, #09090b)",border:"none",borderRadius:"6px",padding:"8px",fontWeight:700,fontSize:"12px",cursor:"pointer" },
 };

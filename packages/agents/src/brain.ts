@@ -61,15 +61,15 @@ export class BrainManager {
     fs.appendFileSync(transcriptFile, entry, "utf-8");
   }
 
-  public writeArtifact(filename: string, content: string) {
+  public async writeArtifact(filename: string, content: string): Promise<void> {
     const artifactPath = path.join(this.getArtifactsDir(), filename);
-    fs.writeFileSync(artifactPath, content, "utf-8");
+    await fs.promises.writeFile(artifactPath, content, "utf-8");
   }
 
-  public getArtifact(filename: string): string | null {
+  public async getArtifact(filename: string): Promise<string | null> {
     const artifactPath = path.join(this.getArtifactsDir(), filename);
     if (fs.existsSync(artifactPath)) {
-      return fs.readFileSync(artifactPath, "utf-8");
+      return await fs.promises.readFile(artifactPath, "utf-8");
     }
     return null;
   }

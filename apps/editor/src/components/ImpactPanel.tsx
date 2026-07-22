@@ -39,7 +39,7 @@ export function ImpactPanel({ filePath, symbolName }: ImpactPanelProps) {
     setState({ status: "loading" });
 
     try {
-      const api = (window as any).atlasAPI;
+      const api = window.atlasAPI;
       if (!api || !api.impact) {
         setState({ status: "no-graph" });
         return;
@@ -92,7 +92,7 @@ export function ImpactPanel({ filePath, symbolName }: ImpactPanelProps) {
 }
 
 function ImpactDisplay({ result }: { result: ImpactResult }) {
-  const riskColor = RISK_COLORS[result.riskLevel] ?? "#fafafa";
+  const riskColor = RISK_COLORS[result.riskLevel] ?? "var(--text-main, #fafafa)";
   const riskLabel = RISK_LABELS[result.riskLevel] ?? result.riskLevel.toUpperCase();
 
   return (
@@ -123,7 +123,7 @@ function ImpactDisplay({ result }: { result: ImpactResult }) {
                 <span
                   style={{
                     ...styles.fileBadge,
-                    color: isTest ? "#38bdf8" : isApi ? "#c084fc" : "#71717a",
+                    color: isTest ? "var(--accent, #38bdf8)" : isApi ? "#c084fc" : "var(--text-muted, #71717a)",
                   }}
                 >
                   {isTest ? "test" : isApi ? "api" : "src"}
@@ -169,8 +169,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "14px",
     height: "100%",
     overflowY: "auto",
-    backgroundColor: "#0d0d10",
-    color: "#fafafa",
+    backgroundColor: "var(--bg-base, #0d0d10)",
+    color: "var(--text-main, #fafafa)",
     fontSize: 12,
     borderRight: "1px solid #27272a",
   },
@@ -184,13 +184,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     fontSize: 11,
     letterSpacing: "0.8px",
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   loadingDot: {
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   hint: {
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: 12,
     marginTop: 8,
   },
@@ -207,7 +207,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 14,
   },
   metric: {
-    background: "#18181b",
+    background: "var(--bg-header, #18181b)",
     border: "1px solid #27272a",
     borderRadius: 6,
     padding: "10px",
@@ -218,16 +218,16 @@ const styles: Record<string, React.CSSProperties> = {
   metricValue: {
     fontSize: 18,
     fontWeight: 700,
-    color: "#fafafa",
+    color: "var(--text-main, #fafafa)",
   },
   metricLabel: {
     fontSize: 10,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     textTransform: "uppercase",
     letterSpacing: "0.5px",
   },
   rationale: {
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     marginBottom: 14,
     lineHeight: 1.5,
   },
@@ -237,7 +237,7 @@ const styles: Record<string, React.CSSProperties> = {
   fileListHeader: {
     fontSize: 10,
     fontWeight: 700,
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     letterSpacing: "0.8px",
     marginBottom: 8,
   },
@@ -255,13 +255,13 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 28,
   },
   filePath: {
-    color: "#a1a1aa",
+    color: "var(--text-muted, #a1a1aa)",
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
   moreFiles: {
-    color: "#71717a",
+    color: "var(--text-muted, #71717a)",
     fontSize: 11,
     marginTop: 6,
   },

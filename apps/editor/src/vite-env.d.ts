@@ -1,10 +1,14 @@
 /// <reference types="vite/client" />
+import { AtlasAPI } from "./types/atlas";
 
 declare module "*.png" {
   const src: string;
   export default src;
 }
 
-interface Window {
-  atlasAPI: any;
+declare global {
+  interface Window {
+    atlasAPI: AtlasAPI;
+    monaco: any;
+  }
 }

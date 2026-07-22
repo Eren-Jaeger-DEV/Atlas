@@ -24,7 +24,7 @@ export function StatusBar({ repoPath, activeLanguage, cursorSymbol, cursorLine =
           backgroundColor: isBlue 
             ? (hovered === id ? "#0284c7" : "#0ea5e9") 
             : (hovered === id ? "rgba(255,255,255,0.12)" : "transparent"),
-          color: isBlue ? "#ffffff" : "#e4e4e7",
+          color: isBlue ? "#ffffff" : "var(--text-main, #e4e4e7)",
           cursor: "pointer",
           transition: "background-color 0.1s",
           gap: "4px"
@@ -120,7 +120,7 @@ export function StatusBar({ repoPath, activeLanguage, cursorSymbol, cursorLine =
             <span style={{ fontSize: "12px", fontWeight: "bold", fontFamily: "monospace" }}>{"{}"}</span>
             <span style={{ fontSize: "11px", marginTop: "1px" }}>{activeLanguage ? activeLanguage.toUpperCase() : "TYPESCRIPT JSX"}</span>
             {lsStatus === "ready" && <div className="status-live-indicator" style={{ marginLeft: "4px" }} title="Language Server Ready" />}
-            {lsStatus === "loading" && <div className="status-warn-indicator" style={{ marginLeft: "4px", backgroundColor: "#38bdf8" }} title="Language Server Loading..." />}
+            {lsStatus === "loading" && <div className="status-warn-indicator" style={{ marginLeft: "4px", backgroundColor: "var(--accent, #38bdf8)" }} title="Language Server Loading..." />}
             {lsStatus === "error" && <div className="status-warn-indicator" style={{ marginLeft: "4px", backgroundColor: "#f87171" }} title="Language Server Error" />}
           </div>
         </StatusItem>
@@ -168,7 +168,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: "22px",
     backgroundColor: "#000000",
     borderTop: "1px solid #38bdf8",
-    color: "#e4e4e7",
+    color: "var(--text-main, #e4e4e7)",
     userSelect: "none",
   },
   leftGroup: {
