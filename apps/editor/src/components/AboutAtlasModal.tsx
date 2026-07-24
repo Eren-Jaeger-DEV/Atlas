@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import logoImg from "../assets/logo.png";
 
 interface AboutAtlasModalProps {
@@ -5,9 +6,17 @@ interface AboutAtlasModalProps {
 }
 
 export function AboutAtlasModal({ onClose }: AboutAtlasModalProps) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
   return (
     <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+      <div className="anim-scale-in" style={styles.modal} onClick={e => e.stopPropagation()}>
         <div style={styles.header}>
           <img src={logoImg} alt="Atlas" style={styles.logo} />
           <div>
@@ -72,12 +81,14 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 99999,
   },
   modal: {
-    backgroundColor: "var(--bg-panel, #141417)",
-    border: "1px solid #27272a",
+    backgroundColor: "var(--bg-panel, rgba(20, 20, 23, 0.85))",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+    border: "1px solid #333333",
     borderRadius: "12px",
     width: "520px",
     maxWidth: "90vw",
-    boxShadow: "0 24px 72px rgba(0, 0, 0, 0.9)",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.05)",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",

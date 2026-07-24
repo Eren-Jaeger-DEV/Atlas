@@ -1,5 +1,3 @@
-// WARN - The AST Graph Index status and the info text below are currently hardcoded/simulated. 
-// The file count and TODO count are real, but the deep AST dependency analysis is pending implementation.
 import { useState, useEffect } from "react";
 
 const api = () => window.atlasAPI;
@@ -12,6 +10,7 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
   const [todoCount, setTodoCount] = useState<number | null>(null);
   const [fileCount, setFileCount] = useState<number | null>(null);
   const [depsStats, setDepsStats] = useState<{deps: number, outdated: number} | null>(null);
+  const [graphStats, setGraphStats] = useState<{ nodes: number; edges: number } | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -21,13 +20,19 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
     Promise.all([
       api().readDir ? api().readDir(repoPath) : Promise.resolve([]),
       api().scanTodos ? api().scanTodos(repoPath) : Promise.resolve({ total: null }),
-      api().scanDeps ? api().scanDeps(repoPath) : Promise.resolve({ deps: 0, outdated: 0 })
+      api().scanDeps ? api().scanDeps(repoPath) : Promise.resolve({ deps: 0, outdated: 0 }),
+      api().getGraphData ? api().getGraphData(repoPath) : Promise.resolve({ nodes: [], edges: [] })
     ])
-      .then(([files, todos, deps]) => {
+      .then(([files, todos, deps, graph]) => {
         setFileCount(Array.isArray(files) ? files.length : null);
         setTodoCount(todos?.total ?? null);
         setDepsStats(deps);
+        setGraphStats({
+          nodes: Array.isArray(graph?.nodes) ? graph.nodes.length : 0,
+          edges: Array.isArray(graph?.edges) ? graph.edges.length : 0
+        });
       })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [repoPath]);
 
@@ -92,16 +97,16 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
               </div>
               <div style={styles.bdRow}>
                 <span>AST Graph Index</span>
-                <span style={{ color: "var(--accent, #38bdf8)" }}>[LIVE]</span>
+                <span style={{ color: "var(--accent, #38bdf8)" }}>
+                  {graphStats ? `[${graphStats.nodes} Nodes / ${graphStats.edges} Edges]` : "[SCANNING]"}
+                </span>
               </div>
             </div>
 
             {/* Info */}
             <div style={styles.info}>
               <p style={styles.infoTxt}>
-                Full circular-dependency detection and unused-export analysis are driven by the
-                live AST graph engine. Use the Dependency Graph panel to explore the complete
-                module graph for this workspace.
+                AST graph analysis is live ({graphStats?.nodes ?? 0} AST nodes indexed). Use the Dependency Graph panel to explore the complete interactive module graph for this workspace.
               </p>
             </div>
           </>

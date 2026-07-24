@@ -27,3 +27,10 @@ export { BrowserEngine, type NetworkLogEntry } from "./browser/BrowserEngine.js"
 export { getBrowserToolDefinitions, executeBrowserTool, type AgentToolDefinition } from "./browser/BrowserTools.js";
 export { BrowserSubagent, type BrowserSubagentOptions, type BrowserSubagentResult } from "./browser/BrowserSubagent.js";
 
+// AtlasParallel — multi-agent concurrent workflow
+export { WorkerPool, type WorkerPoolConfig } from "./parallel/WorkerPool.js";
+export { ParallelPlanner, type ParallelPlannerConfig } from "./parallel/ParallelPlanner.js";
+export { ParallelMerger, type MergeReport, type FileEdit, type MergeConflict } from "./parallel/ParallelMerger.js";
+export { SelfHealingVerifier, type VerificationResult } from "./parallel/SelfHealingVerifier.js";
+export { WorkflowSkillCreator } from "./parallel/WorkflowSkillCreator.js";
+export type { ParallelPlan, ParallelSubTask, WorkerState, ParallelEvent, ParallelWorkerStatus } from "./parallel/types.js";

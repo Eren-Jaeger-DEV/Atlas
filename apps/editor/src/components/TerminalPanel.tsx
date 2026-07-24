@@ -153,26 +153,40 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
 
   return (
     <div style={styles.container}>
-      {/* Terminal Tab Bar & Shell Selector */}
       <div style={styles.header}>
         <div style={styles.tabGroup}>
           {tabs.map(t => (
             <div
               key={t.id}
+              className="editor-tab anim-slide-right"
               style={{ ...styles.tab, ...(t.id === activeTabId ? styles.tabOn : {}) }}
               onClick={() => setActiveTabId(t.id)}
             >
               <span>{t.name}</span>
               {tabs.length > 1 && (
-                <span style={styles.tabX} onClick={e => handleCloseTab(t.id, e)}>✕</span>
+                <span
+                  className="tab-close-btn"
+                  style={styles.tabX}
+                  onClick={e => handleCloseTab(t.id, e)}
+                  title="Close Terminal"
+                >
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                  </svg>
+                </span>
               )}
             </div>
           ))}
-          <button style={styles.addBtn} title="New Terminal Tab" onClick={handleAddTab}>+</button>
+          <button className="hover-scale sidebar-action-btn" style={styles.addBtn} title="New Terminal Tab" onClick={handleAddTab}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
         </div>
 
         <div style={styles.rightGroup}>
           <select
+            className="hover-scale"
             style={styles.select}
             value={shellType}
             onChange={e => setShellType(e.target.value)}
@@ -181,7 +195,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
             <option value="cmd">Command Prompt</option>
             <option value="bash">Git Bash</option>
           </select>
-          <span style={styles.subtext}>{repoPath ?? "No workspace"}</span>
+          <span style={styles.subtext}>{repoPath ? repoPath.split(/[/\\]/).pop() : "No workspace"}</span>
         </div>
       </div>
 
@@ -195,23 +209,23 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "var(--bg-base, #09090b)",
-    color: "var(--text-main, #fafafa)",
+    backgroundColor: "transparent",
+    color: "var(--text-main)",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "0 8px",
-    backgroundColor: "var(--bg-base, #0d0d10)",
-    borderBottom: "1px solid #27272a",
+    padding: "0 8px 0 0",
+    backgroundColor: "transparent",
+    borderBottom: "1px solid var(--border-subtle)",
     fontSize: "11px",
     height: "28px",
+    flexShrink: 0,
   },
   tabGroup: {
     display: "flex",
     alignItems: "center",
-    gap: "2px",
     height: "100%",
   },
   tab: {
@@ -220,28 +234,37 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "6px",
     padding: "0 10px",
     height: "100%",
-    color: "var(--text-muted, #71717a)",
+    color: "var(--text-muted)",
     cursor: "pointer",
     fontSize: "11px",
-    fontWeight: 600,
+    fontWeight: 500,
     borderBottom: "2px solid transparent",
+    borderRight: "1px solid var(--border-subtle)",
+    transition: "color 0.15s, background-color 0.15s",
   },
   tabOn: {
-    color: "var(--text-main, #fafafa)",
-    borderBottom: "2px solid #fafafa",
-    backgroundColor: "var(--bg-panel, #141417)",
+    color: "var(--text-main)",
+    borderBottom: "2px solid var(--accent)",
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
   },
   tabX: {
-    fontSize: "10px",
-    opacity: 0.5,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "2px",
+    borderRadius: "3px",
+    color: "var(--text-faint)",
+    transition: "color 0.15s, background-color 0.15s",
   },
   addBtn: {
     background: "none",
     border: "none",
-    color: "var(--text-muted, #71717a)",
-    fontSize: "14px",
+    color: "var(--text-muted)",
     cursor: "pointer",
-    padding: "0 6px",
+    padding: "4px 8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   rightGroup: {
     display: "flex",
@@ -249,21 +272,26 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "10px",
   },
   select: {
-    backgroundColor: "var(--bg-header, #18181b)",
-    border: "1px solid #27272a",
-    color: "var(--text-main, #fafafa)",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
+    border: "1px solid var(--border-subtle)",
+    color: "var(--text-main)",
     fontSize: "11px",
-    borderRadius: "3px",
-    padding: "1px 4px",
+    borderRadius: "4px",
+    padding: "2px 6px",
     outline: "none",
+    cursor: "pointer",
+    transition: "border-color 0.15s",
   },
   subtext: {
-    color: "var(--text-muted, #71717a)",
+    color: "var(--text-faint)",
     fontSize: "10px",
+    fontWeight: 500,
+    letterSpacing: "0.5px",
+    textTransform: "uppercase",
   },
   canvasContainer: {
     flex: 1,
-    padding: "4px 8px",
+    padding: "8px 10px 4px 10px",
     overflow: "hidden",
     position: "relative",
   },

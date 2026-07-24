@@ -1,165 +1,153 @@
-import { useState, useEffect } from "react";
-import { useStorage } from "./StorageContext";
+import React, { useState, useEffect, useRef } from "react";
 
-import type { CommandService, CommandDescriptor } from "@atlas/core";
-
-interface CommandPaletteProps {
-  commandService: CommandService;
-  isOpen: boolean;
-  onClose: () => void;
+interface CommandItem {
+  id: string;
+  title: string;
+  category?: string;
+  shortcut?: string;
+  action: () => void;
 }
 
-export function CommandPalette({ commandService, isOpen, onClose }: CommandPaletteProps) {
-  const storage = useStorage();
-  const [search, setSearch] = useState("");
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [recentIds, setRecentIds] = useState<string[]>([]);
+interface CommandPaletteProps {
+  isOpen: boolean;
+  onClose: () => void;
+  commands?: CommandItem[];
+  commandService?: any;
+  openFiles?: string[];
+  onSelectFile?: (filePath: string) => void;
+}
 
-  useEffect(() => {
-    const loadRecent = async () => {
-      try {
-        const stored = await storage.getItem("atlas_recent_commands");
-        if (stored) setRecentIds(JSON.parse(stored));
-      } catch (err) {
-        console.warn("[WARN] Failed to parse atlas_recent_commands from storage:", err);
-      }
-    };
-    loadRecent();
-  }, [storage]);
+export function CommandPalette({
+  isOpen,
+  onClose,
+  commands = [],
+  commandService,
+  openFiles = [],
+  onSelectFile,
+}: CommandPaletteProps) {
+  const [query, setQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setSearch("");
+      setQuery("");
       setSelectedIndex(0);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
-  const saveRecent = async (id: string) => {
-    let next: string[] = [];
-    setRecentIds((prev) => {
-      next = [id, ...prev.filter((x) => x !== id)].slice(0, 5);
-      return next;
-    });
-    await storage.setItem("atlas_recent_commands", JSON.stringify(next));
-  };
-
   if (!isOpen) return null;
 
-  const commands = commandService.getCommands();
-
-  // Fuzzy match logic
-  const fuzzyMatch = (str: string, query: string) => {
-    if (!query) return { isMatch: true, indices: [] };
-    const strLower = str.toLowerCase();
-    const queryLower = query.toLowerCase();
-    let i = 0, j = 0;
-    const indices = [];
-    while (i < strLower.length && j < queryLower.length) {
-      if (strLower[i] === queryLower[j]) {
-        indices.push(i);
-        j++;
-      }
-      i++;
-    }
-    return { isMatch: j === queryLower.length, indices };
-  };
-
-  const renderHighlighted = (text: string, indices: number[]) => {
-    if (indices.length === 0) return <span>{text}</span>;
-    return (
-      <span>
-        {text.split("").map((char, idx) =>
-          indices.includes(idx) ? (
-            <span key={idx} style={{ color: "var(--accent, #38bdf8)", fontWeight: 700 }}>{char}</span>
-          ) : (
-            <span key={idx}>{char}</span>
-          )
-        )}
-      </span>
-    );
-  };
-
-  let displayCommands: Array<{ cmd: CommandDescriptor; indices: number[]; isRecent?: boolean }> = [];
-
-  if (search === "") {
-    const recent = recentIds.map(id => commands.find(c => c.id === id)).filter(Boolean) as CommandDescriptor[];
-    const others = commands.filter(c => !recentIds.includes(c.id));
-    displayCommands = [
-      ...recent.map(cmd => ({ cmd, indices: [], isRecent: true })),
-      ...others.map(cmd => ({ cmd, indices: [] }))
-    ];
-  } else {
-    for (const cmd of commands) {
-      const matchLabel = fuzzyMatch(cmd.label, search);
-      const matchCat = cmd.category ? fuzzyMatch(cmd.category, search) : { isMatch: false, indices: [] };
-      if (matchLabel.isMatch || matchCat.isMatch) {
-        displayCommands.push({ cmd, indices: matchLabel.isMatch ? matchLabel.indices : [] });
-      }
+  let activeCommands: CommandItem[] = [...commands];
+  if (commandService && typeof commandService.getCommands === "function") {
+    const registered = commandService.getCommands();
+    if (Array.isArray(registered)) {
+      activeCommands = [
+        ...activeCommands,
+        ...registered.map((c: any) => ({
+          id: c.id || c.title,
+          title: c.title || c.label || c.id,
+          category: c.category || "Editor",
+          action: () => {
+            if (typeof c.action === "function") c.action();
+            else if (typeof commandService.executeCommand === "function") commandService.executeCommand(c.id);
+            onClose();
+          }
+        }))
+      ];
     }
   }
+
+  const isFileSearch = query.startsWith(">") === false;
+  const searchTerm = query.startsWith(">") ? query.slice(1).trim().toLowerCase() : query.trim().toLowerCase();
+
+  const filteredCommands: CommandItem[] = isFileSearch
+    ? openFiles
+        .filter((f) => f.toLowerCase().includes(searchTerm))
+        .map((f) => ({
+          id: f,
+          title: f.split("/").pop() || f,
+          category: f,
+          action: () => {
+            onSelectFile?.(f);
+            onClose();
+          },
+        }))
+    : activeCommands.filter(
+        (c) =>
+          c.title.toLowerCase().includes(searchTerm) ||
+          (c.category && c.category.toLowerCase().includes(searchTerm))
+      );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       onClose();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % Math.max(1, displayCommands.length));
+      setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredCommands.length));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + displayCommands.length) % Math.max(1, displayCommands.length));
+      setSelectedIndex((prev) => (prev - 1 + filteredCommands.length) % Math.max(1, filteredCommands.length));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const target = displayCommands[selectedIndex];
-      if (target) {
-        saveRecent(target.cmd.id);
-        commandService.executeCommand(target.cmd.id).catch(console.error);
-        onClose();
+      if (filteredCommands[selectedIndex]) {
+        filteredCommands[selectedIndex].action();
       }
     }
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <input
-          autoFocus
-          style={styles.input}
-          placeholder="Type a command or search..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setSelectedIndex(0);
-          }}
-          onKeyDown={handleKeyDown}
-        />
+    <div
+      className="anim-fade-in"
+      style={styles.backdrop}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="anim-scale-in" style={styles.modal}>
+        <div style={styles.inputContainer}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" style={{ marginRight: 10 }}>
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            ref={inputRef}
+            type="text"
+            style={styles.input}
+            placeholder="Type a command or '>' for actions (e.g. '> Format', '> Build')..."
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
+            onKeyDown={handleKeyDown}
+          />
+          <span style={styles.badge}>{isFileSearch ? "Files" : "Commands"}</span>
+        </div>
+
         <div style={styles.list}>
-          {displayCommands.length === 0 ? (
-            <div style={styles.noMatch}>No matching commands</div>
+          {filteredCommands.length === 0 ? (
+            <div style={styles.emptyState}>No matching results found</div>
           ) : (
-            displayCommands.map((item, idx) => {
-              const showRecentHeader = idx === 0 && search === "" && item.isRecent;
-              const showOtherHeader = search === "" && !item.isRecent && (idx === 0 || displayCommands[idx - 1]?.isRecent);
-              
+            filteredCommands.map((cmd, idx) => {
+              const isSelected = idx === selectedIndex;
               return (
-                <div key={item.cmd.id}>
-                  {showRecentHeader && <div style={styles.groupHeader}>Recently Used</div>}
-                  {showOtherHeader && <div style={styles.groupHeader}>All Commands</div>}
-                  <div
-                    style={{
-                      ...styles.item,
-                      ...(idx === selectedIndex ? styles.itemSelected : {}),
-                    }}
-                    onMouseEnter={() => setSelectedIndex(idx)}
-                    onClick={() => {
-                      saveRecent(item.cmd.id);
-                      commandService.executeCommand(item.cmd.id).catch(console.error);
-                      onClose();
-                    }}
-                  >
-                    {item.cmd.category && <span style={styles.category}>{item.cmd.category}</span>}
-                    <span style={styles.label}>{renderHighlighted(item.cmd.label, item.indices)}</span>
-                    {item.cmd.shortcut && <span style={styles.shortcut}>{item.cmd.shortcut}</span>}
+                <div
+                  key={cmd.id}
+                  style={{
+                    ...styles.item,
+                    backgroundColor: isSelected ? "#38bdf81a" : "transparent",
+                    borderLeft: isSelected ? "3px solid #38bdf8" : "3px solid transparent",
+                  }}
+                  onClick={() => cmd.action()}
+                  onMouseEnter={() => setSelectedIndex(idx)}
+                >
+                  <div style={styles.itemMain}>
+                    <span style={styles.itemTitle}>{cmd.title}</span>
+                    {cmd.category && <span style={styles.itemCategory}>{cmd.category}</span>}
                   </div>
+                  {cmd.shortcut && <span style={styles.shortcut}>{cmd.shortcut}</span>}
                 </div>
               );
             })
@@ -171,88 +159,103 @@ export function CommandPalette({ commandService, isOpen, onClose }: CommandPalet
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  overlay: {
+  backdrop: {
     position: "fixed",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    backdropFilter: "blur(4px)",
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    zIndex: 99999,
     display: "flex",
     justifyContent: "center",
     alignItems: "flex-start",
-    paddingTop: "80px",
-    zIndex: 9999,
+    paddingTop: "12vh",
+    fontFamily: "var(--font-ui)",
   },
   modal: {
-    width: "560px",
-    backgroundColor: "#050505",
-    border: "1px solid #38bdf8",
+    backgroundColor: "rgba(14, 14, 18, 0.94)",
+    backdropFilter: "blur(16px) saturate(1.5)",
+    WebkitBackdropFilter: "blur(16px) saturate(1.5)",
+    width: "600px",
+    maxWidth: "90vw",
     borderRadius: "10px",
-    boxShadow: "0 25px 65px rgba(0, 0, 0, 0.7)",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.05), 0 0 40px rgba(0,0,0,0.5)",
+    border: "1px solid rgba(255, 255, 255, 0.08)",
     overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+  },
+  inputContainer: {
+    display: "flex",
+    alignItems: "center",
+    padding: "16px",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
+    backgroundColor: "transparent",
   },
   input: {
-    width: "100%",
-    padding: "16px 20px",
-    backgroundColor: "#000000",
+    flex: 1,
+    background: "none",
     border: "none",
-    borderBottom: "1px solid #38bdf8",
-    color: "var(--text-main, #fafafa)",
-    fontSize: "14px",
+    color: "var(--text-main)",
+    fontSize: "15px",
     outline: "none",
     fontFamily: "inherit",
   },
-  list: {
-    maxHeight: "360px",
-    overflowY: "auto",
-    padding: "8px",
-  },
-  groupHeader: {
-    padding: "6px 14px",
+  badge: {
     fontSize: "10px",
     fontWeight: 700,
-    color: "#64748b",
     textTransform: "uppercase",
     letterSpacing: "0.5px",
+    color: "var(--accent)",
+    backgroundColor: "rgba(56, 189, 248, 0.1)",
+    padding: "2px 8px",
+    borderRadius: "4px",
+    border: "1px solid rgba(56, 189, 248, 0.25)",
+  },
+  list: {
+    overflowY: "auto",
+    maxHeight: "340px",
+    padding: "8px",
   },
   item: {
     display: "flex",
+    justifyContent: "space-between",
     alignItems: "center",
     padding: "10px 14px",
-    cursor: "pointer",
-    fontSize: "13px",
-    color: "#94a3b8",
     borderRadius: "6px",
-    transition: "background-color 0.1s",
+    cursor: "pointer",
+    transition: "all 0.1s ease",
   },
-  itemSelected: {
-    backgroundColor: "#38bdf820",
-    color: "var(--text-main, #e4e4e7)",
+  itemMain: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "3px",
   },
-  category: {
-    fontSize: "10px",
-    fontWeight: 700,
-    textTransform: "uppercase",
-    color: "#64748b",
-    width: "100px",
+  itemTitle: {
+    fontSize: "13px",
+    fontWeight: 500,
+    color: "var(--text-main)",
   },
-  label: {
-    flex: 1,
+  itemCategory: {
+    fontSize: "11px",
+    color: "var(--text-faint)",
   },
   shortcut: {
     fontSize: "11px",
-    color: "#94a3b8",
-    backgroundColor: "#000000",
-    border: "1px solid #38bdf8",
-    padding: "2px 6px",
+    fontFamily: "var(--font-mono, monospace)",
+    color: "var(--text-muted)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    padding: "3px 6px",
     borderRadius: "4px",
+    border: "1px solid rgba(255,255,255,0.08)",
   },
-  noMatch: {
-    padding: "20px",
+  emptyState: {
+    padding: "32px",
     textAlign: "center",
-    color: "#64748b",
     fontSize: "13px",
+    color: "var(--text-muted)",
   },
 };

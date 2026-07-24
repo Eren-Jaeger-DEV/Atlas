@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ComposerDiff } from "./ComposerDiff.js";
 import { SynapseDashboard } from "./SynapseDashboard.js";
+import { logToOutput } from "./OutputPanel.js";
 
 interface AiSidebarProps {
   repoPath?: string;
@@ -22,9 +23,16 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
   const [activeView, setActiveView] = useState<"chat" | "history" | "dashboard">("chat");
   const [composerOutput, setComposerOutput] = useState<any>(null);
   const [streamEvents, setStreamEvents] = useState<any[]>([]);
+  const [streamingTokenText, setStreamingTokenText] = useState("");
   const [awaitingHuman, setAwaitingHuman] = useState<string | null>(null);
   const [planningMode, setPlanningMode] = useState(false);
   const [planApprovalReq, setPlanApprovalReq] = useState<{reqId: string, plan: any} | null>(null);
+
+  // Model & Key setup state
+  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
+  const [showKeySetup, setShowKeySetup] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [keySaveMsg, setKeySaveMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const api = window.atlasAPI;
@@ -36,16 +44,32 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
 
     const unsub = api.onEvent((ev: any) => {
       setStreamEvents((prev) => [...prev, ev]);
-      if (ev.type === "awaiting_human") {
-        setAwaitingHuman(ev.reason);
+      if (ev.type === "token" && ev.content) {
+        setStreamingTokenText((prev) => prev + ev.content);
       }
-      if (ev.type === "state_change" && (ev.state === "DONE" || ev.state === "ERROR" || ev.state === "CANCELLED" || ev.state === "APPROVED")) {
+      if (ev.type === "log" && (ev.message || ev.content)) {
+        const text = ev.message || ev.content;
+        if (text && !text.startsWith("State:")) {
+          setStreamingTokenText((prev) => prev ? prev + "\n" + text : text);
+          logToOutput("Agent", text, "info");
+        }
+      }
+      if (ev.type === "step_start" && ev.tool) {
+        logToOutput("Agent", `Tool: ${ev.tool}${ev.args ? ` (${JSON.stringify(ev.args).slice(0,60)})` : ""}`, "info");
+      }
+      if (ev.type === "state_change") {
+        const level = ev.state === "ERROR" ? "error" : ev.state === "DONE" ? "success" : "info";
+        logToOutput("Agent", `State: ${ev.state}${ev.runId ? ` [${ev.runId.slice(0,8)}]` : ""}`, level);
         setActiveRuns(prev => {
           const next = new Set(prev);
           next.delete(ev.runId);
           return next;
         });
         if (ev.state === "DONE" || ev.state === "CANCELLED" || ev.state === "APPROVED") setAwaitingHuman(null);
+      }
+      if (ev.type === "awaiting_human") {
+        setAwaitingHuman(ev.reason);
+        logToOutput("Agent", `Awaiting human input: ${ev.reason ?? ""}`, "warn");
       }
     });
 
@@ -81,6 +105,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
     const newMessages = [...messages, { role: "user" as const, text: userMsg }];
     setMessages(newMessages);
     setStreamEvents([]);
+    setStreamingTokenText("");
     setAwaitingHuman(null);
 
     const api = window.atlasAPI;
@@ -107,9 +132,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           if (api.terminalGetHistory) {
             terminalHistory = await api.terminalGetHistory("term-1");
           }
-        } catch (e) {
-          // Ignore
-        }
+        } catch (e) {}
 
         let diagnostics = "";
         try {
@@ -119,9 +142,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
               diagnostics = markers.map((m: any) => `[${m.resource?.path || 'unknown'}] Line ${m.startLineNumber}: ${m.message}`).join("\n");
             }
           }
-        } catch (e) {
-          // Ignore
-        }
+        } catch (e) {}
 
         const context = {
           activeFilePath,
@@ -132,14 +153,18 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           gitStatusSummary,
           planningMode,
           terminalHistory,
-          diagnostics
+          diagnostics,
+          model: selectedModel
         };
 
         const result = await api.run(newMessages, context);
         if (result.error) {
           setMessages((prev) => [...prev, { role: "agent", text: `Error: ${result.error}` }]);
+          if (result.error.toLowerCase().includes("key") || result.error.toLowerCase().includes("provider")) {
+            setShowKeySetup(true);
+          }
         } else {
-          const replyText = result.plan?.planningReasoning || "Task completed successfully. Diff ready for review.";
+          const replyText = result.plan?.planningReasoning || streamingTokenText || "Task completed successfully. Diff ready for review.";
           setMessages((prev) => [...prev, { role: "agent", text: replyText }]);
           setAwaitingHuman(null);
           
@@ -150,8 +175,12 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             }
           }
         }
-      } catch (err) {
-        setMessages((prev) => [...prev, { role: "agent", text: `Error: ${String(err)}` }]);
+      } catch (err: any) {
+        const errMsg = String(err);
+        setMessages((prev) => [...prev, { role: "agent", text: `Error: ${errMsg}` }]);
+        if (errMsg.toLowerCase().includes("key") || errMsg.toLowerCase().includes("provider")) {
+          setShowKeySetup(true);
+        }
       } finally {
         setActiveRuns(prev => { const n = new Set(prev); n.delete(runKey); return n; });
       }
@@ -228,7 +257,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           </div>
         ) : (
           messages.map((msg, i) => (
-            <div key={i} style={msg.role === "user" ? styles.userBubble : styles.agentBubble}>
+            <div key={i} className="anim-slide-up" style={msg.role === "user" ? styles.userBubble : styles.agentBubble}>
               <p style={styles.bubbleText}>{msg.text}</p>
             </div>
           ))
@@ -278,16 +307,27 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
                 </div>
               </div>
             ) : (
-              <p style={{ ...styles.bubbleText, marginTop: "8px" }}>Running {activeRuns.size} task(s)...</p>
+              <div style={{ marginTop: "8px" }}>
+                <p style={{ ...styles.bubbleText, display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span className="pulsing-dot" style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#38bdf8" }} />
+                  Running {activeRuns.size} task(s)...
+                </p>
+                {streamingTokenText && (
+                  <div style={{ marginTop: "8px", color: "var(--text-main, #e4e4e7)", fontSize: "13px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                    {streamingTokenText}
+                    <span style={{ display: "inline-block", width: "4px", height: "14px", backgroundColor: "#38bdf8", marginLeft: "4px", animation: "blink 1s step-end infinite" }} />
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
       </div>
 
       <div style={styles.inputArea}>
-        <div style={styles.inputBox}>
+        <div style={styles.inputBox} className="ai-input-box">
           <div style={styles.inputTop}>
-            <button style={styles.addContextBtn} title="Add context, media, or files">
+            <button className="sidebar-action-btn" style={styles.addContextBtn} title="Add context, media, or files">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
             <textarea
@@ -304,20 +344,46 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             />
           </div>
           <div style={styles.inputBottom}>
-            <div 
-              style={{...styles.modelSelector, color: planningMode ? "var(--accent, #38bdf8)" : "var(--text-muted, #a1a1aa)"}}
-              onClick={() => setPlanningMode(!planningMode)}
-              title="Toggle Planning Mode"
+            <select
+              style={{
+                backgroundColor: "#18181b", border: "1px solid #27272a", color: "#38bdf8",
+                borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 600, outline: "none"
+              }}
+              value={selectedModel}
+              onChange={e => setSelectedModel(e.target.value)}
             >
-              {planningMode ? "Plan Mode: ON" : "Plan Mode: OFF"}
-            </div>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gpt-4o">GPT-4o</option>
+              <option value="claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+              <option value="ollama">Ollama (Local)</option>
+            </select>
+
+            <button
+              style={{
+                fontSize: 10, background: "none", border: "1px solid #3f3f46", borderRadius: 4,
+                color: planningMode ? "#38bdf8" : "#71717a", padding: "2px 6px", cursor: "pointer"
+              }}
+              onClick={() => setPlanningMode(!planningMode)}
+            >
+              {planningMode ? "Plan: ON" : "Plan: OFF"}
+            </button>
+
+            <button
+              style={{ fontSize: 10, background: "none", border: "1px solid #38bdf8", borderRadius: 4, color: "#38bdf8", padding: "2px 6px", cursor: "pointer" }}
+              onClick={() => setShowKeySetup(true)}
+              title="Configure Provider API Key"
+            >
+              [Key]
+            </button>
+
             <div style={styles.actionRow}>
               {prompt.trim() ? (
-                <button style={styles.sendBtn} onClick={handleSend}>
+                <button className="sidebar-action-btn" style={styles.sendBtn} onClick={handleSend}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </button>
               ) : (
-                <button style={styles.micBtn} title="Voice Input">
+                <button className="sidebar-action-btn" style={styles.micBtn} title="Voice Input">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                 </button>
               )}
@@ -328,6 +394,61 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           AI may make mistakes. Double-check all generated code.
         </div>
       </div>
+
+      {/* API Key Setup Modal */}
+      {showKeySetup && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 99999, fontFamily: "system-ui, sans-serif"
+        }}>
+          <div style={{
+            backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: 8,
+            width: 380, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.6)"
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#fafafa", marginBottom: 6 }}>
+              Configure Provider API Key
+            </div>
+            <div style={{ fontSize: 11, color: "#a1a1aa", marginBottom: 12 }}>
+              Set your API Key for Gemini, OpenAI, or Anthropic to enable live AI responses.
+            </div>
+            <input
+              type="password"
+              placeholder="Paste your API key here (e.g. AIzaSy... / sk-...)"
+              value={apiKeyInput}
+              onChange={e => setApiKeyInput(e.target.value)}
+              style={{
+                width: "100%", boxSizing: "border-box", background: "#09090b", border: "1px solid #38bdf8",
+                borderRadius: 4, padding: "8px 10px", fontSize: 12, color: "#fafafa", outline: "none", marginBottom: 12
+              }}
+            />
+            {keySaveMsg && <div style={{ fontSize: 11, color: "#22c55e", marginBottom: 10 }}>{keySaveMsg}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                style={{ background: "#27272a", border: "none", borderRadius: 4, color: "#e4e4e7", fontSize: 12, padding: "6px 14px", cursor: "pointer" }}
+                onClick={() => setShowKeySetup(false)}
+              >
+                Cancel
+              </button>
+              <button
+                style={{ background: "#38bdf8", border: "none", borderRadius: 4, color: "#000", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" }}
+                onClick={async () => {
+                  if (!apiKeyInput.trim()) return;
+                  const api = window.atlasAPI;
+                  if (api?.setSecureKey) {
+                    await api.setSecureKey("GEMINI_API_KEY", apiKeyInput.trim());
+                    await api.setSecureKey("OPENAI_API_KEY", apiKeyInput.trim());
+                  }
+                  setKeySaveMsg("Key saved successfully!");
+                  setTimeout(() => { setShowKeySetup(false); setKeySaveMsg(null); setApiKeyInput(""); }, 1000);
+                }}
+              >
+                Save Key
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </>
   );
@@ -338,10 +459,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#000000",
-    borderLeft: "1px solid #38bdf8",
+    backgroundColor: "rgba(9, 9, 11, 0.7)",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+    borderLeft: "1px solid rgba(56, 189, 248, 0.2)",
     fontSize: "13px",
     flexShrink: 0,
+    transition: "width 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
   },
   header: {
     display: "flex",

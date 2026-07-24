@@ -3,10 +3,9 @@ import MonacoEditor, { OnMount, OnChange, loader } from "@monaco-editor/react";
 import type * as Monaco from "monaco-editor";
 import * as monaco from "monaco-editor";
 import { dapClient, DAPEvent } from "../dap/DAPClient.js";
-
+import { useContextMenu, ContextMenuItem } from "./ContextMenuProvider.js";
 import { EditorSettings } from "./SettingsPanel.js";
 import { SnippetManager } from "../snippets/SnippetManager.js";
-
 import { fetchDocumentSymbols } from "../lsp/LSPClient.js";
 import { parseUnifiedDiff, parseGitBlame, BlameInfo } from "./GitHelpers.js";
 
@@ -79,6 +78,7 @@ export function EditorPane({
 }: EditorPaneProps) {
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
+  const { showContextMenu } = useContextMenu();
 
   const [showFind, setShowFind] = useState(false);
   const [findText, setFindText] = useState("");
@@ -258,10 +258,240 @@ export function EditorPane({
     SnippetManager.initialize(monaco).catch(console.error);
 
     if (repoPath) {
-      import("../lsp/LSPClient.js").then(m => {
-        m.initLSPClient(repoPath, resolvedLang).then(() => {
-          setTimeout(updateSymbols, 1000); // Give LSP a second to index before first fetch
-        });
+      import("../lsp/LSPClient.js").then(async m => {
+        await m.initLSPClient(repoPath, resolvedLang);
+        setTimeout(updateSymbols, 1000);
+
+        const lsp = m.getLSPClient();
+        if (!lsp) return;
+
+        // ----------------------------------------------------------------
+        // LSP: Hover provider
+        // ----------------------------------------------------------------
+        monaco.languages.registerHoverProvider(
+          ["typescript", "typescriptreact", "javascript", "javascriptreact", "python"],
+          {
+            provideHover: async (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
+              try {
+                const uri = model.uri.toString();
+                const result: any = await lsp.sendRequest("textDocument/hover", {
+                  textDocument: { uri },
+                  position: { line: position.lineNumber - 1, character: position.column - 1 }
+                });
+                if (!result?.contents) return null;
+                const contents = Array.isArray(result.contents) ? result.contents : [result.contents];
+                const value = contents.map((c: any) => (typeof c === "string" ? c : c.value ?? "")).join("\n\n");
+                if (!value.trim()) return null;
+                return {
+                  range: result.range ? new monaco.Range(
+                    result.range.start.line + 1, result.range.start.character + 1,
+                    result.range.end.line + 1, result.range.end.character + 1
+                  ) : undefined,
+                  contents: [{ value, isTrusted: true, supportThemeIcons: true }]
+                };
+              } catch { return null; }
+            }
+          }
+        );
+
+        // ----------------------------------------------------------------
+        // LSP: Definition provider (F12 / Ctrl+Click)
+        // ----------------------------------------------------------------
+        monaco.languages.registerDefinitionProvider(
+          ["typescript", "typescriptreact", "javascript", "javascriptreact", "python"],
+          {
+            provideDefinition: async (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
+              try {
+                const result: any = await lsp.sendRequest("textDocument/definition", {
+                  textDocument: { uri: model.uri.toString() },
+                  position: { line: position.lineNumber - 1, character: position.column - 1 }
+                });
+                if (!result) return null;
+                const locations = Array.isArray(result) ? result : [result];
+                return locations.map((loc: any) => ({
+                  uri: monaco.Uri.parse(loc.uri),
+                  range: new monaco.Range(
+                    loc.range.start.line + 1, loc.range.start.character + 1,
+                    loc.range.end.line + 1, loc.range.end.character + 1
+                  )
+                }));
+              } catch { return null; }
+            }
+          }
+        );
+
+        // ----------------------------------------------------------------
+        // LSP: References provider (Shift+F12)
+        // ----------------------------------------------------------------
+        monaco.languages.registerReferenceProvider(
+          ["typescript", "typescriptreact", "javascript", "javascriptreact", "python"],
+          {
+            provideReferences: async (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
+              try {
+                const result: any = await lsp.sendRequest("textDocument/references", {
+                  textDocument: { uri: model.uri.toString() },
+                  position: { line: position.lineNumber - 1, character: position.column - 1 },
+                  context: { includeDeclaration: true }
+                });
+                if (!result) return null;
+                return result.map((loc: any) => ({
+                  uri: monaco.Uri.parse(loc.uri),
+                  range: new monaco.Range(
+                    loc.range.start.line + 1, loc.range.start.character + 1,
+                    loc.range.end.line + 1, loc.range.end.character + 1
+                  )
+                }));
+              } catch { return null; }
+            }
+          }
+        );
+
+        // ----------------------------------------------------------------
+        // LSP: Rename provider (F2)
+        // ----------------------------------------------------------------
+        monaco.languages.registerRenameProvider(
+          ["typescript", "typescriptreact", "javascript", "javascriptreact", "python"],
+          {
+            provideRenameEdits: async (model: Monaco.editor.ITextModel, position: Monaco.Position, newName: string) => {
+              try {
+                const result: any = await lsp.sendRequest("textDocument/rename", {
+                  textDocument: { uri: model.uri.toString() },
+                  position: { line: position.lineNumber - 1, character: position.column - 1 },
+                  newName
+                });
+                if (!result) return null;
+                const workspaceEdit: monaco.languages.WorkspaceEdit = { edits: [] };
+                if (result.changes) {
+                  for (const [fileUri, edits] of Object.entries(result.changes)) {
+                    for (const edit of edits as any[]) {
+                      workspaceEdit.edits.push({
+                        resource: monaco.Uri.parse(fileUri),
+                        textEdit: {
+                          range: new monaco.Range(
+                            edit.range.start.line + 1, edit.range.start.character + 1,
+                            edit.range.end.line + 1, edit.range.end.character + 1
+                          ),
+                          text: edit.newText
+                        },
+                        versionId: undefined
+                      });
+                    }
+                  }
+                }
+                if (result.documentChanges) {
+                  for (const change of result.documentChanges) {
+                    for (const edit of change.edits ?? []) {
+                      workspaceEdit.edits.push({
+                        resource: monaco.Uri.parse(change.textDocument.uri),
+                        textEdit: {
+                          range: new monaco.Range(
+                            edit.range.start.line + 1, edit.range.start.character + 1,
+                            edit.range.end.line + 1, edit.range.end.character + 1
+                          ),
+                          text: edit.newText
+                        },
+                        versionId: undefined
+                      });
+                    }
+                  }
+                }
+                return workspaceEdit;
+              } catch { return null; }
+            }
+          }
+        );
+
+        // ----------------------------------------------------------------
+        // LSP: Code Action provider (Ctrl+. lightbulb)
+        // ----------------------------------------------------------------
+        monaco.languages.registerCodeActionProvider(
+          ["typescript", "typescriptreact", "javascript", "javascriptreact", "python"],
+          {
+            provideCodeActions: async (model: Monaco.editor.ITextModel, range: Monaco.Range, context: Monaco.languages.CodeActionContext) => {
+              try {
+                const result: any = await lsp.sendRequest("textDocument/codeAction", {
+                  textDocument: { uri: model.uri.toString() },
+                  range: {
+                    start: { line: range.startLineNumber - 1, character: range.startColumn - 1 },
+                    end: { line: range.endLineNumber - 1, character: range.endColumn - 1 }
+                  },
+                  context: {
+                    diagnostics: context.markers.map((m: Monaco.editor.IMarkerData) => ({
+                      range: {
+                        start: { line: m.startLineNumber - 1, character: m.startColumn - 1 },
+                        end: { line: m.endLineNumber - 1, character: m.endColumn - 1 }
+                      },
+                      message: m.message,
+                      severity: 1
+                    }))
+                  }
+                });
+                if (!result?.length) return { actions: [], dispose: () => {} };
+                const actions: monaco.languages.CodeAction[] = result.map((ca: any) => ({
+                  title: ca.title,
+                  kind: ca.kind,
+                  edit: ca.edit ? {
+                    edits: Object.entries(ca.edit.changes ?? {}).flatMap(([uri, edits]) =>
+                      (edits as any[]).map(e => ({
+                        resource: monaco.Uri.parse(uri),
+                        textEdit: {
+                          range: new monaco.Range(
+                            e.range.start.line + 1, e.range.start.character + 1,
+                            e.range.end.line + 1, e.range.end.character + 1
+                          ),
+                          text: e.newText
+                        },
+                        versionId: undefined
+                      }))
+                    )
+                  } : undefined,
+                  isPreferred: ca.isPreferred
+                }));
+                return { actions, dispose: () => {} };
+              } catch { return { actions: [], dispose: () => {} }; }
+            }
+          }
+        );
+
+        // ----------------------------------------------------------------
+        // LSP: Document Formatting provider (Shift+Alt+F)
+        // ----------------------------------------------------------------
+        monaco.languages.registerDocumentFormattingEditProvider(
+          ["typescript", "typescriptreact", "javascript", "javascriptreact", "python"],
+          {
+            provideDocumentFormattingEdits: async (model: Monaco.editor.ITextModel) => {
+              try {
+                // Try LSP format first
+                const lspResult: any = await lsp.sendRequest("textDocument/formatting", {
+                  textDocument: { uri: model.uri.toString() },
+                  options: { tabSize: 2, insertSpaces: true }
+                });
+                if (lspResult?.length) {
+                  return lspResult.map((edit: any) => ({
+                    range: new monaco.Range(
+                      edit.range.start.line + 1, edit.range.start.character + 1,
+                      edit.range.end.line + 1, edit.range.end.character + 1
+                    ),
+                    text: edit.newText
+                  }));
+                }
+              } catch {}
+              // Fallback: atlas formatCode
+              try {
+                if (window.atlasAPI?.formatCode && filePath && repoPath) {
+                  const formatted = await window.atlasAPI.formatCode(repoPath, filePath, model.getValue());
+                  if (formatted && formatted !== model.getValue()) {
+                    return [{
+                      range: model.getFullModelRange(),
+                      text: formatted
+                    }];
+                  }
+                }
+              } catch {}
+              return [];
+            }
+          }
+        );
       }).catch(console.error);
     }
 
@@ -282,21 +512,21 @@ export function EditorPane({
       ],
       colors: {
         "editor.background": "#000000",
-        "editor.foreground": "var(--text-main, #e4e4e7)",
+        "editor.foreground": "#e4e4e7",
         "editorLineNumber.foreground": "#475569",
-        "editorLineNumber.activeForeground": "var(--accent, #38bdf8)",
+        "editorLineNumber.activeForeground": "#38bdf8",
         "editor.lineHighlightBackground": "#38bdf810",
         "editor.selectionBackground": "#38bdf830",
         "editor.inactiveSelectionBackground": "#38bdf815",
-        "editorCursor.foreground": "var(--accent, #38bdf8)",
+        "editorCursor.foreground": "#38bdf8",
         "editorGutter.background": "#000000",
         "editorWidget.background": "#050505",
-        "editorWidget.border": "var(--accent, #38bdf8)",
+        "editorWidget.border": "#38bdf8",
         "editorSuggestWidget.background": "#050505",
-        "editorSuggestWidget.border": "var(--accent, #38bdf8)",
+        "editorSuggestWidget.border": "#38bdf8",
         "editorSuggestWidget.selectedBackground": "#38bdf830",
         "editorIndentGuide.background1": "#38bdf830",
-        "editorIndentGuide.activeBackground1": "var(--accent, #38bdf8)",
+        "editorIndentGuide.activeBackground1": "#38bdf8",
         "scrollbar.shadow": "#00000000",
         "scrollbarSlider.background": "#38bdf830",
         "scrollbarSlider.hoverBackground": "#38bdf850",
@@ -323,13 +553,13 @@ export function EditorPane({
         "editor.background": "#0b0f19",
         "editor.foreground": "#f1f5f9",
         "editorLineNumber.foreground": "#475569",
-        "editorLineNumber.activeForeground": "var(--accent, #38bdf8)",
+        "editorLineNumber.activeForeground": "#38bdf8",
         "editor.lineHighlightBackground": "#38bdf810",
         "editor.selectionBackground": "#ff79c625",
         "editorCursor.foreground": "#ff79c6",
         "editorGutter.background": "#0b0f19",
         "editorWidget.background": "#0b0f19",
-        "editorWidget.border": "var(--accent, #38bdf8)",
+        "editorWidget.border": "#38bdf8",
       }
     });
 
@@ -441,6 +671,147 @@ export function EditorPane({
       () => { editor.getAction("editor.action.formatDocument")?.run(); }
     );
     editor.addCommand(monaco.KeyCode.Escape, () => setShowFind(false));
+
+    // Go to Line (Ctrl+G)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyG, () => {
+      editor.getAction("editor.action.gotoLine")?.run();
+    });
+
+    // Word wrap toggle (Alt+Z)
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyZ, () => {
+      const current = editor.getOption(monaco.editor.EditorOption.wordWrap);
+      editor.updateOptions({ wordWrap: current === "on" ? "off" : "on" });
+    });
+
+    // Go to Definition (F12)
+    editor.addCommand(monaco.KeyCode.F12, () => {
+      editor.getAction("editor.action.revealDefinition")?.run();
+    });
+
+    // Peek Definition (Alt+F12)
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.F12, () => {
+      editor.getAction("editor.action.peekDefinition")?.run();
+    });
+
+    // Find All References (Shift+F12)
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => {
+      editor.getAction("editor.action.referenceSearch.trigger")?.run();
+    });
+
+    // Rename Symbol (F2)
+    editor.addCommand(monaco.KeyCode.F2, () => {
+      editor.getAction("editor.action.rename")?.run();
+    });
+
+    // Quick Fix / Code Actions (Ctrl+.)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Period, () => {
+      editor.getAction("editor.action.quickFix")?.run();
+    });
+
+    // Change All Occurrences (Ctrl+F2)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.F2, () => {
+      editor.getAction("editor.action.changeAll")?.run();
+    });
+
+    // ----------------------------------------------------------------
+    // Right-click context menu (replacing Monaco's default)
+    // ----------------------------------------------------------------
+    editor.onContextMenu((e) => {
+      e.event.preventDefault();
+      e.event.stopPropagation();
+      const pos = e.target.position;
+      const model = editor.getModel();
+      const selection = editor.getSelection();
+      const hasSelection = selection && !selection.isEmpty();
+
+      const menuItems: ContextMenuItem[] = [
+        {
+          label: "Go to Definition",
+          shortcut: "F12",
+          onClick: () => editor.getAction("editor.action.revealDefinition")?.run()
+        },
+        {
+          label: "Peek Definition",
+          shortcut: "Alt+F12",
+          onClick: () => editor.getAction("editor.action.peekDefinition")?.run()
+        },
+        {
+          label: "Find All References",
+          shortcut: "Shift+F12",
+          onClick: () => editor.getAction("editor.action.referenceSearch.trigger")?.run()
+        },
+        {
+          label: "Rename Symbol",
+          shortcut: "F2",
+          onClick: () => editor.getAction("editor.action.rename")?.run()
+        },
+        { separator: true },
+        {
+          label: "Quick Fix",
+          shortcut: "Ctrl+.",
+          onClick: () => editor.getAction("editor.action.quickFix")?.run()
+        },
+        {
+          label: "Format Document",
+          shortcut: "Shift+Alt+F",
+          onClick: () => editor.getAction("editor.action.formatDocument")?.run()
+        },
+        {
+          label: "Format Selection",
+          shortcut: "Ctrl+K Ctrl+F",
+          disabled: !hasSelection,
+          onClick: () => editor.getAction("editor.action.formatSelection")?.run()
+        },
+        { separator: true },
+        {
+          label: "Cut",
+          shortcut: "Ctrl+X",
+          disabled: !hasSelection,
+          onClick: () => editor.getAction("editor.action.clipboardCutAction")?.run()
+        },
+        {
+          label: "Copy",
+          shortcut: "Ctrl+C",
+          onClick: () => editor.getAction("editor.action.clipboardCopyAction")?.run()
+        },
+        {
+          label: "Paste",
+          shortcut: "Ctrl+V",
+          onClick: () => editor.getAction("editor.action.clipboardPasteAction")?.run()
+        },
+        { separator: true },
+        {
+          label: "Change All Occurrences",
+          shortcut: "Ctrl+F2",
+          onClick: () => editor.getAction("editor.action.changeAll")?.run()
+        },
+        {
+          label: "Select All",
+          shortcut: "Ctrl+A",
+          onClick: () => editor.getAction("editor.action.selectAll")?.run()
+        },
+        { separator: true },
+        {
+          label: "Copy Line Path",
+          onClick: () => {
+            if (filePath && pos) {
+              navigator.clipboard.writeText(`${filePath}:${pos.lineNumber}:${pos.column}`);
+            }
+          }
+        },
+        {
+          label: "Command Palette",
+          shortcut: "Ctrl+Shift+P",
+          onClick: () => editor.getAction("editor.action.quickCommand")?.run()
+        }
+      ];
+
+      showContextMenu({
+        x: e.event.posx,
+        y: e.event.posy,
+        items: menuItems
+      });
+    });
 
     decorationsRef.current = editor.createDecorationsCollection([]);
     activeLineDecoRef.current = editor.createDecorationsCollection([]);
@@ -607,6 +978,7 @@ export function EditorPane({
         <div style={s.ctrlActions}>
           <span style={s.langBadge}>{resolvedLang}</span>
           <button
+            className="hover-scale"
             style={s.ctrlBtn}
             title="Format Document (Alt+Shift+F)"
             onClick={() => editorRef.current?.getAction("editor.action.formatDocument")?.run()}
@@ -614,6 +986,7 @@ export function EditorPane({
             Format
           </button>
           <button
+            className="hover-scale"
             style={s.ctrlBtn}
             title="Find & Replace (Ctrl+F / Ctrl+H)"
             onClick={() => setShowFind(p => !p)}
@@ -625,7 +998,7 @@ export function EditorPane({
 
       {/* Find & Replace overlay */}
       {showFind && (
-        <div style={s.findBox}>
+        <div className="anim-scale-in" style={s.findBox}>
           <div style={s.findRow}>
             <input
               style={s.findInput}
@@ -635,16 +1008,17 @@ export function EditorPane({
               onChange={e => setFindText(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") doFindNext(); if (e.key === "Escape") setShowFind(false); }}
             />
-            <button style={s.findBtn} title="Previous" onClick={doFindPrev}>&#8593;</button>
-            <button style={s.findBtn} title="Next" onClick={doFindNext}>&#8595;</button>
+            <button className="hover-scale" style={s.findBtn} title="Previous" onClick={doFindPrev}>&#8593;</button>
+            <button className="hover-scale" style={s.findBtn} title="Next" onClick={doFindNext}>&#8595;</button>
             <button
+              className="hover-scale"
               style={{ ...s.findBtn, ...(showReplace ? s.findBtnOn : {}) }}
               title="Toggle Replace"
               onClick={() => setShowReplace(p => !p)}
             >
               &#8644;
             </button>
-            <button style={s.findBtn} title="Close" onClick={() => setShowFind(false)}>&#10005;</button>
+            <button className="hover-scale" style={s.findBtn} title="Close" onClick={() => setShowFind(false)}>&#10005;</button>
           </div>
           {showReplace && (
             <div style={{ ...s.findRow, marginTop: "4px" }}>
@@ -655,8 +1029,8 @@ export function EditorPane({
                 onChange={e => setReplaceText(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") doReplaceNext(); }}
               />
-              <button style={s.findActBtn} onClick={doReplaceNext}>Replace</button>
-              <button style={s.findActBtn} onClick={doReplaceAll}>All</button>
+              <button className="hover-scale" style={s.findActBtn} onClick={doReplaceNext}>Replace</button>
+              <button className="hover-scale" style={s.findActBtn} onClick={doReplaceAll}>All</button>
             </div>
           )}
         </div>
@@ -724,12 +1098,12 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    height: "24px",
-    backgroundColor: "var(--bg-base, #0d0d10)",
-    borderBottom: "1px solid #27272a",
-    padding: "0 8px",
+    height: "26px",
+    backgroundColor: "transparent",
+    borderBottom: "1px solid var(--border-subtle)",
+    padding: "0 12px",
     fontSize: "11px",
-    color: "var(--text-muted, #71717a)",
+    color: "var(--text-muted)",
     flexShrink: 0,
   },
   filePath: {
@@ -755,11 +1129,12 @@ const s: Record<string, React.CSSProperties> = {
   ctrlBtn: {
     background: "none",
     border: "none",
-    color: "var(--text-muted, #71717a)",
-    fontSize: "11px",
+    color: "var(--text-muted)",
+    fontSize: "11.5px",
     cursor: "pointer",
-    padding: "0 4px",
-    borderRadius: "2px",
+    padding: "2px 6px",
+    borderRadius: "4px",
+    transition: "color 0.1s, background-color 0.1s",
   },
   monacoContainer: {
     flex: 1,
@@ -767,14 +1142,16 @@ const s: Record<string, React.CSSProperties> = {
   },
   findBox: {
     position: "absolute",
-    top: "28px",
+    top: "32px",
     right: "16px",
-    backgroundColor: "var(--bg-header, #18181b)",
-    border: "1px solid #27272a",
+    backgroundColor: "rgba(24, 24, 27, 0.7)",
+    backdropFilter: "blur(12px) saturate(1.5)",
+    WebkitBackdropFilter: "blur(12px) saturate(1.5)",
+    border: "1px solid var(--border-medium)",
     borderRadius: "6px",
-    padding: "6px 8px",
+    padding: "8px",
     zIndex: 100,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+    boxShadow: "var(--shadow-lg), var(--shadow-panel)",
     display: "flex",
     flexDirection: "column",
     width: "290px",

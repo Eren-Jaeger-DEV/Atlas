@@ -173,15 +173,17 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
           </div>
         ) : (
           <>
-            {Object.entries(groupedResults).map(([file, matches]: [string, any]) => (
-              <div key={file} style={styles.fileGroup}>
+            {Object.entries(groupedResults).map(([file, matches]: [string, any], i) => (
+              <div key={file} className={`anim-slide-up stagger-${Math.min(i + 1, 15)}`} style={styles.fileGroup}>
                 <div style={styles.fileName} title={file}>
-                  📄 {file.split(/[/\\]/).pop()}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  {file.split(/[/\\]/).pop()}
                   <span style={styles.matchCount}>{matches.length}</span>
                 </div>
                 {matches.map((match: any, idx: number) => (
                   <div 
                     key={`${file}-${match.line}-${idx}`} 
+                    className="sidebar-list-item"
                     style={styles.matchItem}
                     onClick={() => onFileSelect(file, match.line)}
                   >
@@ -211,55 +213,57 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#000000",
-    color: "var(--text-main, #e4e4e7)",
+    backgroundColor: "transparent",
+    color: "var(--text-main)",
   },
   header: {
-    padding: "4px 8px",
-    borderBottom: "1px solid #38bdf8",
-    backgroundColor: "#050505",
+    padding: "8px 12px",
+    borderBottom: "1px solid var(--border-subtle)",
+    backgroundColor: "transparent",
   },
   headerTop: {
     fontSize: "10px",
     fontWeight: 700,
     letterSpacing: "0.8px",
-    color: "#94a3b8",
+    textTransform: "uppercase",
+    color: "var(--text-faint)",
   },
   form: {
     display: "flex",
     flexDirection: "column",
     gap: "8px",
     padding: "12px",
-    borderBottom: "1px solid #1e293b",
+    borderBottom: "1px solid var(--border-subtle)",
   },
   searchBox: {
     display: "flex",
     alignItems: "center",
-    backgroundColor: "#050505",
-    border: "1px solid #38bdf8",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
+    border: "1px solid var(--border-color)",
     borderRadius: "4px",
-    padding: "4px 8px",
+    padding: "2px 8px",
+    transition: "border-color 0.15s, box-shadow 0.15s",
   },
   input: {
     flex: 1,
     backgroundColor: "transparent",
     border: "none",
-    color: "var(--text-main, #fafafa)",
-    padding: "6px 8px",
+    color: "var(--text-main)",
+    padding: "6px 4px",
     fontSize: "12px",
     outline: "none",
   },
   toggleBtn: {
     border: "none",
     borderRadius: "4px",
-    padding: "0 8px",
+    padding: "4px 8px",
     fontSize: "11px",
     fontWeight: 600,
     cursor: "pointer",
-    transition: "all 0.2s",
+    transition: "all 0.15s",
   },
   submitBtn: {
-    backgroundColor: "var(--accent, #38bdf8)",
+    backgroundColor: "var(--accent)",
     color: "#0f111a",
     border: "none",
     padding: "6px",
@@ -268,14 +272,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
     marginTop: "4px",
-    transition: "all 0.2s",
+    transition: "all 0.15s",
   },
   errorBox: {
     padding: "8px 12px",
     color: "#f87171",
     fontSize: "11px",
-    backgroundColor: "#450a0a",
-    borderBottom: "1px solid #7f1d1d",
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderBottom: "1px solid rgba(239, 68, 68, 0.2)",
   },
   resultsArea: {
     flex: 1,
@@ -285,7 +289,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   emptyState: {
     padding: "40px 20px",
-    color: "#94a3b8",
+    color: "var(--text-faint)",
     textAlign: "center",
     fontSize: "13px",
     display: "flex",
@@ -304,12 +308,13 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "4px 12px",
     fontSize: "12px",
     fontWeight: 600,
-    backgroundColor: "#161b22",
-    color: "var(--text-main, #fafafa)",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    color: "var(--text-main)",
+    fontFamily: "var(--font-ui)",
   },
   matchCount: {
-    backgroundColor: "#1e293b",
-    color: "#94a3b8",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    color: "var(--text-muted)",
     fontSize: "10px",
     padding: "2px 6px",
     borderRadius: "10px",
@@ -320,18 +325,20 @@ const styles: Record<string, React.CSSProperties> = {
     gap: "8px",
     padding: "4px 12px 4px 24px",
     fontSize: "12px",
-    color: "#94a3b8",
+    color: "var(--text-muted)",
     cursor: "pointer",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
-    transition: "background-color 0.15s",
+    transition: "background-color 0.1s, color 0.1s",
+    fontFamily: "var(--font-mono, monospace)",
   },
   matchLineNum: {
-    color: "var(--accent, #38bdf8)",
+    color: "var(--accent)",
     width: "24px",
     textAlign: "right",
     flexShrink: 0,
+    opacity: 0.8,
   },
   matchText: {
     overflow: "hidden",

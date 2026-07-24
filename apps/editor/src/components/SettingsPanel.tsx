@@ -64,12 +64,12 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean, onChange: (v: b
       style={{
         width: "36px",
         height: "20px",
-        backgroundColor: checked ? "var(--accent, #38bdf8)" : "var(--bg-header, #18181b)",
+        backgroundColor: checked ? "var(--accent)" : "rgba(0,0,0,0.3)",
         borderRadius: "12px",
         position: "relative",
         cursor: "pointer",
         transition: "background-color 0.2s ease",
-        border: "1px solid var(--border-color, #27272a)",
+        border: "1px solid var(--border-medium)",
         flexShrink: 0
       }}
     >
@@ -94,16 +94,17 @@ function DropdownSelect({ value, options, onChange }: { value: string | number, 
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={{
-        backgroundColor: "var(--bg-header, #18181b)",
-        border: "1px solid var(--border-color, #27272a)",
-        color: "var(--text-main, #fafafa)",
+        backgroundColor: "rgba(0,0,0,0.2)",
+        border: "1px solid var(--border-medium)",
+        color: "var(--text-main)",
         borderRadius: "6px",
         padding: "8px 12px",
         fontSize: "12px",
         outline: "none",
-        fontFamily: "inherit",
+        fontFamily: "var(--font-ui)",
         cursor: "pointer",
-        minWidth: "150px"
+        minWidth: "150px",
+        transition: "border-color 0.2s ease, box-shadow 0.2s ease"
       }}
     >
       {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -116,6 +117,7 @@ function DropdownSelect({ value, options, onChange }: { value: string | number, 
 export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps) {
   const [localSettings, setLocalSettings] = useState<EditorSettings>(settings);
   const [activeCategory, setActiveCategory] = useState("Appearance");
+  const [searchQuery, setSearchQuery] = useState("");
   const [secureKeys, setSecureKeys] = useState<Record<string, string>>({
     openRouterApiKey: "",
     openaiApiKey: "",
@@ -184,26 +186,34 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
     }
   };
 
-  const SettingRow = ({ title, description, control }: { title: string, description: string, control: React.ReactNode }) => (
-    <div style={{
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "16px 20px",
-      borderBottom: "1px solid var(--border-color, #27272a)"
-    }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingRight: "40px" }}>
-        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main, #fafafa)" }}>{title}</span>
-        <span style={{ fontSize: "12px", color: "var(--text-muted, #a1a1aa)", lineHeight: "1.4" }}>{description}</span>
+  const SettingRow = ({ title, description, control }: { title: string, description: string, control: React.ReactNode }) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!title.toLowerCase().includes(q) && !description.toLowerCase().includes(q)) {
+        return null;
+      }
+    }
+    return (
+      <div className="anim-slide-up" style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "16px 20px",
+        borderBottom: "1px solid var(--border-subtle)"
+      }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px", paddingRight: "40px" }}>
+          <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>{title}</span>
+          <span style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.4" }}>{description}</span>
+        </div>
+        <div>{control}</div>
       </div>
-      <div>{control}</div>
-    </div>
-  );
+    );
+  };
 
   const SettingGroup = ({ children }: { children: React.ReactNode }) => (
-    <div style={{
-      backgroundColor: "var(--bg-base, #09090b)",
-      border: "1px solid var(--border-color, #27272a)",
+    <div className="anim-fade-in" style={{
+      backgroundColor: "rgba(0,0,0,0.2)",
+      border: "1px solid var(--border-medium)",
       borderRadius: "8px",
       overflow: "hidden",
       marginBottom: "24px"
@@ -213,13 +223,13 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
   );
 
   return (
-    <div style={{ display: "flex", height: "100vh", backgroundColor: "var(--bg-base, #0d0d10)", color: "var(--text-main, #fafafa)", fontFamily: "sans-serif" }}>
+    <div style={{ display: "flex", height: "100vh", backgroundColor: "transparent", color: "var(--text-main)", fontFamily: "var(--font-ui)" }}>
       {/* Sidebar Navigation */}
       <div style={{
         width: "220px",
         minWidth: "220px",
-        backgroundColor: "var(--bg-panel, #141417)",
-        borderRight: "1px solid var(--border-color, #27272a)",
+        backgroundColor: "var(--bg-panel)",
+        borderRight: "1px solid var(--border-subtle)",
         padding: "20px 0",
         display: "flex",
         flexDirection: "column"
@@ -227,16 +237,17 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
         {CATEGORIES.map(cat => (
           <div
             key={cat}
-            onClick={() => setActiveCategory(cat)}
+            className="sidebar-list-item"
+            onClick={() => { setActiveCategory(cat); setSearchQuery(""); }}
             style={{
               padding: "10px 20px",
               fontSize: "13px",
               fontWeight: 500,
               cursor: "pointer",
-              color: activeCategory === cat ? "var(--text-main, #fafafa)" : "var(--text-muted, #71717a)",
-              backgroundColor: activeCategory === cat ? "var(--hover-bg, rgba(255,255,255,0.05))" : "transparent",
-              borderLeft: activeCategory === cat ? "3px solid var(--accent, #38bdf8)" : "3px solid transparent",
-              transition: "all 0.15s ease"
+              color: (!searchQuery && activeCategory === cat) ? "var(--text-main)" : "var(--text-muted)",
+              backgroundColor: (!searchQuery && activeCategory === cat) ? "rgba(255,255,255,0.05)" : "transparent",
+              borderLeft: (!searchQuery && activeCategory === cat) ? "3px solid var(--accent)" : "3px solid transparent",
+              opacity: searchQuery ? 0.5 : 1
             }}
           >
             {cat}
@@ -246,12 +257,38 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
 
       {/* Main Content Area */}
       <div style={{ flex: 1, overflowY: "auto", padding: "40px 60px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: 600, margin: "0 0 8px 0" }}>{activeCategory}</h1>
-        <p style={{ fontSize: "14px", color: "var(--text-muted, #a1a1aa)", margin: "0 0 32px 0" }}>
-          Manage your {activeCategory.toLowerCase()} settings and preferences.
-        </p>
+        
+        <div style={{ marginBottom: "24px" }}>
+          <input 
+            type="text" 
+            placeholder="Search Settings..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              width: "100%",
+              maxWidth: "400px",
+              padding: "10px 14px",
+              fontSize: "14px",
+              backgroundColor: "rgba(0,0,0,0.2)",
+              border: "1px solid var(--border-medium)",
+              borderRadius: "4px",
+              color: "var(--text-main)",
+              outline: "none",
+              transition: "border-color 0.2s ease, box-shadow 0.2s ease"
+            }}
+          />
+        </div>
 
-        {activeCategory === "Appearance" && (
+        {!searchQuery && (
+          <>
+            <h1 style={{ fontSize: "24px", fontWeight: 600, margin: "0 0 8px 0" }}>{activeCategory}</h1>
+            <p style={{ fontSize: "14px", color: "var(--text-muted)", margin: "0 0 32px 0" }}>
+              Manage your {activeCategory.toLowerCase()} settings and preferences.
+            </p>
+          </>
+        )}
+
+        {(searchQuery || activeCategory === "Appearance") && (
           <SettingGroup>
             <SettingRow 
               title="Editor Theme" 
@@ -358,7 +395,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
           </SettingGroup>
         )}
 
-        {activeCategory === "Editor" && (
+        {(searchQuery || activeCategory === "Editor") && (
           <SettingGroup>
             <SettingRow 
               title="Format On Save" 
@@ -403,7 +440,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
           </SettingGroup>
         )}
 
-        {activeCategory === "Terminal" && (
+        {(searchQuery || activeCategory === "Terminal") && (
           <SettingGroup>
             <SettingRow 
               title="Default Terminal Shell" 
@@ -421,7 +458,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
           </SettingGroup>
         )}
 
-        {activeCategory === "AI Configuration" && (
+        {(searchQuery || activeCategory === "AI Configuration") && (
           <>
             <SettingGroup>
               <SettingRow 
@@ -527,13 +564,14 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
           </>
         )}
 
-        {activeCategory === "Advanced" && (
+        {(searchQuery || activeCategory === "Advanced") && (
           <SettingGroup>
             <SettingRow 
               title="Raw JSON Configuration" 
               description="Open the raw settings.json file in the editor to make advanced modifications."
               control={
                 <button 
+                  className="hover-scale"
                   onClick={async () => {
                     const api = window.atlasAPI;
                     if (api?.getPaths && api?.openFileInEditor) {
@@ -541,7 +579,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
                       api.openFileInEditor(paths.settingsJsonPath);
                     }
                   }}
-                  style={{...textInputStyle, cursor: "pointer", backgroundColor: "var(--border-color, #27272a)"}}
+                  style={{...textInputStyle, cursor: "pointer", backgroundColor: "rgba(0,0,0,0.3)"}}
                 >
                   Open settings.json
                 </button>
@@ -552,6 +590,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               description="Open the raw keybindings.json file in the editor to bind custom bash commands and snippets."
               control={
                 <button 
+                  className="hover-scale"
                   onClick={async () => {
                     const api = window.atlasAPI;
                     if (api?.getPaths && api?.openFileInEditor) {
@@ -559,7 +598,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
                       api.openFileInEditor(paths.keybindingsJsonPath);
                     }
                   }}
-                  style={{...textInputStyle, cursor: "pointer", backgroundColor: "var(--border-color, #27272a)"}}
+                  style={{...textInputStyle, cursor: "pointer", backgroundColor: "rgba(0,0,0,0.3)"}}
                 >
                   Open keybindings.json
                 </button>
@@ -577,15 +616,16 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
 }
 
 const textInputStyle: React.CSSProperties = {
-  backgroundColor: "var(--bg-header, #18181b)",
-  border: "1px solid var(--border-color, #27272a)",
-  color: "var(--text-main, #fafafa)",
+  backgroundColor: "rgba(0,0,0,0.2)",
+  border: "1px solid var(--border-medium)",
+  color: "var(--text-main)",
   borderRadius: "6px",
   padding: "8px 12px",
   fontSize: "12px",
   outline: "none",
-  fontFamily: "inherit",
-  minWidth: "200px"
+  fontFamily: "var(--font-ui)",
+  minWidth: "200px",
+  transition: "border-color 0.2s ease, box-shadow 0.2s ease"
 };
 
 function ApiKeyInput({ value, onChange, onTest, status, placeholder }: any) {
@@ -599,12 +639,13 @@ function ApiKeyInput({ value, onChange, onTest, status, placeholder }: any) {
         style={{...textInputStyle, minWidth: "180px"}}
       />
       <button 
+        className="hover-scale"
         onClick={onTest}
         disabled={status === "testing" || !value}
         style={{
-          backgroundColor: "var(--border-color, #27272a)",
-          border: "1px solid var(--border-color, #3f3f46)",
-          color: "var(--text-main, #fafafa)",
+          backgroundColor: "rgba(0,0,0,0.3)",
+          border: "1px solid var(--border-medium)",
+          color: "var(--text-main)",
           borderRadius: "6px",
           padding: "8px 16px",
           fontSize: "12px",

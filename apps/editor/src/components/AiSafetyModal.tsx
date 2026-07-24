@@ -13,7 +13,7 @@ export function AiSafetyModal({
 }: AiSafetyModalProps) {
   return (
     <div style={styles.backdrop}>
-      <div style={styles.modal}>
+      <div className="anim-scale-in" style={styles.modal}>
         <div style={styles.header}>
           <div>
             <span style={styles.tag}>AI SAFETY CONFIRMATION</span>
@@ -53,13 +53,15 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 99999,
   },
   modal: {
-    backgroundColor: "var(--bg-panel, #141417)",
-    border: "1px solid #27272a",
+    backgroundColor: "var(--bg-panel, rgba(20, 20, 23, 0.85))",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+    border: "1px solid #333333",
     borderRadius: "10px",
     width: "600px",
     maxWidth: "90vw",
     maxHeight: "80vh",
-    boxShadow: "0 24px 72px rgba(0, 0, 0, 0.8)",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.05)",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",

@@ -68,6 +68,7 @@ export function ProblemsPanel({
               {fileProblems.map((p, i) => (
                 <div
                   key={i}
+                  className="list-row-hover"
                   style={s.problemRow}
                   onClick={() =>
                     onJump && onJump(path, p.marker.startLineNumber, p.marker.startColumn)
@@ -112,7 +113,7 @@ const s = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    backgroundColor: "#000000",
+    backgroundColor: "transparent",
     color: "var(--text-main, #e4e4e7)",
     fontFamily: "Inter, sans-serif",
   } as React.CSSProperties,
@@ -121,8 +122,8 @@ const s = {
     alignItems: "center",
     padding: "0 12px",
     height: "35px",
-    backgroundColor: "#000000",
-    borderBottom: "1px solid #38bdf8",
+    backgroundColor: "transparent",
+    borderBottom: "1px solid var(--border-subtle)",
     fontSize: "11px",
     textTransform: "uppercase",
     letterSpacing: "0.5px",
@@ -133,16 +134,16 @@ const s = {
     alignItems: "center",
     height: "100%",
     color: "var(--text-main, #e4e4e7)",
-    borderBottom: "2px solid #38bdf8",
+    borderBottom: "2px solid var(--accent)",
     marginRight: "16px",
   } as React.CSSProperties,
   badge: {
-    backgroundColor: "#050505",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
     padding: "2px 6px",
     borderRadius: "10px",
     marginLeft: "6px",
     fontSize: "10px",
-    color: "#94a3b8",
+    color: "var(--text-muted)",
   } as React.CSSProperties,
   summary: {
     display: "flex",
@@ -181,15 +182,15 @@ const s = {
     padding: "4px 12px",
     fontSize: "12px",
     fontWeight: 600,
-    color: "var(--text-main, #e4e4e7)",
-    backgroundColor: "#050505",
+    color: "var(--text-main)",
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
   } as React.CSSProperties,
   fileIcon: {
     marginRight: "6px",
     fontSize: "14px",
   } as React.CSSProperties,
   fileBadge: {
-    backgroundColor: "#000000",
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
     color: "#fff",
     padding: "2px 6px",
     borderRadius: "10px",
@@ -202,7 +203,7 @@ const s = {
     padding: "6px 12px 6px 28px",
     fontSize: "12px",
     cursor: "pointer",
-    borderBottom: "1px solid #38bdf8",
+    borderBottom: "1px solid var(--border-subtle)",
     transition: "background-color 0.15s",
   } as React.CSSProperties,
   severityIcon: {
@@ -217,12 +218,12 @@ const s = {
     marginRight: "12px",
   } as React.CSSProperties,
   problemSource: {
-    color: "#64748b",
+    color: "var(--text-faint)",
     marginRight: "12px",
     fontSize: "11px",
   } as React.CSSProperties,
   problemLocation: {
-    color: "#64748b",
+    color: "var(--text-faint)",
     fontSize: "11px",
     minWidth: "70px",
     textAlign: "right",

@@ -18,15 +18,21 @@ export function Breadcrumb({ filePath, repoPath, cursorSymbol }: BreadcrumbProps
     <div style={styles.container}>
       {parts.map((part, i) => (
         <span key={i} style={styles.item}>
-          {i > 0 && <span style={styles.separator}>&gt;</span>}
+          {i > 0 && (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="2" style={styles.separatorSvg}>
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          )}
           <span style={(i === parts.length - 1 && !cursorSymbol) ? styles.activePart : styles.part}>{part}</span>
         </span>
       ))}
       
       {cursorSymbol && (
         <span style={styles.item}>
-          <span style={styles.separator}>&gt;</span>
-          <span style={styles.activePart}>{cursorSymbol}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" style={styles.separatorSvg}>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span style={styles.symbolPart}>{cursorSymbol}</span>
         </span>
       )}
     </div>
@@ -37,29 +43,36 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex",
     alignItems: "center",
-    height: "24px",
+    height: "26px",
     padding: "0 12px",
-    backgroundColor: "var(--bg-base, #0d0d10)",
-    borderBottom: "1px solid #27272a",
-    fontSize: "11px",
-    color: "var(--text-muted, #71717a)",
+    backgroundColor: "transparent",
+    borderBottom: "1px solid var(--border-subtle)",
+    fontSize: "11.5px",
+    fontFamily: "var(--font-mono, monospace)",
+    color: "var(--text-faint)",
     userSelect: "none",
     overflowX: "auto",
+    whiteSpace: "nowrap",
   },
   item: {
     display: "flex",
     alignItems: "center",
   },
-  separator: {
-    margin: "0 6px",
-    fontSize: "10px",
-    color: "#52525b",
+  separatorSvg: {
+    margin: "0 4px",
+    opacity: 0.6,
   },
   part: {
-    color: "var(--text-muted, #a1a1aa)",
+    cursor: "pointer",
+    transition: "color 0.1s",
+    color: "var(--text-muted)",
   },
   activePart: {
-    color: "var(--text-main, #fafafa)",
-    fontWeight: 600,
+    color: "var(--text-main)",
+    fontWeight: 500,
+  },
+  symbolPart: {
+    color: "var(--accent)",
+    fontWeight: 500,
   },
 };

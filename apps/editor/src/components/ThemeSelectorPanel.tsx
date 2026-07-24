@@ -3,9 +3,10 @@ import { ThemeManager } from "./ThemeManager.js";
 
 interface ThemeSelectorPanelProps {
   onClose: () => void;
+  onSelectTheme: (theme: string) => void;
 }
 
-export function ThemeSelectorPanel({ onClose }: ThemeSelectorPanelProps) {
+export function ThemeSelectorPanel({ onClose, onSelectTheme }: ThemeSelectorPanelProps) {
   const themeManager = ThemeManager.getInstance();
 
   const handleImport = async () => {
@@ -17,7 +18,7 @@ export function ThemeSelectorPanel({ onClose }: ThemeSelectorPanelProps) {
       if (!file) return;
       const text = await file.text();
       themeManager.importVsCodeTheme(text);
-      // Force React re-render by dispatching event if necessary, or just close
+      onSelectTheme("custom");
       onClose();
     };
     fileInput.click();
@@ -25,17 +26,19 @@ export function ThemeSelectorPanel({ onClose }: ThemeSelectorPanelProps) {
 
   const handleSelectDark = () => {
     themeManager.setDarkMode();
+    onSelectTheme("dark");
     onClose();
   };
 
   const handleSelectLight = () => {
     themeManager.setLightMode();
+    onSelectTheme("light");
     onClose();
   };
 
   return (
     <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+      <div className="anim-scale-in" style={styles.modal} onClick={e => e.stopPropagation()}>
         <div style={styles.header}>
           <h2 style={styles.title}>Select Theme</h2>
           <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -67,20 +70,23 @@ const styles: Record<string, React.CSSProperties> = {
   backdrop: {
     position: "fixed",
     inset: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.75)",
+    backdropFilter: "blur(8px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 99999,
   },
   modal: {
-    backgroundColor: "var(--bg-panel, #141417)",
+    backgroundColor: "var(--bg-panel, rgba(20, 20, 23, 0.85))",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     border: "1px solid var(--border-color, #27272a)",
     borderRadius: "8px",
     width: "360px",
     display: "flex",
     flexDirection: "column",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(56, 189, 248, 0.15)",
   },
   header: {
     display: "flex",

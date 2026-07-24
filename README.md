@@ -80,6 +80,12 @@ We are systematically building features to match and exceed standard editor capa
   - [x] **Trajectory Replay & Time-Travel Engine (`TrajectoryReplay`):** Execution step snapshotting, rewind, and offline playback.
   - [x] **Visual DOM Verifier (`VisualVerifier`):** Headless layout regression testing during AI code edits.
   - [x] **Autonomous Browser Subagent (`BrowserSubagent`):** Dynamic DOM accessibility (a11y) tree extraction, visual spatial grounding, and automated web task execution.
+  - [x] **Atlas Parallel Multi-Agent Engine (`WorkerPool`, `ParallelPlanner`, `ParallelMerger`):** Asynchronous multi-threaded agent workflow (Jetski equivalent) with automatic LLM sub-task decomposition, dependency graph execution, conflict pre-detection, and live streaming multi-card UI dashboard.
+  - [x] **Interactive Visual DAG Dependency Graph (`ParallelDAGViewer`):** Dynamic SVG topological dependency graph rendering, pulse status animations, and node click inspection.
+  - [x] **Autonomous Tri-Surface Self-Healing Verification (`SelfHealingVerifier`):** Post-coding compiler LSP diagnostics & unit test execution with auto-retry self-repair loops.
+  - [x] **Interactive 3-Way Conflict Workbench (`ConflictResolverModal`):** Side-by-side multi-worker edit collision resolution modal with 1-click acceptance.
+  - [x] **Agent Skill Auto-Distillation (`WorkflowSkillCreator`):** Packaging completed multi-agent workflows into reusable `.agents/skills/<name>/SKILL.md` custom skills.
+  - [x] **Full IDE Features & Parity:** Real Monaco LSP protocol wire-up (Hover, Go-to-Def F12, References Shift+F12, Rename F2, Code Actions Ctrl+., Format Shift+Alt+F), full right-click context menus (Editor & FileExplorer with inline rename, new file/folder, copy path, open terminal), and interactive StatusBar pickers (Language, Indentation, EOL, Go-to-Line).
 
 ---
 

@@ -43,7 +43,7 @@ export function InlineAiTool({
   };
 
   return (
-    <div style={containerStyle}>
+    <div className="anim-scale-in" style={containerStyle}>
       <div style={styles.header}>
         <span style={styles.title}>ATLAS SYNAPSE HUD</span>
         <button style={styles.closeBtn} onClick={onClose}>✕</button>
@@ -70,10 +70,12 @@ const styles: Record<string, React.CSSProperties> = {
     top: "10px",
     right: "20px",
     width: "320px",
-    backgroundColor: "var(--bg-panel, #141417)",
-    border: "1px solid #27272a",
+    backgroundColor: "var(--bg-panel, rgba(20, 20, 23, 0.85))",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+    border: "1px solid #333333",
     borderRadius: "8px",
-    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.6)",
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.05)",
     zIndex: 9999,
     padding: "10px",
     display: "flex",

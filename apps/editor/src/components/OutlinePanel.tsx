@@ -36,6 +36,7 @@ export function OutlinePanel({ symbols, onSymbolClick, activeLine }: OutlinePane
           key={`${sym.name}-${i}`} 
           symbol={sym} 
           level={0} 
+          index={i}
           onSymbolClick={onSymbolClick}
           activeLine={activeLine}
         />
@@ -44,7 +45,7 @@ export function OutlinePanel({ symbols, onSymbolClick, activeLine }: OutlinePane
   );
 }
 
-function SymbolItem({ symbol, level, onSymbolClick, activeLine }: { symbol: DocumentSymbol, level: number, onSymbolClick: (s: DocumentSymbol) => void, activeLine?: number }) {
+function SymbolItem({ symbol, level, index, onSymbolClick, activeLine }: { symbol: DocumentSymbol, level: number, index: number, onSymbolClick: (s: DocumentSymbol) => void, activeLine?: number }) {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = symbol.children && symbol.children.length > 0;
   
@@ -54,13 +55,16 @@ function SymbolItem({ symbol, level, onSymbolClick, activeLine }: { symbol: Docu
                    activeLine >= symbol.range.start.line + 1 && 
                    activeLine <= symbol.range.end.line + 1;
 
+  const staggerClass = `stagger-${Math.min(index + 1, 15)}`;
+
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <div 
+      <div
+        className={`sidebar-list-item anim-slide-right ${staggerClass}`}
         style={{
           ...styles.item,
-          paddingLeft: `${level * 12 + 8}px`,
-          backgroundColor: isActive ? "#38bdf820" : "transparent",
+          paddingLeft: `${level * 14 + 8}px`,
+          backgroundColor: isActive ? "rgba(56, 189, 248, 0.12)" : "transparent",
         }}
         onClick={(e) => {
           e.stopPropagation();
@@ -81,7 +85,7 @@ function SymbolItem({ symbol, level, onSymbolClick, activeLine }: { symbol: Docu
         
         <SymbolIcon kind={symbol.kind} />
         
-        <span style={{ ...styles.name, color: isActive ? "var(--accent, #38bdf8)" : "var(--text-main, #e4e4e7)" }}>
+        <span style={{ ...styles.name, color: isActive ? "var(--accent)" : "inherit" }}>
           {symbol.name}
         </span>
         {symbol.detail && (
@@ -95,7 +99,8 @@ function SymbolItem({ symbol, level, onSymbolClick, activeLine }: { symbol: Docu
             <SymbolItem 
               key={`${child.name}-${i}`} 
               symbol={child} 
-              level={level + 1} 
+              level={level + 1}
+              index={i}
               onSymbolClick={onSymbolClick} 
               activeLine={activeLine} 
             />
@@ -126,7 +131,7 @@ function SymbolIcon({ kind }: { kind: number }) {
     case 11: // Interface
       color = "#34d399"; text = "I"; break;
     case 7: // Property
-      color = "var(--accent, #38bdf8)"; text = "P"; break;
+      color = "var(--accent)"; text = "P"; break;
     case 10: // Enum
       color = "#f43f5e"; text = "E"; break;
     default:
@@ -146,22 +151,27 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     flex: 1,
     overflowY: "auto",
-    padding: "8px 0",
+    padding: "4px 0",
   },
   empty: {
     padding: "16px",
-    color: "var(--text-muted, #71717a)",
-    fontSize: "12px",
+    color: "var(--text-muted)",
+    fontSize: "12.5px",
     textAlign: "center",
   },
   item: {
     display: "flex",
     alignItems: "center",
     cursor: "pointer",
-    padding: "4px 8px",
-    fontSize: "12px",
-    color: "var(--text-main, #e4e4e7)",
+    padding: "0 8px",
+    height: "24px",
+    margin: "1px 4px",
+    borderRadius: "4px",
+    fontSize: "12.5px",
+    color: "var(--text-main)",
     userSelect: "none",
+    transition: "background-color 0.1s, color 0.1s",
+    fontFamily: "var(--font-ui)",
   },
   chevron: {
     display: "inline-flex",
@@ -170,8 +180,9 @@ const styles: Record<string, React.CSSProperties> = {
     width: "16px",
     height: "16px",
     marginRight: "4px",
-    color: "var(--text-muted, #71717a)",
+    color: "var(--text-faint)",
     transition: "transform 0.15s ease",
+    cursor: "pointer",
   },
   icon: {
     display: "inline-flex",
@@ -188,7 +199,7 @@ const styles: Record<string, React.CSSProperties> = {
     marginRight: "8px",
   },
   detail: {
-    color: "var(--text-muted, #71717a)",
+    color: "var(--text-muted)",
     fontSize: "11px",
     whiteSpace: "nowrap",
     overflow: "hidden",

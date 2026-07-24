@@ -11,7 +11,8 @@ interface TooltipProps {
 
 const TooltipContainer = styled.div`
   position: absolute;
-  background-color: var(--bg-panel, #1f1f23);
+  background-color: var(--bg-panel, rgba(31, 31, 35, 0.9));
+  backdrop-filter: blur(8px);
   color: var(--text-main, #fafafa);
   padding: 6px 10px;
   border-radius: 6px;
@@ -22,6 +23,7 @@ const TooltipContainer = styled.div`
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   border: 1px solid var(--border-color, #27272a);
   pointer-events: none;
+  animation: scaleInFade 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 `;
 
 export function Tooltip({ content, children, position = "right", delay = 300 }: TooltipProps) {

@@ -75,12 +75,12 @@ export function TimelinePanel({ repoPath }: TimelinePanelProps) {
 
   const getEventIcon = (type: string) => {
     switch (type) {
-      case "commit": return "📦";
-      case "test": return "🧪";
-      case "security": return "🛡️";
-      case "graph": return "🕸️";
-      case "agent": return "🤖";
-      default: return "📌";
+      case "commit": return "[COMMIT]";
+      case "test": return "[TEST]";
+      case "security": return "[SEC]";
+      case "graph": return "[GRAPH]";
+      case "agent": return "[AGENT]";
+      default: return "[EVT]";
     }
   };
 

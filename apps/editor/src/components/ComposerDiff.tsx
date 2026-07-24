@@ -40,10 +40,12 @@ export function ComposerDiff({
       transform: "translateX(-50%)",
       width: `${width}px`,
       height: `${height}px`,
-      backgroundColor: "#1e1e1e",
-      borderRadius: "8px",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-      border: "1px solid #3f3f46",
+      backgroundColor: "rgba(9, 9, 11, 0.85)",
+      backdropFilter: "blur(16px)",
+      WebkitBackdropFilter: "blur(16px)",
+      borderRadius: "12px",
+      boxShadow: "0 25px 50px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255, 255, 255, 0.1)",
       display: "flex",
       flexDirection: "column" as const,
       overflow: "hidden",
@@ -51,14 +53,14 @@ export function ComposerDiff({
     },
     header: {
       padding: "12px 16px",
-      backgroundColor: "var(--border-color, #27272a)",
+      backgroundColor: "transparent",
       color: "var(--text-main, #e4e4e7)",
       fontSize: "13px",
       fontWeight: 500,
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      borderBottom: "1px solid #3f3f46",
+      borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
     },
     title: {
       display: "flex",
@@ -90,16 +92,16 @@ export function ComposerDiff({
     },
     fileTabs: {
       display: "flex",
-      backgroundColor: "#1e1e1e",
-      borderBottom: "1px solid #3f3f46",
+      backgroundColor: "transparent",
+      borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
       overflowX: "auto" as const,
     },
     tab: (isActive: boolean) => ({
       padding: "8px 16px",
       fontSize: "12px",
       color: isActive ? "#fff" : "var(--text-muted, #a1a1aa)",
-      backgroundColor: isActive ? "var(--border-color, #27272a)" : "transparent",
-      borderRight: "1px solid #3f3f46",
+      backgroundColor: isActive ? "rgba(255, 255, 255, 0.05)" : "transparent",
+      borderRight: "1px solid rgba(255, 255, 255, 0.05)",
       cursor: "pointer",
       whiteSpace: "nowrap" as const,
     }),
@@ -109,7 +111,7 @@ export function ComposerDiff({
   };
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="anim-scale-in">
       <div style={styles.header}>
         <div style={styles.title}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>

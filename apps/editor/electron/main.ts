@@ -308,15 +308,18 @@ async function createProvider(repoRoot: string) {
       const keysPath = join(app.getPath("userData"), "..", "atlas", "keys.json");
       if (existsSync(keysPath)) {
         const keysObj = safeJsonParse<any>(await fsPromises.readFile(keysPath, "utf-8"), {});
-        const keyMap: Record<string, string> = {
-          "openai": "openaiApiKey",
-          "anthropic": "anthropicApiKey",
-          "gemini": "geminiApiKey",
-          "openai-compatible": "openRouterApiKey"
+        const keyMap: Record<string, string[]> = {
+          "openai": ["OPENAI_API_KEY", "openaiApiKey"],
+          "anthropic": ["ANTHROPIC_API_KEY", "anthropicApiKey"],
+          "gemini": ["GEMINI_API_KEY", "geminiApiKey"],
+          "openai-compatible": ["OPENAI_API_KEY", "openRouterApiKey"]
         };
-        const secureKey = keyMap[providerName];
-        if (secureKey && keysObj[secureKey]) {
-          apiKey = safeStorage.decryptString(Buffer.from(keysObj[secureKey], "base64"));
+        const possibleKeys = keyMap[providerName] ?? [];
+        for (const k of possibleKeys) {
+          if (keysObj[k]) {
+            apiKey = safeStorage.decryptString(Buffer.from(keysObj[k], "base64"));
+            if (apiKey) break;
+          }
         }
       }
     } catch (e) {
@@ -722,6 +725,7 @@ ipcMain.handle("atlas:set-secure-key", async (_event, key: string, value: string
     const encrypted = safeStorage.encryptString(value).toString("base64");
     keysObj[key] = encrypted;
     await writeFile(keysPath, JSON.stringify(keysObj, null, 2), "utf-8");
+    process.env[key] = value; // Live update process.env so provider detection works instantly
   } catch (err) {
     console.error("Failed to set secure key:", err);
     throw err;
@@ -896,7 +900,7 @@ ipcMain.handle("atlas:format-code", async (_event, repoPath: string, filePath: s
 let activeLanguageServer: cp.ChildProcess | null = null;
 let activeLanguageServerType: string | null = null;
 
-ipcMain.handle("atlas:start-lsp", async (event, repoPath: string, language: string = "typescript") => {
+const handleStartLsp = async (event: any, repoPath: string, language: string = "typescript") => {
   if (activeLanguageServerType === language && activeLanguageServer) {
     return "already_running";
   }
@@ -937,7 +941,9 @@ ipcMain.handle("atlas:start-lsp", async (event, repoPath: string, language: stri
     console.error(`Failed to start ${language} LSP:`, err);
     return "error";
   }
-});
+};
+ipcMain.handle("atlas:lsp-start", handleStartLsp);
+ipcMain.handle("atlas:start-lsp", handleStartLsp);
 
 ipcMain.on("atlas:lsp-client-to-server", (_event, message: string) => {
   if (activeLanguageServer && activeLanguageServer.stdin) {
@@ -1672,6 +1678,63 @@ ipcMain.handle("atlas:get-runs", async () => {
     return runs;
   } catch (err) {
     return [];
+  }
+  }
+});
+
+let globalWorkerPool: any = null;
+let lastParallelPlan: any = null;
+
+ipcMain.handle("atlas:parallel-spawn", async (event, payload: { goal: string; repoPath: string }) => {
+  const repoRoot = payload.repoPath || getProjectRoot();
+  if (!repoRoot) return { error: "No active workspace" };
+
+  try {
+    const provider = await createProvider(repoRoot);
+    const { MemoryEngine } = await import("@atlas/graph");
+    const { WorkerPool, ParallelPlanner } = await import("@atlas/agents");
+
+    if (!globalWorkerPool) {
+      const memory = await MemoryEngine.create({ repoRoot });
+      globalWorkerPool = new WorkerPool({
+        orchestratorConfig: { provider, repoRoot, memory },
+        onEvent: (ev: any) => {
+          event.sender.send("atlas:parallel-event", ev);
+        }
+      });
+    }
+
+    const planner = new ParallelPlanner({ provider, repoRoot });
+    const plan = await planner.plan(payload.goal);
+    lastParallelPlan = plan;
+
+    globalWorkerPool.executePlan(plan).catch(console.error);
+    return "Spawned";
+  } catch (err: any) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle("atlas:parallel-list", async () => {
+  if (!globalWorkerPool) return [];
+  return globalWorkerPool.list();
+});
+
+ipcMain.handle("atlas:package-skill", async (_event, payload: { name: string; repoPath: string }) => {
+  try {
+    const { WorkflowSkillCreator } = await import("@atlas/agents");
+    const creator = new WorkflowSkillCreator(payload.repoPath);
+    
+    const workers = globalWorkerPool ? globalWorkerPool.list() : [];
+    const planToPackage = lastParallelPlan || {
+      overallGoal: `Custom skill: ${payload.name}`,
+      tasks: workers.map((w: any) => w.task)
+    };
+    
+    const skillPath = await creator.packageWorkflowAsSkill(planToPackage, workers, payload.name);
+    return skillPath;
+  } catch (err: any) {
+    return { error: err.message };
   }
 });
 

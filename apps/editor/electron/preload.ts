@@ -285,6 +285,19 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.invoke("atlas:agent-inline-action", action, text),
   testProviderConnection: (providerName: string, apiKey: string, baseUrl?: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke("atlas:test-provider-connection", providerName, apiKey, baseUrl),
+    
+  // Parallel AI Orchestrator
+  parallelSpawn: (payload: { goal: string; repoPath: string }): Promise<string> =>
+    ipcRenderer.invoke("atlas:parallel-spawn", payload),
+  parallelList: (): Promise<any[]> =>
+    ipcRenderer.invoke("atlas:parallel-list"),
+  onParallelEvent: (handler: (event: any) => void) => {
+    const listener = (_e: any, ev: any) => handler(ev);
+    ipcRenderer.on("atlas:parallel-event", listener);
+    return () => ipcRenderer.off("atlas:parallel-event", listener);
+  },
+  packageSkill: (payload: { name: string; repoPath: string }): Promise<string> =>
+    ipcRenderer.invoke("atlas:package-skill", payload),
 
 
 
