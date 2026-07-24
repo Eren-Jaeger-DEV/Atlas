@@ -239,8 +239,6 @@ export function StatusBar({
             {eol}
           </div>
 
-          {/* Encoding — read-only for now */}
-          <div className="statusbar-item" style={itemStyle(false)} title="File Encoding">UTF-8</div>
 
           {/* Language picker */}
           <div

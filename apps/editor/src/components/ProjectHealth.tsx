@@ -79,10 +79,7 @@ export function ProjectHealth({ repoPath }: ProjectHealthProps) {
             {/* Breakdown */}
             <div style={styles.breakdown}>
               <p style={styles.bdHdr}>ANALYSIS STATUS</p>
-              <div style={styles.bdRow}>
-                <span>Git Repository</span>
-                <span style={{ color: "#4ade80" }}>[PASS]</span>
-              </div>
+
               <div style={styles.bdRow}>
                 <span>TODO / FIXME Scan</span>
                 <span style={{ color: todoCount !== null ? "#4ade80" : "var(--text-muted, #71717a)" }}>

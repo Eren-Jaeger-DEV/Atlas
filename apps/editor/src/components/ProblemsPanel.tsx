@@ -43,8 +43,8 @@ export function ProblemsPanel({
           Problems <span style={s.badge}>{problems.length}</span>
         </div>
         <div style={s.summary}>
-          {errorsCount > 0 && <span style={s.errorTxt}>âœ˜ {errorsCount}</span>}
-          {warningsCount > 0 && <span style={s.warnTxt}>âš  {warningsCount}</span>}
+          {errorsCount > 0 && <span style={s.errorTxt}>[FAIL] {errorsCount}</span>}
+          {warningsCount > 0 && <span style={s.warnTxt}>[WARN] {warningsCount}</span>}
         </div>
       </div>
       <div style={s.content}>
@@ -61,7 +61,7 @@ export function ProblemsPanel({
           Object.entries(grouped).map(([path, fileProblems]) => (
             <div key={path} style={s.fileGroup}>
               <div style={s.filePath}>
-                <span style={s.fileIcon}>ðŸ“„</span>
+                <span style={s.fileIcon}>[FILE]</span>
                 {path}
                 <span style={s.fileBadge}>{fileProblems.length}</span>
               </div>
@@ -86,10 +86,10 @@ export function ProblemsPanel({
                     }}
                   >
                     {p.marker.severity === monaco.MarkerSeverity.Error
-                      ? "âœ˜"
+                      ? "[FAIL]"
                       : p.marker.severity === monaco.MarkerSeverity.Warning
-                      ? "âš "
-                      : "â„¹"}
+                      ? "[WARN]"
+                      : "[INFO]"}
                   </span>
                   <span style={s.problemMsg}>{p.marker.message}</span>
                   <span style={s.problemSource}>
