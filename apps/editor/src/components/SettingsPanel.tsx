@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   fontSize: 13,
   fontFamily: "'JetBrains Mono', Consolas, monospace",
   tabSize: 2,
-  wordWrap: "on",
+  wordWrap: "off",
   formatOnSave: false,
   minimap: true,
   lineNumbers: true,

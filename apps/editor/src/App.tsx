@@ -1070,7 +1070,16 @@ function AppInner() {
             ))}
           </div>
 
-          {activeTab && <Breadcrumb filePath={activeTab.filePath} repoPath={repoPath} cursorSymbol={cursorSymbol} />}
+          {activeTab && (
+            <Breadcrumb
+              filePath={activeTab.filePath}
+              repoPath={repoPath}
+              cursorSymbol={cursorSymbol}
+              language={activeTab.language}
+              onFormat={() => activeEditorRef.current?.getAction?.("editor.action.formatDocument")?.run()}
+              onFind={() => activeEditorRef.current?.getAction?.("actions.find")?.run()}
+            />
+          )}
 
           <div style={s.editorArea}>
             {showInlineAi && (
@@ -1391,8 +1400,8 @@ const s: Record<string,React.CSSProperties> = {
 
   /* ---- Editor Area ---- */
   center:{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",backgroundColor:"var(--bg-base)" },
-  tabBar:{ display:"flex",height:"38px",backgroundColor:"var(--bg-panel)",borderBottom:"1px solid var(--border-subtle)",alignItems:"center",padding:"0", overflowX:"auto", overflowY:"hidden" },
-  tab:{ display:"flex",alignItems:"center",gap:"8px",padding:"0 12px 0 16px",minWidth:"140px",maxWidth:"220px",height:"100%",backgroundColor:"var(--bg-panel)",borderRight:"1px solid var(--border-subtle)",color:"var(--text-faint)",fontSize:"13px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0,transition:"all 0.15s ease",position:"relative" as const },
+  tabBar:{ display:"flex",height:"32px",backgroundColor:"var(--bg-panel)",borderBottom:"1px solid var(--border-subtle)",alignItems:"center",padding:"0", overflowX:"auto", overflowY:"hidden" },
+  tab:{ display:"flex",alignItems:"center",gap:"6px",padding:"0 10px 0 12px",minWidth:"120px",maxWidth:"200px",height:"100%",backgroundColor:"var(--bg-panel)",borderRight:"1px solid var(--border-subtle)",color:"var(--text-faint)",fontSize:"12px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0,transition:"all 0.15s ease",position:"relative" as const },
   tabOn:{ backgroundColor:"var(--bg-base)",color:"var(--accent)",borderTop:"2px solid var(--accent)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.05)" },
   tabName:{ flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,fontWeight:500,letterSpacing:"0.2px" },
   tabDot:{ color:"var(--text-main)",fontSize:"12px",lineHeight:"1",flexShrink:0 },

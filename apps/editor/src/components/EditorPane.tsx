@@ -4,13 +4,30 @@ import type * as Monaco from "monaco-editor";
 import * as monaco from "monaco-editor";
 import { dapClient, DAPEvent } from "../dap/DAPClient.js";
 import { useContextMenu, ContextMenuItem } from "./ContextMenuProvider.js";
+import { useNotification } from "./NotificationProvider.js";
 import { EditorSettings } from "./SettingsPanel.js";
 import { SnippetManager } from "../snippets/SnippetManager.js";
 import { fetchDocumentSymbols } from "../lsp/LSPClient.js";
 import { parseUnifiedDiff, parseGitBlame, BlameInfo } from "./GitHelpers.js";
 
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+
 // Configure Monaco to bundle locally rather than from CDN
 loader.config({ monaco });
+
+self.MonacoEnvironment = {
+  getWorker(_: any, label: string) {
+    if (label === "json") return new jsonWorker();
+    if (label === "css" || label === "scss" || label === "less") return new cssWorker();
+    if (label === "html" || label === "handlebars" || label === "razor") return new htmlWorker();
+    if (label === "typescript" || label === "javascript") return new tsWorker();
+    return new editorWorker();
+  }
+};
 
 interface EditorPaneProps {
   filePath?: string;
@@ -59,6 +76,11 @@ function inferLanguage(filePath?: string, hint?: string): string {
     rb: "ruby",        php: "php",
     sql: "sql",        toml: "ini",
     env: "ini",        txt: "plaintext",
+    cs: "csharp",      scala: "scala",
+    swift: "swift",    dart: "dart",
+    dockerfile: "dockerfile", xml: "xml",
+    graphql: "graphql", r: "r",
+    m: "objective-c",  mm: "objective-cpp"
   };
   return map[ext] ?? "plaintext";
 }
@@ -79,6 +101,7 @@ export function EditorPane({
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const { showContextMenu } = useContextMenu();
+  const { showNotification } = useNotification();
 
   const [showFind, setShowFind] = useState(false);
   const [findText, setFindText] = useState("");
@@ -256,11 +279,28 @@ export function EditorPane({
     monacoRef.current = monaco;
 
     SnippetManager.initialize(monaco).catch(console.error);
+    
+    // Globally emit diagnostics for extensions
+    monaco.editor.onDidChangeMarkers(() => {
+      const markers = monaco.editor.getModelMarkers({});
+      if ((window as any).atlasAPI?.emitEvent) {
+        (window as any).atlasAPI.emitEvent("DiagnosticsUpdated", { count: markers.length });
+      }
+    });
 
     if (repoPath) {
       import("../lsp/LSPClient.js").then(async m => {
-        await m.initLSPClient(repoPath, resolvedLang);
-        setTimeout(updateSymbols, 1000);
+        const supported = ["typescript", "javascript", "typescriptreact", "javascriptreact", "python"];
+        if (!supported.includes(resolvedLang)) {
+          showNotification({
+            message: `Language '${resolvedLang}' is not supported yet for advanced features (Hover, Autocomplete, etc). Basic editing will work fine.`,
+            type: "info",
+            duration: 5000
+          });
+        }
+        
+        // await m.initLSPClient(repoPath, resolvedLang);
+        // setTimeout(updateSymbols, 1000);
 
         const lsp = m.getLSPClient();
         if (!lsp) return;
@@ -972,30 +1012,6 @@ export function EditorPane({
 
   return (
     <div style={s.wrapper}>
-      {/* Control bar */}
-      <div style={s.ctrlBar}>
-        <span style={s.filePath}>{filePath ? filePath.split(/[/\\]/).pop() : "Untitled"}</span>
-        <div style={s.ctrlActions}>
-          <span style={s.langBadge}>{resolvedLang}</span>
-          <button
-            className="hover-scale"
-            style={s.ctrlBtn}
-            title="Format Document (Alt+Shift+F)"
-            onClick={() => editorRef.current?.getAction("editor.action.formatDocument")?.run()}
-          >
-            Format
-          </button>
-          <button
-            className="hover-scale"
-            style={s.ctrlBtn}
-            title="Find & Replace (Ctrl+F / Ctrl+H)"
-            onClick={() => setShowFind(p => !p)}
-          >
-            Find
-          </button>
-        </div>
-      </div>
-
       {/* Find & Replace overlay */}
       {showFind && (
         <div className="anim-scale-in" style={s.findBox}>
@@ -1053,7 +1069,7 @@ export function EditorPane({
             lineNumbers: settings?.lineNumbers !== false ? "on" : "off",
             glyphMargin: true,
             minimap: { enabled: settings?.minimap !== false, scale: 1, renderCharacters: false },
-            wordWrap: settings?.wordWrap ?? "on",
+            wordWrap: settings?.wordWrap ?? "off",
             scrollBeyondLastLine: false,
             automaticLayout: true,
             tabSize: settings?.tabSize ?? 2,
