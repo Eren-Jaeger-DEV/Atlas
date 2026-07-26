@@ -72,6 +72,8 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
   // Model & Provider state (syncs with Settings)
   const [currentProvider, setCurrentProvider] = useState<string>("gemini");
   const [selectedModel, setSelectedModel] = useState<string>("gemini-2.5-flash");
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showModelMenu, setShowModelMenu] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -390,63 +392,145 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
 
       <div style={styles.inputArea}>
         <div style={styles.inputBox} className="ai-input-box">
-          <div style={styles.inputTop}>
-            <button className="sidebar-action-btn" style={styles.addContextBtn} title="Add context, media, or files">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-            <RichComposer
-              value={prompt}
-              onChange={(val) => setPrompt(val)}
-              onSubmit={handleSend}
-              openTabs={openTabs}
-              disabled={activeRuns.size > 0}
-            />
-          </div>
-            <select
-              style={{
-                backgroundColor: "#18181b", border: "1px solid #27272a", color: "#38bdf8",
-                borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 600, outline: "none",
-                maxWidth: 150
-              }}
-              value={selectedModel}
-              onChange={e => handleModelChange(e.target.value)}
-            >
-              {availableModels.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
-            </select>
+          <RichComposer
+            value={prompt}
+            onChange={(val) => setPrompt(val)}
+            onSubmit={handleSend}
+            openTabs={openTabs}
+            disabled={activeRuns.size > 0}
+          />
 
-            <button
-              style={{
-                fontSize: 10, background: "none", border: "1px solid #3f3f46", borderRadius: 4,
-                color: planningMode ? "#38bdf8" : "#71717a", padding: "2px 6px", cursor: "pointer"
-              }}
-              onClick={() => setPlanningMode(!planningMode)}
-            >
-              {planningMode ? "Plan: ON" : "Plan: OFF"}
-            </button>
-
-            <button
-              style={{ fontSize: 10, background: "none", border: "1px solid #38bdf8", borderRadius: 4, color: "#38bdf8", padding: "2px 6px", cursor: "pointer" }}
-              onClick={() => {
-                if (onOpenSettings) onOpenSettings();
-                else window.atlasAPI?.openSettingsWindow?.();
-              }}
-              title="Open AI Configuration Settings"
-            >
-              [Key]
-            </button>
-
-            <div style={styles.actionRow}>
-              {prompt.trim() ? (
-                <button className="sidebar-action-btn" style={styles.sendBtn} onClick={handleSend}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "4px" }}>
+            {/* Left: + Button (Context & Plan mode options) and Model Pill */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", position: "relative" }}>
+              {/* Plus button with dropdown */}
+              <div style={{ position: "relative" }}>
+                <button
+                  style={{
+                    background: showPlusMenu ? "rgba(255,255,255,0.1)" : "none",
+                    border: "none",
+                    color: planningMode ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
+                    cursor: "pointer",
+                    padding: "4px 6px",
+                    borderRadius: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "14px",
+                    fontWeight: "bold"
+                  }}
+                  onClick={() => { setShowPlusMenu(!showPlusMenu); setShowModelMenu(false); }}
+                  title="Context & Plan Mode Options"
+                >
+                  +
                 </button>
-              ) : (
-                <button className="sidebar-action-btn" style={styles.micBtn} title="Voice Input">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+
+                {showPlusMenu && (
+                  <div
+                    style={{
+                      position: "absolute", bottom: "32px", left: "0", zIndex: 1000,
+                      backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px",
+                      padding: "6px", width: "180px", boxShadow: "0 8px 24px rgba(0,0,0,0.6)"
+                    }}
+                  >
+                    <button
+                      style={{
+                        width: "100%", textAlign: "left", background: "none", border: "none",
+                        color: planningMode ? "#38bdf8" : "#fafafa", padding: "6px 8px", borderRadius: "4px",
+                        fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between"
+                      }}
+                      onClick={() => { setPlanningMode(!planningMode); setShowPlusMenu(false); }}
+                    >
+                      <span>Planning Mode</span>
+                      <span style={{ fontSize: "10px", fontWeight: "bold", color: planningMode ? "#38bdf8" : "#71717a" }}>
+                        {planningMode ? "ON" : "OFF"}
+                      </span>
+                    </button>
+                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
+                    <div style={{ fontSize: "10px", color: "#71717a", padding: "4px 8px", fontWeight: 600 }}>CONTEXT HINT</div>
+                    <div style={{ fontSize: "11px", color: "#a1a1aa", padding: "4px 8px" }}>Type @ to attach context files or symbols</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Model Pill */}
+              <div style={{ position: "relative" }}>
+                <button
+                  style={{
+                    backgroundColor: "rgba(24, 24, 27, 0.9)",
+                    border: "1px solid #27272a",
+                    color: "#e4e4e7",
+                    borderRadius: "16px",
+                    padding: "3px 10px",
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                  onClick={() => { setShowModelMenu(!showModelMenu); setShowPlusMenu(false); }}
+                >
+                  <span>{availableModels.find(m => m.value === selectedModel)?.label || selectedModel}</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="18 15 12 9 6 15"/>
+                  </svg>
                 </button>
-              )}
+
+                {showModelMenu && (
+                  <div
+                    style={{
+                      position: "absolute", bottom: "32px", left: "0", zIndex: 1000,
+                      backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: "8px",
+                      padding: "4px", width: "190px", maxHeight: "200px", overflowY: "auto",
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.6)"
+                    }}
+                  >
+                    {availableModels.map(m => (
+                      <div
+                        key={m.value}
+                        style={{
+                          padding: "6px 10px", fontSize: "11px", cursor: "pointer", borderRadius: "4px",
+                          color: m.value === selectedModel ? "#38bdf8" : "#fafafa",
+                          backgroundColor: m.value === selectedModel ? "rgba(56, 189, 248, 0.1)" : "transparent"
+                        }}
+                        onClick={() => {
+                          handleModelChange(m.value);
+                          setShowModelMenu(false);
+                        }}
+                      >
+                        {m.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Mic & Arrow Send Button */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button
+                style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center" }}
+                title="Voice Input"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              </button>
+
+              <button
+                style={{
+                  width: "26px", height: "26px", borderRadius: "50%",
+                  backgroundColor: prompt.trim() ? "#fafafa" : "#27272a",
+                  color: prompt.trim() ? "#000" : "#71717a",
+                  border: "none", display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: prompt.trim() ? "pointer" : "default",
+                  transition: "all 0.15s ease"
+                }}
+                onClick={handleSend}
+                disabled={!prompt.trim()}
+                title="Send Message"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -454,8 +538,9 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           AI may make mistakes. Double-check all generated code.
         </div>
       </div>
-    </>
-  );
+    </div>
+  </>
+);
 }
 
 const styles: Record<string, React.CSSProperties> = {
