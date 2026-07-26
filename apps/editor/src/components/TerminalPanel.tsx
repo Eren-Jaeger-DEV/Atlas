@@ -5,6 +5,7 @@ import "@xterm/xterm/css/xterm.css";
 
 interface TerminalPanelProps {
   repoPath?: string;
+  addTrigger?: number;
 }
 
 interface TermTab {
@@ -13,12 +14,15 @@ interface TermTab {
   shell: string;
 }
 
-export function TerminalPanel({ repoPath }: TerminalPanelProps) {
+export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
+  const isWin = typeof navigator !== "undefined" && navigator.userAgent.includes("Win");
+  const defaultShell = isWin ? "powershell" : "bash";
+
   const [tabs, setTabs] = useState<TermTab[]>([
-    { id: "term-1", name: "Terminal 1", shell: "powershell" }
+    { id: "term-1", name: "Terminal 1", shell: defaultShell }
   ]);
   const [activeTabId, setActiveTabId] = useState("term-1");
-  const [shellType, setShellType] = useState("powershell");
+  const [shellType] = useState(defaultShell);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const termMapRef = useRef<Map<string, { term: Terminal; fit: FitAddon }>>(new Map());
@@ -34,6 +38,14 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
     setTabs(p => [...p, newTab]);
     setActiveTabId(newId);
   };
+
+  const prevTriggerRef = useRef(addTrigger);
+  useEffect(() => {
+    if (addTrigger !== undefined && addTrigger !== prevTriggerRef.current) {
+      prevTriggerRef.current = addTrigger;
+      handleAddTab();
+    }
+  }, [addTrigger]);
 
   const handleCloseTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -67,17 +79,17 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
           fontSize: 13,
           fontFamily: "'JetBrains Mono', Consolas, monospace",
           theme: {
-            background: "var(--bg-base, #09090b)",
-            foreground: "var(--text-main, #fafafa)",
-            cursor: "var(--text-main, #fafafa)",
-            selectionBackground: "var(--border-color, #27272a)",
-            black: "var(--bg-header, #18181b)",
+            background: "#000000",
+            foreground: "#fafafa",
+            cursor: "#fafafa",
+            selectionBackground: "#27272a",
+            black: "#18181b",
             red: "#f87171",
             green: "#4ade80",
             yellow: "#facc15",
             blue: "#60a5fa",
             magenta: "#c084fc",
-            cyan: "var(--accent, #38bdf8)",
+            cyan: "#38bdf8",
             white: "#f4f4f5",
           },
         });
@@ -195,51 +207,44 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
       {/* Terminal Viewport */}
       <div ref={containerRef} style={styles.canvasContainer} />
 
-      {/* Right-hand Sessions Sidebar matching Antigravity Screenshot 1 */}
+      {/* Right-hand Sessions Sidebar matching Antigravity Screenshot 2 */}
       <div style={styles.sessionsSidebar}>
-        {/* Top Mini Preview Box */}
-        <div style={styles.miniPreview}>
-          <div style={{ fontSize: "9px", fontFamily: "var(--font-mono, monospace)", color: "#a1a1aa", opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {repoPath ? repoPath.split(/[/\\]/).pop() : "Atlas"}
-          </div>
-          <div style={{ fontSize: "8.5px", fontFamily: "var(--font-mono, monospace)", color: "#71717a", marginTop: "6px", lineHeight: "1.4" }}>
-            {repoPath ? `victor@victor:${repoPath.split(/[/\\]/).pop()}$` : "victor@victor:~$"}
-          </div>
-        </div>
-
-        {/* Bottom Sessions List */}
-        <div style={styles.sessionsList}>
-          {tabs.map(t => {
-            const isActive = t.id === activeTabId;
-            return (
-              <div
-                key={t.id}
-                style={{
-                  ...styles.sessionItem,
-                  ...(isActive ? styles.sessionItemActive : {})
-                }}
-                onClick={() => setActiveTabId(t.id)}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: isActive ? "#f97316" : "#a1a1aa" }}>&gt;_</span>
-                  <span style={{ fontSize: "11px", fontWeight: isActive ? 600 : 400, color: isActive ? "#fafafa" : "#a1a1aa", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                    {t.shell === "powershell" ? "powershell" : t.shell === "cmd" ? "cmd" : "bash"}
-                  </span>
+        {tabs.map(t => {
+          const isActive = t.id === activeTabId;
+          return (
+            <div
+              key={t.id}
+              style={{
+                ...styles.sessionItem,
+                ...(isActive ? styles.sessionItemActive : {})
+              }}
+              onClick={() => setActiveTabId(t.id)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: "16px", height: "16px", border: "1px solid #52525b", borderRadius: "3px",
+                  fontSize: "9.5px", fontFamily: "var(--font-mono, monospace)", fontWeight: 700, color: "#e4e4e7"
+                }}>
+                  &gt;_
                 </div>
-                {tabs.length > 1 && (
-                  <span
-                    className="hover-scale"
-                    style={styles.sessionX}
-                    onClick={e => handleCloseTab(t.id, e)}
-                    title="Kill Terminal"
-                  >
-                    ✕
-                  </span>
-                )}
+                <span style={{ fontSize: "12px", fontFamily: "var(--font-mono, monospace)", fontWeight: isActive ? 600 : 400, color: isActive ? "#ffffff" : "#a1a1aa", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                  {t.shell}
+                </span>
               </div>
-            );
-          })}
-        </div>
+              {tabs.length > 1 && (
+                <span
+                  className="hover-scale"
+                  style={styles.sessionX}
+                  onClick={e => handleCloseTab(t.id, e)}
+                  title="Kill Terminal"
+                >
+                  ✕
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -251,8 +256,8 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "row",
     height: "100%",
     width: "100%",
-    backgroundColor: "var(--bg-base, #09090b)",
-    color: "var(--text-main)",
+    backgroundColor: "#000000",
+    color: "#fafafa",
     overflow: "hidden",
   },
   canvasContainer: {
@@ -264,49 +269,33 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#000000",
   },
   sessionsSidebar: {
-    width: "140px",
+    width: "120px",
     height: "100%",
-    backgroundColor: "var(--bg-panel, #09090b)",
+    backgroundColor: "#000000",
     borderLeft: "1px solid var(--border-subtle, #27272a)",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
-    padding: "8px",
+    gap: "3px",
+    padding: "4px",
     flexShrink: 0,
-    overflow: "hidden",
-  },
-  miniPreview: {
-    height: "90px",
-    backgroundColor: "#000000",
-    border: "1px solid var(--border-subtle, #27272a)",
-    borderRadius: "4px",
-    padding: "6px",
-    overflow: "hidden",
-    pointerEvents: "none",
-  },
-  sessionsList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "4px",
-    marginTop: "auto",
+    overflowY: "auto",
   },
   sessionItem: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "5px 8px",
-    borderRadius: "4px",
+    padding: "3px 6px",
+    borderRadius: "2px",
     cursor: "pointer",
-    fontSize: "11px",
-    color: "var(--text-muted, #a1a1aa)",
-    border: "1px solid #27272a",
-    backgroundColor: "#09090b",
+    fontSize: "12px",
+    color: "#a1a1aa",
+    border: "1px dashed transparent",
     transition: "all 0.1s ease",
   },
   sessionItemActive: {
-    color: "#fafafa",
-    backgroundColor: "rgba(249, 115, 22, 0.08)",
-    border: "1px solid #f97316",
+    color: "#ffffff",
+    border: "1px dashed #f97316",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
   },
   sessionX: {
     fontSize: "10px",

@@ -125,6 +125,7 @@ function AppInner() {
 
 
   const [showBottomPanel, setShowBottomPanel]       = useState(true);
+  const [termAddTrigger, setTermAddTrigger]         = useState(0);
   const [showRightAiSidebar, setShowRightAiSidebar] = useState(true);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [isSplit, setIsSplit]                       = useState(false);
@@ -1366,7 +1367,7 @@ function AppInner() {
                       className="hover-scale"
                       style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "2px 4px", fontSize: "14px", display: "flex", alignItems: "center" }}
                       title="New Terminal"
-                      onClick={() => setBottomTab("terminal")}
+                      onClick={() => { setBottomTab("terminal"); setTermAddTrigger(n => n + 1); }}
                     >
                       +
                     </button>
@@ -1413,7 +1414,7 @@ function AppInner() {
                   </div>
                 </div>
                 <div style={{flex:1, overflow:"hidden"}}>
-                  {bottomTab==="terminal" && <TerminalPanel repoPath={repoPath}/>}
+                  {bottomTab==="terminal" && <TerminalPanel repoPath={repoPath} addTrigger={termAddTrigger}/>}
                   {bottomTab==="problems" && <ProblemsPanel onJump={(p,l,c) => openFile(p,l,c)}/>}
                   {bottomTab==="output"   && <OutputPanel/>}
                   {bottomTab==="ai"       && <div style={s.log}>{aiEvents.length===0?<p style={s.logDim}>No agent runs.</p>:aiEvents.map((e,i)=><p key={i} style={s.logLine}>{e}</p>)}</div>}
