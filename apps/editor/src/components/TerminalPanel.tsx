@@ -99,15 +99,26 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
         termMapRef.current.set(tab.id, { term, fit: fitAddon });
 
         if (api) {
-          api.terminalCreate(tab.id, repoPath).then(() => {
-            term.onData((data: string) => api.terminalInput(tab.id, data));
-          });
           const unsub = api.onTerminalData((payload: { termId: string; data: string }) => {
             if (payload.termId === tab.id) term.write(payload.data);
           });
           if (typeof unsub === "function") {
             unsubMapRef.current.set(tab.id, unsub);
           }
+
+          api.terminalCreate(tab.id, repoPath).then(() => {
+            term.onData((data: string) => api.terminalInput(tab.id, data));
+            if (term.cols && term.rows && api.terminalResize) {
+              api.terminalResize(tab.id, term.cols, term.rows);
+            }
+            api.terminalGetHistory(tab.id).then((hist: string) => {
+              if (hist) {
+                term.write(hist);
+              } else {
+                api.terminalInput(tab.id, "\r");
+              }
+            });
+          });
 
           // Copy text automatically when selected
           term.onSelectionChange(() => {
@@ -146,7 +157,15 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
         if (el) el.style.display = tab.id === activeTabId ? "block" : "none";
         if (tab.id === activeTabId) {
           setTimeout(() => {
-            try { termMapRef.current.get(tab.id)?.fit.fit(); } catch {}
+            try {
+              const active = termMapRef.current.get(tab.id);
+              if (active) {
+                active.fit.fit();
+                if (active.term.cols && active.term.rows && api?.terminalResize) {
+                  api.terminalResize(tab.id, active.term.cols, active.term.rows);
+                }
+              }
+            } catch {}
           }, 10);
         }
       }
@@ -159,7 +178,12 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
     const observer = new ResizeObserver(() => {
       const active = termMapRef.current.get(activeTabId);
       if (active) {
-        try { active.fit.fit(); } catch {}
+        try {
+          active.fit.fit();
+          if (active.term.cols && active.term.rows && window.atlasAPI?.terminalResize) {
+            window.atlasAPI.terminalResize(activeTabId, active.term.cols, active.term.rows);
+          }
+        } catch {}
       }
     });
     observer.observe(containerRef.current);
