@@ -40,7 +40,8 @@ import { TaskDAG } from "./dag/TaskDAG.js";
 import { verifyAST, verifyTerminalSandbox, verifyVision, VerificationResult } from "./verification/index.js";
 import { TaskNode } from "@atlas/core";
 import { BrainManager } from "./brain.js";
-import { readFileTool, listDirectoryTool, FS_TOOL_DEFINITIONS } from "./tools/fs-tools.js";
+import { readFileTool, listDirectoryTool, writeFileTool, multiReplaceFileContentTool, FS_TOOL_DEFINITIONS } from "./tools/fs-tools.js";
+import { BASH_TOOL_DEFINITIONS, runCommandTool } from "./tools/bash-tools.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -254,13 +255,21 @@ export class Orchestrator {
       if (isChatMode) {
         const lastMsg = goal.toLowerCase().trim();
         const isGreeting = /^(hi|hey|hello|yo|howdy|greetings|good\s*(morning|afternoon|evening|day))[\s!.]*$/i.test(lastMsg);
-        const isLikelyTask = !isGreeting && /\b(add|create|update|refactor|fix|change|remove|delete|implement|write|build|test|debug|run|review|audit|inspect|check|analyze|overview)\b/i.test(lastMsg);
+        const isLikelyTask = !isGreeting && /\b(add|create|make|generate|build|scaffold|setup|install|update|refactor|fix|change|remove|delete|implement|write|test|debug|run|review|audit|inspect|check|analyze|overview|bot|app|script|project|file|dir|folder|code)\b/i.test(lastMsg);
         
         if (!isLikelyTask) {
           const developerProfile = this.config.memory.getDeveloperProfile?.("default");
           const profileContext = developerProfile ? `\n[Developer Profile Preferences]\n${developerProfile}\n` : "";
           
-          const chatContext = `You are a helpful AI coding assistant in Atlas Studio.\nContext:\n${ctx.promptContext}${skillsContext}${rulesContext}${profileContext}\n`;
+          const chatContext = `You are an autonomous AI coding agent in Atlas Studio operating directly inside the user's active workspace directory.
+Context:
+${ctx.promptContext}${skillsContext}${rulesContext}${profileContext}
+
+CRITICAL DIRECTIVE FOR FILE & SYSTEM MODIFICATIONS:
+When the user asks to create, make, build, install, or modify files, scripts, bots, or apps, DO NOT just return markdown code blocks for manual copy-pasting. You MUST autonomously invoke tool calls:
+- Use 'write_file' or 'multi_replace_file_content' to write files directly to disk in the workspace folder.
+- Use 'run_command' to run shell setup commands (e.g. npm init, npm install, etc.).
+- Always check files using 'read_file' or 'list_directory' first before modifying.`;
           
           let semanticChatMsgs: any[] = [];
           if (this.config.memory.vectorSearchChat) {
@@ -289,9 +298,7 @@ export class Orchestrator {
             }
           };
 
-          const readTool = FS_TOOL_DEFINITIONS.find(t => t.name === "read_file");
-          const listTool = FS_TOOL_DEFINITIONS.find(t => t.name === "list_directory");
-          const chatTools = [updateDevProfileTool, ...(readTool ? [readTool] : []), ...(listTool ? [listTool] : [])];
+          const chatTools = [updateDevProfileTool, ...FS_TOOL_DEFINITIONS, ...BASH_TOOL_DEFINITIONS];
 
           let allMessages = [systemMsg, ...semanticChatMsgs, ...pastChatMsgs, ...chatMsgs];
 
@@ -301,7 +308,7 @@ export class Orchestrator {
             (chunk: string) => { if (chunk) this.emit({ type: "token", content: chunk, runId }); }
           );
 
-          // Handle any tool calls returned (e.g. update_developer_profile, read_file, list_directory)
+          // Handle any tool calls returned (e.g. update_developer_profile, write_file, multi_replace_file_content, run_command, read_file, list_directory)
           while (chatRes.toolCalls && chatRes.toolCalls.length > 0) {
              const tc = chatRes.toolCalls[0];
              if (!tc) break;
@@ -314,6 +321,27 @@ export class Orchestrator {
                    this.config.memory.upsertDeveloperProfile("default", prefs);
                 }
                 allMessages.push({ role: "tool", content: "Profile updated successfully.", toolCallId: tc.id });
+             } else if (tc.name === "write_file") {
+                const filePath = String(tc.arguments?.file_path || "");
+                const content = String(tc.arguments?.content || "");
+                const fileName = filePath.split("/").pop() || filePath;
+                this.emit({ type: "step_start", step: { id: tc.id, title: `Edited ${fileName}`, description: "", relevantFiles: [filePath], reasoning: "", order: 0 }, runId });
+                const res = await writeFileTool(filePath, content, this.config.repoRoot);
+                allMessages.push({ role: "tool", content: res, toolCallId: tc.id });
+             } else if (tc.name === "multi_replace_file_content") {
+                const filePath = String(tc.arguments?.file_path || "");
+                const replacements = (tc.arguments?.replacements as any[]) || [];
+                const fileName = filePath.split("/").pop() || filePath;
+                this.emit({ type: "step_start", step: { id: tc.id, title: `Edited ${fileName}`, description: "", relevantFiles: [filePath], reasoning: "", order: 0 }, runId });
+                const res = await multiReplaceFileContentTool(filePath, replacements, this.config.repoRoot);
+                allMessages.push({ role: "tool", content: res, toolCallId: tc.id });
+             } else if (tc.name === "run_command") {
+                const command = String(tc.arguments?.command || "");
+                this.emit({ type: "step_start", step: { id: tc.id, title: `Ran ${command}`, description: "", relevantFiles: [], reasoning: "", order: 0 }, runId });
+                const res = await runCommandTool(command, ".", this.config.repoRoot, this.config.checkPermission, undefined, (chunk: string) => {
+                  if (chunk) this.emit({ type: "token", content: `\nTerminalOutput: ${chunk}`, runId });
+                });
+                allMessages.push({ role: "tool", content: res, toolCallId: tc.id });
              } else if (tc.name === "read_file") {
                 const filePath = String(tc.arguments?.file_path || "");
                 const fileName = filePath.split("/").pop() || filePath;
