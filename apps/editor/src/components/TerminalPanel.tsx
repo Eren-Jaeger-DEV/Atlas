@@ -145,11 +145,26 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
         const el = document.getElementById(`canvas-${tab.id}`);
         if (el) el.style.display = tab.id === activeTabId ? "block" : "none";
         if (tab.id === activeTabId) {
-          termMapRef.current.get(tab.id)?.fit.fit();
+          setTimeout(() => {
+            try { termMapRef.current.get(tab.id)?.fit.fit(); } catch {}
+          }, 10);
         }
       }
     });
   }, [tabs, activeTabId, repoPath]);
+
+  // Handle ResizeObserver for automatic terminal refitting
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(() => {
+      const active = termMapRef.current.get(activeTabId);
+      if (active) {
+        try { active.fit.fit(); } catch {}
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [activeTabId]);
 
   return (
     <div style={styles.container}>
@@ -158,6 +173,17 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
 
       {/* Right-hand Sessions Sidebar matching Antigravity Screenshot 1 */}
       <div style={styles.sessionsSidebar}>
+        {/* Top Mini Preview Box */}
+        <div style={styles.miniPreview}>
+          <div style={{ fontSize: "9px", fontFamily: "var(--font-mono, monospace)", color: "#a1a1aa", opacity: 0.8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {repoPath ? repoPath.split(/[/\\]/).pop() : "Atlas"}
+          </div>
+          <div style={{ fontSize: "8.5px", fontFamily: "var(--font-mono, monospace)", color: "#71717a", marginTop: "6px", lineHeight: "1.4" }}>
+            {repoPath ? `victor@victor:${repoPath.split(/[/\\]/).pop()}$` : "victor@victor:~$"}
+          </div>
+        </div>
+
+        {/* Bottom Sessions List */}
         <div style={styles.sessionsList}>
           {tabs.map(t => {
             const isActive = t.id === activeTabId;
@@ -171,10 +197,7 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
                 onClick={() => setActiveTabId(t.id)}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isActive ? "#f97316" : "#a1a1aa"} strokeWidth="2.5">
-                    <polyline points="4 17 10 11 4 5" />
-                    <line x1="12" y1="19" x2="20" y2="19" />
-                  </svg>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: isActive ? "#f97316" : "#a1a1aa" }}>&gt;_</span>
                   <span style={{ fontSize: "11px", fontWeight: isActive ? 600 : 400, color: isActive ? "#fafafa" : "#a1a1aa", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                     {t.shell === "powershell" ? "powershell" : t.shell === "cmd" ? "cmd" : "bash"}
                   </span>
@@ -217,31 +240,43 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#000000",
   },
   sessionsSidebar: {
-    width: "135px",
+    width: "140px",
     height: "100%",
     backgroundColor: "var(--bg-panel, #09090b)",
     borderLeft: "1px solid var(--border-subtle, #27272a)",
     display: "flex",
     flexDirection: "column",
-    padding: "4px",
+    justifyContent: "space-between",
+    padding: "8px",
     flexShrink: 0,
-    overflowY: "auto",
+    overflow: "hidden",
+  },
+  miniPreview: {
+    height: "90px",
+    backgroundColor: "#000000",
+    border: "1px solid var(--border-subtle, #27272a)",
+    borderRadius: "4px",
+    padding: "6px",
+    overflow: "hidden",
+    pointerEvents: "none",
   },
   sessionsList: {
     display: "flex",
     flexDirection: "column",
-    gap: "2px",
+    gap: "4px",
+    marginTop: "auto",
   },
   sessionItem: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "4px 8px",
-    borderRadius: "3px",
+    padding: "5px 8px",
+    borderRadius: "4px",
     cursor: "pointer",
     fontSize: "11px",
     color: "var(--text-muted, #a1a1aa)",
-    border: "1px solid transparent",
+    border: "1px solid #27272a",
+    backgroundColor: "#09090b",
     transition: "all 0.1s ease",
   },
   sessionItemActive: {
