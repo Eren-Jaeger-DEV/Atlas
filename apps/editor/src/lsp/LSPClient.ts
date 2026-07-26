@@ -40,6 +40,21 @@ function updateStatus(status: LSPStatus) {
 
 export async function initLSPClient(repoPath: string, language: string = "typescript") {
   if (isInitialized || isInitializing) return;
+  
+  const supported = ["typescript", "javascript", "typescriptreact", "javascriptreact", "python"];
+  let isLanguageSupported = supported.includes(language);
+  
+  if (!isLanguageSupported && api()) {
+    const extensions = await api()!.listExtensions();
+    // E.g., C# might map to atlas.language.csharp
+    const extId = `atlas.language.${language.toLowerCase()}`;
+    isLanguageSupported = extensions.some(ext => (ext.id || ext.name)?.toLowerCase() === extId || (ext.id || ext.name)?.toLowerCase() === `atlas.language.${language.toLowerCase()}`);
+  }
+
+  if (!isLanguageSupported) {
+    console.log(`[LSP] Language '${language}' is not supported. Please install the extension from the Marketplace.`);
+    return;
+  }
   isInitializing = true;
   updateStatus("loading");
   logToOutput("LSP", `Starting ${language} Language Server for ${repoPath}...`);
@@ -54,48 +69,55 @@ export async function initLSPClient(repoPath: string, language: string = "typesc
 
   logToOutput("LSP", `LSP started successfully. Connecting client...`);
 
-  // To properly handle LSP headers, we can use the standard StreamMessageReader/Writer if we had Node streams.
-  // In the browser, we have to parse Content-Length. Let's do a simple manual parser.
-  class ManualIpcReader extends AbstractMessageReader {
+  // Offload parsing of LSP message payloads (regex + JSON parsing) to a Web Worker
+  // to avoid blocking the main UI thread during heavy typing and autocompletion
+  class WorkerIpcReader extends AbstractMessageReader {
     private disposeCallback?: () => void;
-    private buffer = "";
+    private worker: Worker;
+
+    constructor() {
+      super();
+      this.worker = new Worker(new URL('./lspWorker.ts', import.meta.url), { type: 'module' });
+    }
 
     listen(callback: DataCallback): monaco.IDisposable {
-      this.disposeCallback = api()?.onLspMessage((chunk: string) => {
-        this.buffer += chunk;
-        while (true) {
-          const match = this.buffer.match(/Content-Length:\s*(\d+)\r\n\r\n/);
-          if (!match) break;
-          const length = parseInt(match[1]!, 10);
-          const headerLength = match[0].length;
-          if (this.buffer.length < headerLength + length) {
-            break; // not enough data yet
-          }
-          const body = this.buffer.slice(headerLength, headerLength + length);
-          this.buffer = this.buffer.slice(headerLength + length);
-          try {
-            const msg = JSON.parse(body);
-            callback(msg);
-          } catch (e) {
-            console.error("Failed to parse LSP message", e, body);
-          }
+      this.worker.onmessage = (e) => {
+        if (e.data?.type === "message" && e.data?.msg) {
+          callback(e.data.msg);
         }
+      };
+
+      this.disposeCallback = api()?.onLspMessage((chunk: string) => {
+        this.worker.postMessage({ type: "chunk", chunk });
       });
-      return { dispose: () => this.disposeCallback?.() };
+
+      return { 
+        dispose: () => {
+          this.disposeCallback?.();
+          this.worker.terminate();
+        } 
+      };
     }
   }
 
-  const reader = new ManualIpcReader();
+  const reader = new WorkerIpcReader();
   const writer = new IpcMessageWriter();
   const transports = { reader, writer };
 
-  client = new MonacoLanguageClient({
-    name: "Language Client",
-    clientOptions: {
-      documentSelector: ["typescript", "javascript", "typescriptreact", "javascriptreact", "python"]
-    },
-    messageTransports: transports
-  });
+  try {
+    client = new MonacoLanguageClient({
+      name: "Language Client",
+      clientOptions: {
+        documentSelector: ["typescript", "javascript", "typescriptreact", "javascriptreact", "python", language]
+      },
+      messageTransports: transports
+    });
+  } catch (e) {
+    console.warn("Failed to initialize MonacoLanguageClient. If you are using v8+, ensure vscode/localExtensionHost is initialized.", e);
+    isInitializing = false;
+    updateStatus("error");
+    return;
+  }
 
   client.onRequest("workspace/applyEdit", async (params: any) => {
     try {

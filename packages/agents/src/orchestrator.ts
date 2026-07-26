@@ -40,6 +40,7 @@ import { TaskDAG } from "./dag/TaskDAG.js";
 import { verifyAST, verifyTerminalSandbox, verifyVision, VerificationResult } from "./verification/index.js";
 import { TaskNode } from "@atlas/core";
 import { BrainManager } from "./brain.js";
+import { readFileTool, listDirectoryTool, FS_TOOL_DEFINITIONS } from "./tools/fs-tools.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -111,11 +112,15 @@ export class Orchestrator {
           
           if (task.type === "CODE") {
             this.emit({ type: "state_change", state: "CODING", runId });
+            if (task.data?.step) {
+              this.emit({ type: "step_start", step: { ...task.data.step, title: `[CODER] ${task.data.step.title}` }, runId });
+            }
             this.config.memory.logTaskEvent(runId, task.id, "start", { type: "CODE" });
             const coderOutput = await runCoder(task.data.step, commonOpts);
             outputs.coderOutputs.push(coderOutput);
-            
-            // Record to GraphDB / Memory
+
+            this.emit({ type: "coder_output", output: coderOutput, runId });
+
             this.config.memory.recordDecision({
               id: sha256(`coder:${task.id}`).slice(0, 24),
               title: `Coder output for task: ${task.id}`,
@@ -123,9 +128,6 @@ export class Orchestrator {
               rationale: coderOutput.reasoning
             });
 
-            // If the coder decided to break it down further, it could theoretically inject tasks here
-            // e.g. dag.addTask(...)
-            
             dag.updateTaskStatus(task.id, "COMPLETED", coderOutput);
             this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
             this.config.memory.logTaskEvent(runId, task.id, "complete", { success: true });
@@ -133,6 +135,7 @@ export class Orchestrator {
           
           else if (task.type === "TEST") {
             this.emit({ type: "state_change", state: "TESTING", runId });
+            this.emit({ type: "step_start", step: { id: task.id, title: `[TESTER] Executing test suite for ${task.data?.step?.title || "workspace"}`, description: "", relevantFiles: [], reasoning: "", order: 0 }, runId });
             this.config.memory.logTaskEvent(runId, task.id, "start", { type: "TEST" });
             const testResult = await runTester(task.data.step, {
               repoRoot: this.config.repoRoot,
@@ -153,7 +156,8 @@ export class Orchestrator {
           }
           
           else if (task.type === "VERIFY") {
-            this.emit({ type: "state_change", state: "VERIFYING", runId }); // or VERIFYING
+            this.emit({ type: "state_change", state: "VERIFYING", runId });
+            this.emit({ type: "step_start", step: { id: task.id, title: `[REVIEWER] Auditing AST, terminal, and security surfaces`, description: "", relevantFiles: [], reasoning: "", order: 0 }, runId });
             this.config.memory.logTaskEvent(runId, task.id, "start", { type: "VERIFY" });
             
             // Run all 3 surfaces in parallel
@@ -241,17 +245,22 @@ export class Orchestrator {
         }
       }
 
+      const rules = this.brain.getRules();
+      const rulesContext = rules.length > 0
+        ? `\n[Workspace Project Rules]\n${rules.map(r => `Rule (${r.name}):\n${r.content}`).join("\n\n")}\n`
+        : "";
+
       // Quick intent classifier for chat
       if (isChatMode) {
         const lastMsg = goal.toLowerCase().trim();
         const isGreeting = /^(hi|hey|hello|yo|howdy|greetings|good\s*(morning|afternoon|evening|day))[\s!.]*$/i.test(lastMsg);
-        const isLikelyTask = !isGreeting && /\b(add|create|update|refactor|fix|change|remove|delete|implement|write|build|test|debug|run)\b/i.test(lastMsg);
+        const isLikelyTask = !isGreeting && /\b(add|create|update|refactor|fix|change|remove|delete|implement|write|build|test|debug|run|review|audit|inspect|check|analyze|overview)\b/i.test(lastMsg);
         
         if (!isLikelyTask) {
           const developerProfile = this.config.memory.getDeveloperProfile?.("default");
           const profileContext = developerProfile ? `\n[Developer Profile Preferences]\n${developerProfile}\n` : "";
           
-          const chatContext = `You are a helpful AI coding assistant in Atlas Studio.\nContext:\n${ctx.promptContext}${skillsContext}${profileContext}\n`;
+          const chatContext = `You are a helpful AI coding assistant in Atlas Studio.\nContext:\n${ctx.promptContext}${skillsContext}${rulesContext}${profileContext}\n`;
           
           let semanticChatMsgs: any[] = [];
           if (this.config.memory.vectorSearchChat) {
@@ -263,7 +272,7 @@ export class Orchestrator {
           const pastChatMsgs = pastChatNodes.slice(-10).map((n: any) => ({ role: n.role, content: n.content }));
           
           const chatMsgs = (input as { role: string; text: string }[]).map(m => ({
-            role: m.role as "user"|"assistant"|"system",
+            role: (m.role === "agent" ? "assistant" : m.role) as "user"|"assistant"|"system",
             content: m.text
           }));
           const systemMsg = { role: "system" as const, content: chatContext };
@@ -280,34 +289,50 @@ export class Orchestrator {
             }
           };
 
-          let allMessages = [systemMsg, ...semanticChatMsgs, ...pastChatMsgs, ...chatMsgs];
-          
-          let chatRes = await this.config.provider.complete({
-            messages: allMessages,
-            temperature: 0.7,
-            tools: [updateDevProfileTool]
-          });
+          const readTool = FS_TOOL_DEFINITIONS.find(t => t.name === "read_file");
+          const listTool = FS_TOOL_DEFINITIONS.find(t => t.name === "list_directory");
+          const chatTools = [updateDevProfileTool, ...(readTool ? [readTool] : []), ...(listTool ? [listTool] : [])];
 
+          let allMessages = [systemMsg, ...semanticChatMsgs, ...pastChatMsgs, ...chatMsgs];
+
+          // Stream the chat response so token events flow to the sidebar in real-time
+          let chatRes = await this.config.provider.stream(
+            { messages: allMessages, temperature: 0.7, tools: chatTools },
+            (chunk: string) => { if (chunk) this.emit({ type: "token", content: chunk, runId }); }
+          );
+
+          // Handle any tool calls returned (e.g. update_developer_profile, read_file, list_directory)
           while (chatRes.toolCalls && chatRes.toolCalls.length > 0) {
              const tc = chatRes.toolCalls[0];
              if (!tc) break;
              allMessages.push({ role: "assistant", content: chatRes.content || "", toolCalls: [tc] });
-             
+
              if (tc.name === "update_developer_profile") {
                 const prefs = tc.arguments?.preferences as string || "";
+                this.emit({ type: "step_start", step: { id: tc.id, title: "Updated developer profile", description: "", relevantFiles: [], reasoning: "", order: 0 }, runId });
                 if (this.config.memory.upsertDeveloperProfile) {
                    this.config.memory.upsertDeveloperProfile("default", prefs);
                 }
                 allMessages.push({ role: "tool", content: "Profile updated successfully.", toolCallId: tc.id });
+             } else if (tc.name === "read_file") {
+                const filePath = String(tc.arguments?.file_path || "");
+                const fileName = filePath.split("/").pop() || filePath;
+                this.emit({ type: "step_start", step: { id: tc.id, title: `Analyzed ${fileName} #L1-100`, description: "", relevantFiles: [filePath], reasoning: "", order: 0 }, runId });
+                const content = await readFileTool(filePath, this.config.repoRoot);
+                allMessages.push({ role: "tool", content: content.slice(0, 12000), toolCallId: tc.id });
+             } else if (tc.name === "list_directory") {
+                const dirPath = String(tc.arguments?.dir_path || ".");
+                this.emit({ type: "step_start", step: { id: tc.id, title: `Explored directory: ${dirPath}`, description: "", relevantFiles: [], reasoning: "", order: 0 }, runId });
+                const content = await listDirectoryTool(dirPath, this.config.repoRoot);
+                allMessages.push({ role: "tool", content, toolCallId: tc.id });
              } else {
                 allMessages.push({ role: "tool", content: "Unknown tool", toolCallId: tc.id });
              }
-             
-             chatRes = await this.config.provider.complete({
-               messages: allMessages,
-               temperature: 0.7,
-               tools: [updateDevProfileTool]
-             });
+
+             chatRes = await this.config.provider.stream(
+               { messages: allMessages, temperature: 0.7, tools: chatTools },
+               (chunk: string) => { if (chunk) this.emit({ type: "token", content: chunk, runId }); }
+             );
           }
 
           // Save to memory
@@ -352,11 +377,18 @@ export class Orchestrator {
 
       if (this.config.planningMode) {
         // Write implementation_plan.md artifact
-        let mdPlan = `# Implementation Plan\n\n**Goal**: ${goal}\n\n## Rationale\n${plan.planningReasoning}\n\n## Proposed Steps\n`;
+        let mdPlan = `# Implementation Plan\n\n**Goal**: ${goal}\n\n## Rationale\n${plan.planningReasoning}\n\n## Proposed Changes\n`;
         plan.steps.forEach(step => {
           mdPlan += `### ${step.order + 1}. ${step.title}\n${step.description}\n\n`;
         });
         await this.brain.writeArtifact("implementation_plan.md", mdPlan);
+
+        // Write task.md artifact
+        let mdTask = `# Task Checklist\n\n**Goal**: ${goal}\n\n`;
+        plan.steps.forEach(step => {
+          mdTask += `- [ ] **${step.title}**: ${step.description}\n`;
+        });
+        await this.brain.writeArtifact("task.md", mdTask);
 
         this.emit({ type: "awaiting_human", reason: "Plan generated in artifacts. Waiting for approval.", runId });
         
@@ -476,7 +508,41 @@ export class Orchestrator {
       } else {
         finalState = "DONE";
       }
-    } catch (err) {
+
+      // If no code changes were made (e.g., code review or codebase analysis task), stream a rich response synthesis
+      if (plan && plan.planningReasoning && coderOutputs.length === 0 && finalState === "DONE") {
+        try {
+          const synthesisPrompt = `You are Atlas AI. The user asked: "${goal}".\n\nBased on your analysis of their codebase, provide a comprehensive, clear, and beautifully formatted report/response for the user:\n\nAnalysis:\n${plan.planningReasoning}\n\nKey Breakdown:\n${plan.steps.map(s => `### ${s.title}\n${s.description}`).join("\n\n")}`;
+          await this.config.provider.stream(
+            { messages: [{ role: "user", content: synthesisPrompt }], temperature: 0.5 },
+            (chunk: string) => { if (chunk) this.emit({ type: "token", content: chunk, runId }); }
+          );
+        } catch (e) {
+          // Fallback if synthesis streaming fails
+        }
+      // Write walkthrough.md artifact
+      try {
+        let mdWalkthrough = `# Walkthrough - ${goal}\n\n## Goal\n${goal}\n\n## Execution Summary\n- **Status**: ${finalState}\n- **Plan Steps**: ${plan?.steps.length ?? 0}\n- **Files Modified**: ${coderOutputs.reduce((acc, c) => acc + (c.modifiedFiles?.length || 0), 0)}\n\n`;
+
+        if (coderOutputs.length > 0) {
+          mdWalkthrough += `## Changes Made\n\n`;
+          coderOutputs.forEach((co, idx) => {
+            mdWalkthrough += `### Step ${idx + 1}\n**Rationale**: ${co.reasoning || "Executed code edits"}\n\n**Modified Files**:\n${(co.modifiedFiles || []).map(f => `- \`${f}\``).join("\n")}\n\n`;
+          });
+        }
+
+        if (testResults.length > 0) {
+          mdWalkthrough += `## Verification Results\n\n`;
+          testResults.forEach(tr => {
+            mdWalkthrough += `- **Status**: ${tr.status} (${tr.passed}/${tr.total} passed)\n`;
+          });
+        }
+
+        await this.brain.writeArtifact("walkthrough.md", mdWalkthrough);
+      } catch (e) {
+        // Artifact creation fallback
+      }
+    } } catch (err) {
       finalState = "ERROR";
       this.emit({
         type: "error",

@@ -12,6 +12,7 @@ export interface ExtensionContext {
   registerCommand: (id: string, label: string, handler: (...args: any[]) => any) => void;
   registerView: (id: string, title: string) => void;
   registerPanel: (id: string, title: string) => void;
+  onEvent: (eventName: string, handler: (payload: any) => void) => void;
 }
 
 export interface ExtensionModule {
@@ -57,6 +58,10 @@ export class ExtensionHost {
       },
       registerPanel: (panelId, title) => {
         // Register extension bottom panel
+      },
+      onEvent: (eventName: any, handler: any) => {
+        const unreg = this.eventBus.on(eventName, handler);
+        subscriptions.push(unreg);
       },
     };
 

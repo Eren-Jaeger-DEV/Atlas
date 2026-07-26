@@ -208,12 +208,36 @@ const ErrorAlert = styled.div`
   align-items: center;
 `;
 
+const TabBar = styled.div`
+  display: flex;
+  gap: 16px;
+  padding: 0 12px;
+  background-color: var(--bg-base, #09090b);
+  border-bottom: 1px solid #27272a;
+`;
+
+const Tab = styled.button<{ $active: boolean }>`
+  background: none;
+  border: none;
+  color: ${props => props.$active ? "var(--accent, #38bdf8)" : "var(--text-muted, #71717a)"};
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 0;
+  cursor: pointer;
+  border-bottom: 2px solid ${props => props.$active ? "var(--accent, #38bdf8)" : "transparent"};
+  &:hover {
+    color: var(--text-main, #fafafa);
+  }
+`;
+
 function ExtensionGalleryContent() {
   const api = useAtlasAPI();
   const [extensions, setExtensions] = useState<ExtensionManifest[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<"installed" | "marketplace">("installed");
 
   const loadExtensions = () => {
     setLoading(true);
@@ -235,7 +259,7 @@ function ExtensionGalleryContent() {
 
   useEffect(() => {
     loadExtensions();
-  }, [api]);
+  }, []);
 
   const handleInstall = async () => {
     setInstallError(null);
@@ -254,7 +278,34 @@ function ExtensionGalleryContent() {
     }
   };
 
-  const filtered = extensions.filter(ext => {
+  const handleInstallMarketplace = async (manifest: ExtensionManifest) => {
+    setInstallError(null);
+    try {
+      if (!api?.installMarketplaceExtension) {
+        throw new Error("Marketplace API not available.");
+      }
+      setLoading(true);
+      await api.installMarketplaceExtension(manifest);
+      loadExtensions();
+      setActiveTab("installed");
+    } catch (e: unknown) {
+      console.error("Marketplace install failed:", e);
+      setInstallError(e instanceof Error ? e.message : "Failed to install from marketplace.");
+      setLoading(false);
+    }
+  };
+
+  const mockMarketplace: ExtensionManifest[] = [
+    { id: "atlas.language.rust", name: "Rust", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Rust (rust-analyzer)", permissions: ["workspace.read"] },
+    { id: "atlas.language.go", name: "Go", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Go (gopls)", permissions: ["workspace.read"] },
+    { id: "atlas.language.python", name: "Python", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Python (pylsp)", permissions: ["workspace.read"] },
+    { id: "atlas.language.java", name: "Java", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Java (eclipse.jdt.ls)", permissions: ["workspace.read"] },
+    { id: "atlas.language.csharp", name: "C#", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for C# (omnisharp)", permissions: ["workspace.read"] }
+  ];
+
+  const displayList = activeTab === "installed" ? extensions : mockMarketplace;
+
+  const filtered = displayList.filter(ext => {
     const q = search.toLowerCase();
     return (
       (ext.name ?? "").toLowerCase().includes(q) ||
@@ -278,6 +329,11 @@ function ExtensionGalleryContent() {
           </svg>
         </InstallBtn>
       </Header>
+
+      <TabBar>
+        <Tab $active={activeTab === "installed"} onClick={() => setActiveTab("installed")}>Installed</Tab>
+        <Tab $active={activeTab === "marketplace"} onClick={() => setActiveTab("marketplace")}>Available</Tab>
+      </TabBar>
 
       {installError && (
         <ErrorAlert>
@@ -326,7 +382,24 @@ function ExtensionGalleryContent() {
                   <Publisher>{ext.publisher ?? "Unknown"}</Publisher>
                 </ExtMeta>
               </div>
-              <InstalledBadge>[INSTALLED]</InstalledBadge>
+              {activeTab === "installed" ? (
+                <InstalledBadge>[INSTALLED]</InstalledBadge>
+              ) : (
+                <button 
+                  onClick={() => handleInstallMarketplace(ext)}
+                  style={{
+                    background: "var(--accent, #38bdf8)", 
+                    color: "#000", 
+                    border: "none", 
+                    borderRadius: "4px", 
+                    padding: "4px 8px", 
+                    fontSize: "10px", 
+                    fontWeight: "bold", 
+                    cursor: "pointer"
+                  }}>
+                  INSTALL
+                </button>
+              )}
             </CardHeader>
 
             {ext.description && (

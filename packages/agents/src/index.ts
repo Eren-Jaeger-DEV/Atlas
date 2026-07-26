@@ -15,6 +15,8 @@ export {
 } from "./llm/provider.js";
 
 export { ProviderRouter } from "./llm/ProviderRouter.js";
+export { MultiRegionApiRouter, type RegionCluster, type RegionEndpoint } from "./llm/MultiRegionApiRouter.js";
+export { SmartModelClassifier, type ModelTier, type ClassificationResult } from "./llm/SmartModelClassifier.js";
 export { ContextEngine, type ContextOptions, type AssembledContext } from "./context/ContextEngine.js";
 export { TaskDAG } from "./dag/TaskDAG.js";
 export { TrajectoryReplay, type TrajectorySnapshot } from "./dag/TrajectoryReplay.js";
@@ -32,5 +34,7 @@ export { WorkerPool, type WorkerPoolConfig } from "./parallel/WorkerPool.js";
 export { ParallelPlanner, type ParallelPlannerConfig } from "./parallel/ParallelPlanner.js";
 export { ParallelMerger, type MergeReport, type FileEdit, type MergeConflict } from "./parallel/ParallelMerger.js";
 export { SelfHealingVerifier, type VerificationResult } from "./parallel/SelfHealingVerifier.js";
+export { SelfHealingLoop, type SelfHealingResult, type HealingIteration } from "./parallel/SelfHealingLoop.js";
 export { WorkflowSkillCreator } from "./parallel/WorkflowSkillCreator.js";
+export { ExecutionSubagent, type ExecutionSubagentConfig, type ExecutionSubagentResult } from "./subagents/ExecutionSubagent.js";
 export type { ParallelPlan, ParallelSubTask, WorkerState, ParallelEvent, ParallelWorkerStatus } from "./parallel/types.js";

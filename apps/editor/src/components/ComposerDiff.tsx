@@ -26,6 +26,7 @@ export function ComposerDiff({
 }: ComposerDiffProps) {
   const filePaths = Object.keys(filesAfter);
   const [activeFile, setActiveFile] = useState(filePaths[0] || "");
+  const [isSideBySide, setIsSideBySide] = useState(true);
   const editorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
 
   const handleMount = (editor: Monaco.editor.IStandaloneDiffEditor, monacoApi: typeof Monaco) => {
@@ -110,16 +111,71 @@ export function ComposerDiff({
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Alt+J: Next hunk / file
+      if (e.altKey && e.code === "KeyJ") {
+        e.preventDefault();
+        const currentIdx = filePaths.indexOf(activeFile);
+        if (currentIdx < filePaths.length - 1) {
+          setActiveFile(filePaths[currentIdx + 1]);
+        }
+      }
+      // Alt+K: Previous hunk / file
+      else if (e.altKey && e.code === "KeyK") {
+        e.preventDefault();
+        const currentIdx = filePaths.indexOf(activeFile);
+        if (currentIdx > 0) {
+          setActiveFile(filePaths[currentIdx - 1]);
+        }
+      }
+      // Alt+Enter: Accept
+      else if (e.altKey && e.code === "Enter") {
+        e.preventDefault();
+        onAccept?.();
+      }
+      // Alt+Shift+Backspace: Reject
+      else if (e.altKey && e.shiftKey && e.code === "Backspace") {
+        e.preventDefault();
+        onReject?.();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeFile, filePaths, onAccept, onReject]);
+
   return (
     <div style={styles.container} className="anim-scale-in">
       <div style={styles.header}>
         <div style={styles.title}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           AI Composer Review
+          <span style={{ fontSize: "11px", color: "var(--text-muted, #a1a1aa)", marginLeft: "8px", fontWeight: "normal" }}>
+            (Alt+J/K: Navigate · Alt+Enter: Accept · Alt+Shift+Backspace: Reject)
+          </span>
         </div>
         <div style={styles.actions}>
-          <button style={styles.btnReject} onClick={onReject}>Reject</button>
-          <button style={styles.btnAccept} onClick={onAccept}>Accept</button>
+          <button
+            onClick={() => setIsSideBySide(!isSideBySide)}
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              color: "#38bdf8",
+              border: "1px solid rgba(56,189,248,0.3)",
+              padding: "5px 10px",
+              borderRadius: "4px",
+              fontSize: "11px",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontFamily: "var(--font-mono)",
+              marginRight: "4px"
+            }}
+            title="Toggle Split / Unified View"
+          >
+            {isSideBySide ? "Split View" : "Inline View"}
+          </button>
+          <button style={styles.btnReject} onClick={onReject} title="Alt+Shift+Backspace">Reject</button>
+          <button style={styles.btnAccept} onClick={onAccept} title="Alt+Enter">Accept All</button>
         </div>
       </div>
       {filePaths.length > 1 && (
@@ -144,7 +200,7 @@ export function ComposerDiff({
           modified={filesAfter[activeFile] || ""}
           onMount={handleMount as any}
           options={{
-            renderSideBySide: true,
+            renderSideBySide: isSideBySide,
             readOnly: true,
             minimap: { enabled: false },
             fontFamily: "JetBrains Mono, 'Courier New', monospace",

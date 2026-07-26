@@ -19,7 +19,8 @@ export async function runCommandTool(
   cwd: string,
   repoRoot: string,
   onCheckPermission?: (permission: string, data: any) => Promise<boolean>,
-  workspaceTrust?: WorkspaceTrustPolicy
+  workspaceTrust?: WorkspaceTrustPolicy,
+  onOutput?: (chunk: string) => void
 ): Promise<string> {
   const resolvedCwd = path.resolve(repoRoot, cwd);
   if (!resolvedCwd.startsWith(path.resolve(repoRoot))) {
@@ -41,18 +42,41 @@ export async function runCommandTool(
   // Wrap the command with platform-native sandbox isolation
   const sandboxedCommand = SandboxWrapper.wrapCommand(command, { repoPath: repoRoot });
 
-  try {
-    const { stdout, stderr } = await execAsync(sandboxedCommand, { cwd: resolvedCwd, timeout: 10000 });
-    let output = "";
-    if (stdout) output += `STDOUT:\n${stdout}\n`;
-    if (stderr) output += `STDERR:\n${stderr}\n`;
-    return output.trim() || "[Command completed successfully with no output]";
-  } catch (error: any) {
-    let output = `[Error executing command (Exit Code: ${error.code})]\n`;
-    if (error.stdout) output += `STDOUT:\n${error.stdout}\n`;
-    if (error.stderr) output += `STDERR:\n${error.stderr}\n`;
-    return output.trim();
-  }
+  return new Promise((resolve) => {
+    const child = exec(sandboxedCommand, { cwd: resolvedCwd, timeout: 60000 });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.on("data", (data) => {
+      const str = data.toString();
+      stdout += str;
+      onOutput?.(str);
+    });
+
+    child.stderr?.on("data", (data) => {
+      const str = data.toString();
+      stderr += str;
+      onOutput?.(str);
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        let output = "";
+        if (stdout) output += `STDOUT:\n${stdout}\n`;
+        if (stderr) output += `STDERR:\n${stderr}\n`;
+        resolve(output.trim() || "[Command completed successfully with no output]");
+      } else {
+        let output = `[Error executing command (Exit Code: ${code})]\n`;
+        if (stdout) output += `STDOUT:\n${stdout}\n`;
+        if (stderr) output += `STDERR:\n${stderr}\n`;
+        resolve(output.trim());
+      }
+    });
+
+    child.on("error", (err) => {
+      resolve(`[Error executing command: ${err.message}]`);
+    });
+  });
 }
 
 

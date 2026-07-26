@@ -9,6 +9,7 @@ export interface AtlasAPI {
   search: (query: string) => Promise<GraphNode[]>;
 
   openRepo: (repoPath: string) => Promise<void>;
+  setRepoPath: (repoPath: string) => Promise<void>;
   selectDirectory: () => Promise<string | null>;
   addDirectory: () => Promise<string | null>;
   addRepo: (repoPath: string) => Promise<any>;

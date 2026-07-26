@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 
 export type NotificationType = "info" | "success" | "warning" | "error";
 
@@ -31,10 +32,10 @@ export function useNotification() {
 
 const TYPE_CONFIG: Record<NotificationType, { accent: string; bg: string; icon: React.ReactNode }> = {
   info: {
-    accent: "#38bdf8",
+    accent: "var(--accent, #38bdf8)",
     bg: "rgba(56,189,248,0.08)",
     icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent, #38bdf8)" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
     ),
@@ -101,88 +102,92 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           gap: "8px",
           zIndex: 999999,
           pointerEvents: "none",
-          width: "320px",
+          width: "330px",
         }}>
-          {notifications.map(n => {
-            const cfg = TYPE_CONFIG[n.type || "info"];
-            return (
-              <div
-                key={n.id}
-                className="notification-toast"
-                style={{
-                  backgroundColor: "rgba(14, 14, 18, 0.94)",
-                  backdropFilter: "blur(16px) saturate(1.5)",
-                  WebkitBackdropFilter: "blur(16px) saturate(1.5)",
-                  border: `1px solid rgba(255,255,255,0.07)`,
-                  borderLeft: `3px solid ${cfg.accent}`,
-                  boxShadow: `0 16px 40px -8px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03), 0 0 12px -4px ${cfg.accent}40`,
-                  borderRadius: "10px",
-                  padding: "11px 12px",
-                  pointerEvents: "auto",
-                  fontFamily: "var(--font-ui, Inter, system-ui, sans-serif)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "9px" }}>
-                  {cfg.icon}
-                  <span style={{
-                    fontSize: "12.5px",
-                    color: "#e4e4e8",
-                    lineHeight: "1.45",
-                    flex: 1,
-                    wordBreak: "break-word",
-                  }}>
-                    {n.message}
-                  </span>
-                  <button
-                    onClick={() => removeNotification(n.id)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#52525b",
-                      cursor: "pointer",
-                      padding: "1px",
-                      display: "flex",
-                      alignItems: "center",
-                      borderRadius: "3px",
-                      flexShrink: 0,
-                      transition: "color 0.1s",
-                      marginTop: "-1px",
-                    }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
-                    </svg>
-                  </button>
-                </div>
-                {n.actions && n.actions.length > 0 && (
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    {n.actions.map((act, i) => (
-                      <button
-                        key={i}
-                        onClick={() => { act.onClick(); removeNotification(n.id); }}
-                        style={{
-                          background: "rgba(255,255,255,0.07)",
-                          border: `1px solid ${cfg.accent}40`,
-                          color: cfg.accent,
-                          padding: "4px 10px",
-                          fontSize: "11.5px",
-                          fontWeight: 600,
-                          borderRadius: "5px",
-                          cursor: "pointer",
-                          transition: "background 0.12s",
-                        }}
-                      >
-                        {act.label}
-                      </button>
-                    ))}
+          <AnimatePresence>
+            {notifications.map(n => {
+              const cfg = TYPE_CONFIG[n.type || "info"];
+              return (
+                <motion.div
+                  key={n.id}
+                  initial={{ opacity: 0, x: 50, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 50, scale: 0.95 }}
+                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                  style={{
+                    backgroundColor: "var(--bg-glass-strong, rgba(14, 14, 18, 0.95))",
+                    backdropFilter: "blur(20px) saturate(1.5)",
+                    WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+                    border: `1px solid var(--border-strong, #27272a)`,
+                    borderLeft: `3px solid ${cfg.accent}`,
+                    boxShadow: `var(--shadow-lg), 0 0 20px ${cfg.accent}20`,
+                    borderRadius: "var(--radius-md, 8px)",
+                    padding: "11px 12px",
+                    pointerEvents: "auto",
+                    fontFamily: "var(--font-ui)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "9px" }}>
+                    {cfg.icon}
+                    <span style={{
+                      fontSize: "12.5px",
+                      color: "var(--text-main, #fafafa)",
+                      lineHeight: "1.45",
+                      flex: 1,
+                      wordBreak: "break-word",
+                    }}>
+                      {n.message}
+                    </span>
+                    <button
+                      onClick={() => removeNotification(n.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "var(--text-muted, #71717a)",
+                        cursor: "pointer",
+                        padding: "2px",
+                        display: "flex",
+                        alignItems: "center",
+                        borderRadius: "3px",
+                        flexShrink: 0,
+                        transition: "all 0.1s",
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                      </svg>
+                    </button>
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {n.actions && n.actions.length > 0 && (
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      {n.actions.map((act, i) => (
+                        <button
+                          key={i}
+                          onClick={() => { act.onClick(); removeNotification(n.id); }}
+                          style={{
+                            background: "var(--bg-panel, #18181b)",
+                            border: `1px solid ${cfg.accent}60`,
+                            color: cfg.accent,
+                            padding: "4px 10px",
+                            fontSize: "11.5px",
+                            fontWeight: 600,
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            transition: "all 0.12s ease",
+                          }}
+                        >
+                          {act.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>,
         document.body
       )}

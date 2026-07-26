@@ -136,18 +136,29 @@ function createWindow(): void {
       sandbox: false,
     },
     frame: false,
-    show: false,
+    show: true,
     autoHideMenuBar: true,
   });
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow!.show();
-    mainWindow!.focus();
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
 
+  // Fallback to guarantee window visibility
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  }, 300);
+
   // Load URL
+  const devUrl = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL(devUrl);
   } else {
     mainWindow.loadURL("app://bundle/index.html");
   }
@@ -176,7 +187,7 @@ function createWindow(): void {
     console.error(`[DID FAIL LOAD] ${errorCode}: ${errorDescription}`);
     if (isDev && (errorCode === -102 || errorCode === -105 || errorCode === -106)) {
       setTimeout(() => {
-        mainWindow?.loadURL("http://localhost:5173");
+        mainWindow?.loadURL(devUrl);
       }, 1000);
     }
   });
@@ -314,7 +325,7 @@ function buildApplicationMenu(): void {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-async function createProvider(repoRoot: string) {
+async function createProvider(repoRoot: string, modelOverride?: string) {
   const settings = await getMergedSettings();
   const providerName = settings.aiProvider || settings.ai?.provider || "openai";
   let apiKey = settings.ai?.apiKeys?.[providerName] || "";
@@ -359,7 +370,7 @@ async function createProvider(repoRoot: string) {
     apiKey
   };
   
-  const model = settings.aiModel || settings.ai?.model;
+  const model = modelOverride || settings.aiModel || settings.ai?.model;
   if (model) config.model = model;
 
   // routing.run always uses its own base URL; other compatible providers use aiBaseUrl
@@ -375,7 +386,12 @@ async function createProvider(repoRoot: string) {
 }
 
 function getProjectRoot(): string {
-  return global.__atlasRepoRoot || (global.__atlasWorkspaceRoots && global.__atlasWorkspaceRoots.length > 0 ? global.__atlasWorkspaceRoots[0] : process.cwd());
+  if (global.__atlasRepoRoot) return global.__atlasRepoRoot;
+  if (global.__atlasWorkspaceRoots && global.__atlasWorkspaceRoots.length > 0) {
+    const first = global.__atlasWorkspaceRoots[0];
+    if (first) return first;
+  }
+  return process.cwd();
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +403,7 @@ ipcMain.handle("atlas:impact", async (_event, filePath: string, symbolName?: str
   try {
     // Lazy-import MemoryEngine (only the main process does this)
     const { MemoryEngine } = await import("@atlas/graph");
-    const repoRoot = global.__atlasRepoRoot;
+    const repoRoot = getProjectRoot();
     if (!repoRoot) return { error: "No repo open" };
 
     const engine = await MemoryEngine.create({ repoRoot });
@@ -403,7 +419,7 @@ ipcMain.handle("atlas:impact", async (_event, filePath: string, symbolName?: str
 ipcMain.handle("atlas:search", async (_event, query: string) => {
   try {
     const { MemoryEngine } = await import("@atlas/graph");
-    const repoRoot = global.__atlasRepoRoot;
+    const repoRoot = getProjectRoot();
     if (!repoRoot) return [];
 
     const engine = await MemoryEngine.create({ repoRoot });
@@ -1217,11 +1233,19 @@ ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
 
 // File Operations
 ipcMain.handle("atlas:read-file", async (_event, filePath: string) => {
-  return readFile(filePath, "utf-8");
+  const root = global.__atlasRepoRoot || process.cwd();
+  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
+  return readFile(absPath, "utf-8");
 });
 
 ipcMain.handle("atlas:write-file", async (_event, filePath: string, content: string) => {
-  await writeFile(filePath, content, "utf-8");
+  const root = global.__atlasRepoRoot || process.cwd();
+  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
+  await mkdir(path.dirname(absPath), { recursive: true });
+  await writeFile(absPath, content, "utf-8");
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("atlas:event", { type: "file_changed", filePath: absPath });
+  }
 });
 
 ipcMain.handle("atlas:copy-file", async (_event, src: string, dest: string) => {
@@ -1580,6 +1604,12 @@ ipcMain.handle("atlas:scan-todos", async (_event, repoPath: string) => {
 
 
 // Open repo (sets the active repo root)
+ipcMain.handle("atlas:set-repo-path", async (_event, repoPath: string) => {
+  global.__atlasRepoRoot = repoPath;
+  global.__atlasWorkspaceRoots = [repoPath];
+  return true;
+});
+
 ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
   global.__atlasRepoRoot = repoPath;
   global.__atlasWorkspaceRoots = [repoPath];
@@ -1626,7 +1656,7 @@ ipcMain.handle("atlas:run", async (event, input: string | any[], context?: any) 
   }
 
   try {
-    const provider = await createProvider(repoRoot);
+    const provider = await createProvider(repoRoot, context?.model);
     const { Orchestrator } = await import("@atlas/agents");
     const { MemoryEngine } = await import("@atlas/graph");
     const memory = await MemoryEngine.create({ repoRoot });
@@ -2221,6 +2251,40 @@ app.on("window-all-closed", () => {
 });
 
 
+ipcMain.handle("atlas:load-artifacts", async (_event, repoPath: string) => {
+  if (!repoPath) return [];
+  const brainDir = path.join(repoPath, ".atlas", "brain");
+  if (!fs.existsSync(brainDir)) return [];
+
+  const artifacts: Array<{ name: string; content: string }> = [];
+  const findArtifacts = (dir: string) => {
+    try {
+      const items = fs.readdirSync(dir);
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          findArtifacts(fullPath);
+        } else if (item.endsWith(".md")) {
+          const content = fs.readFileSync(fullPath, "utf-8");
+          artifacts.push({ name: item, content });
+        }
+      }
+    } catch (e) {}
+  };
+
+  findArtifacts(brainDir);
+  return artifacts;
+});
+
+ipcMain.handle("atlas:get-background-tasks", async () => {
+  return [];
+});
+
+ipcMain.handle("atlas:kill-background-task", async (_event, _taskId: string) => {
+  return true;
+});
+
 ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
   try {
     const fs = require("fs");
@@ -2257,10 +2321,11 @@ ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
 const remoteClients = new Set<WebSocket>();
 
 function startRemoteServer() {
-  const server = http.createServer((req, res) => {
-    if (req.url === '/') {
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(`
+  const tryPort = (port: number) => {
+    const server = http.createServer((req, res) => {
+      if (req.url === '/') {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -2323,75 +2388,88 @@ function startRemoteServer() {
         </body>
         </html>
       `);
-    } else {
-      res.writeHead(404);
-      res.end();
-    }
-  });
-
-  const wss = new WebSocket.Server({ server });
-
-  wss.on('connection', (ws) => {
-    remoteClients.add(ws);
-    console.log('[Remote] Phone connected');
-    ws.on('close', () => remoteClients.delete(ws));
-
-    ws.on('message', async (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.type === 'run') {
-          const repoRoot = global.__atlasRepoRoot || global.__atlasWorkspaceRoots?.[0];
-          if (!repoRoot) {
-            ws.send(JSON.stringify({ type: 'error', message: 'No active workspace' }));
-            return;
-          }
-
-          const { Orchestrator } = await import("@atlas/agents");
-          const { MemoryEngine } = await import("@atlas/graph");
-          const memory = await MemoryEngine.create({ repoRoot });
-
-
-          const provider = await createProvider(repoRoot);
-
-          const orchestrator = new Orchestrator({
-            provider,
-            memory,
-            repoRoot,
-            onEvent: (ev) => {
-              ws.send(JSON.stringify(ev));
-              if (mainWindow) {
-                mainWindow.webContents.send("atlas:event", ev);
-              }
-            },
-            checkPermission: async (permission, data) => {
-              return new Promise<boolean>((resolve) => {
-                if (mainWindow) {
-                  const reqId = crypto.randomUUID();
-                  permissionRequests.set(reqId, resolve);
-                  mainWindow.webContents.send("atlas:request-permission", { reqId, permission, data });
-                } else {
-                  resolve(false);
-                }
-              });
-            }
-          });
-
-          await orchestrator.run(msg.payload, {
-            activeFilePath: "<Remote Phone>",
-            activeContent: "",
-            openTabs: [],
-            gitStatusSummary: "Unknown"
-          });
-          memory.close();
-        }
-      } catch (e) {
-        console.error('[Remote] Error', e);
+      } else {
+        res.writeHead(404);
+        res.end();
       }
     });
-  });
 
-  server.listen(4000, '0.0.0.0', () => {
-    console.log('[Remote] Control server running on port 4000');
-  });
+    const wss = new WebSocket.Server({ server });
+    wss.on('error', (err) => console.warn('[Remote] WebSocket server warning:', err));
+
+    wss.on('connection', (ws) => {
+      remoteClients.add(ws);
+      console.log('[Remote] Phone connected');
+      ws.on('close', () => remoteClients.delete(ws));
+
+      ws.on('message', async (data) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.type === 'run') {
+            const repoRoot = global.__atlasRepoRoot || global.__atlasWorkspaceRoots?.[0];
+            if (!repoRoot) {
+              ws.send(JSON.stringify({ type: 'error', message: 'No active workspace' }));
+              return;
+            }
+
+            const { Orchestrator } = await import("@atlas/agents");
+            const { MemoryEngine } = await import("@atlas/graph");
+            const memory = await MemoryEngine.create({ repoRoot });
+            const provider = await createProvider(repoRoot);
+
+            const orchestrator = new Orchestrator({
+              provider,
+              memory,
+              repoRoot,
+              onEvent: (ev) => {
+                ws.send(JSON.stringify(ev));
+                if (mainWindow) {
+                  mainWindow.webContents.send("atlas:event", ev);
+                }
+              },
+              checkPermission: async (permission, data) => {
+                return new Promise<boolean>((resolve) => {
+                  if (mainWindow) {
+                    const reqId = crypto.randomUUID();
+                    permissionRequests.set(reqId, resolve);
+                    mainWindow.webContents.send("atlas:request-permission", { reqId, permission, data });
+                  } else {
+                    resolve(false);
+                  }
+                });
+              }
+            });
+
+            await orchestrator.run(msg.payload, {
+              activeFilePath: "<Remote Phone>",
+              activeContent: "",
+              openTabs: [],
+              gitStatusSummary: "Unknown"
+            });
+            memory.close();
+          }
+        } catch (e) {
+          console.error('[Remote] Error', e);
+        }
+      });
+    });
+
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE' && port < 4010) {
+        console.warn(`[Remote] Port ${port} in use, trying port ${port + 1}...`);
+        tryPort(port + 1);
+      } else {
+        console.warn('[Remote] Control server warning:', err.message);
+      }
+    });
+
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`[Remote] Control server running on port ${port}`);
+    });
+  };
+
+  tryPort(4000);
 }
+
+
 

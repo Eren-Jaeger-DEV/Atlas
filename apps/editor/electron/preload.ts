@@ -16,6 +16,15 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   removeSecureKey: (key: string): Promise<void> =>
     ipcRenderer.invoke("atlas:remove-secure-key", key),
 
+  loadArtifacts: (repoPath: string): Promise<Array<{ name: string; content: string }>> =>
+    ipcRenderer.invoke("atlas:load-artifacts", repoPath),
+
+  getBackgroundTasks: (): Promise<any[]> =>
+    ipcRenderer.invoke("atlas:get-background-tasks"),
+
+  killBackgroundTask: (taskId: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:kill-background-task", taskId),
+
 
   // Memory / graph
   impact: (filePath: string, symbolName?: string): Promise<ImpactResult> =>
@@ -27,6 +36,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   // Repo & Workspace management
   openRepo: (repoPath: string) =>
     ipcRenderer.invoke("atlas:open-repo", repoPath),
+
+  setRepoPath: (repoPath: string) =>
+    ipcRenderer.invoke("atlas:set-repo-path", repoPath),
 
   selectDirectory: (): Promise<string | null> =>
     ipcRenderer.invoke("atlas:select-directory"),

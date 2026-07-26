@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface CommandItem {
   id: string;
@@ -37,7 +38,7 @@ export function CommandPalette({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  // Render state check is handled by AnimatePresence below
 
   let activeCommands: CommandItem[] = [...commands];
   if (commandService && typeof commandService.getCommands === "function") {
@@ -98,63 +99,76 @@ export function CommandPalette({
   };
 
   return (
-    <div
-      className="anim-fade-in"
-      style={styles.backdrop}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="anim-scale-in" style={styles.modal}>
-        <div style={styles.inputContainer}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" style={{ marginRight: 10 }}>
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            ref={inputRef}
-            type="text"
-            style={styles.input}
-            placeholder="Type a command or '>' for actions (e.g. '> Format', '> Build')..."
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSelectedIndex(0);
-            }}
-            onKeyDown={handleKeyDown}
-          />
-          <span style={styles.badge}>{isFileSearch ? "Files" : "Commands"}</span>
-        </div>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
+          style={styles.backdrop}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -20 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            style={styles.modal}
+          >
+            <div style={styles.inputContainer}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" style={{ marginRight: 10 }}>
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                ref={inputRef}
+                type="text"
+                style={styles.input}
+                placeholder="Type a command or '>' for actions (e.g. '> Format', '> Build')..."
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setSelectedIndex(0);
+                }}
+                onKeyDown={handleKeyDown}
+              />
+              <span style={styles.badge}>{isFileSearch ? "Files" : "Commands"}</span>
+            </div>
 
-        <div style={styles.list}>
-          {filteredCommands.length === 0 ? (
-            <div style={styles.emptyState}>No matching results found</div>
-          ) : (
-            filteredCommands.map((cmd, idx) => {
-              const isSelected = idx === selectedIndex;
-              return (
-                <div
-                  key={cmd.id}
-                  style={{
-                    ...styles.item,
-                    backgroundColor: isSelected ? "#38bdf81a" : "transparent",
-                    borderLeft: isSelected ? "3px solid #38bdf8" : "3px solid transparent",
-                  }}
-                  onClick={() => cmd.action()}
-                  onMouseEnter={() => setSelectedIndex(idx)}
-                >
-                  <div style={styles.itemMain}>
-                    <span style={styles.itemTitle}>{cmd.title}</span>
-                    {cmd.category && <span style={styles.itemCategory}>{cmd.category}</span>}
-                  </div>
-                  {cmd.shortcut && <span style={styles.shortcut}>{cmd.shortcut}</span>}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </div>
+            <div style={styles.list}>
+              {filteredCommands.length === 0 ? (
+                <div style={styles.emptyState}>No matching results found</div>
+              ) : (
+                filteredCommands.map((cmd, idx) => {
+                  const isSelected = idx === selectedIndex;
+                  return (
+                    <div
+                      key={cmd.id}
+                      style={{
+                        ...styles.item,
+                        backgroundColor: isSelected ? "var(--bg-hover-strong)" : "transparent",
+                        borderLeft: isSelected ? "3px solid var(--accent)" : "3px solid transparent",
+                      }}
+                      onClick={() => cmd.action()}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                    >
+                      <div style={styles.itemMain}>
+                        <span style={styles.itemTitle}>{cmd.title}</span>
+                        {cmd.category && <span style={styles.itemCategory}>{cmd.category}</span>}
+                      </div>
+                      {cmd.shortcut && <span style={styles.shortcut}>{cmd.shortcut}</span>}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -176,14 +190,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font-ui)",
   },
   modal: {
-    backgroundColor: "rgba(14, 14, 18, 0.94)",
-    backdropFilter: "blur(16px) saturate(1.5)",
-    WebkitBackdropFilter: "blur(16px) saturate(1.5)",
+    backgroundColor: "var(--bg-glass-strong)",
+    backdropFilter: "blur(24px) saturate(1.5)",
+    WebkitBackdropFilter: "blur(24px) saturate(1.5)",
     width: "600px",
     maxWidth: "90vw",
-    borderRadius: "10px",
-    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.05), 0 0 40px rgba(0,0,0,0.5)",
-    border: "1px solid rgba(255, 255, 255, 0.08)",
+    borderRadius: "var(--radius-lg)",
+    boxShadow: "var(--shadow-lg), var(--shadow-panel)",
+    border: "1px solid var(--border-strong)",
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",

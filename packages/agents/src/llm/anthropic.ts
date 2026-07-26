@@ -38,7 +38,7 @@ export class AnthropicProvider implements ILLMProvider {
     const messages = request.messages
       .filter((m) => m.role !== "system")
       .map((m) => ({
-        role: m.role as "user" | "assistant",
+        role: ((m.role as string) === "agent" ? "assistant" : m.role) as "user" | "assistant",
         content: m.content,
       }));
 
@@ -94,7 +94,7 @@ export class AnthropicProvider implements ILLMProvider {
     const messages = request.messages
       .filter((m) => m.role !== "system")
       .map((m) => ({
-        role: m.role as "user" | "assistant",
+        role: ((m.role as string) === "agent" ? "assistant" : m.role) as "user" | "assistant",
         content: m.content,
       }));
 

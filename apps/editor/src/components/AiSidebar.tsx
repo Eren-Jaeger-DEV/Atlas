@@ -1,9 +1,525 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ComposerDiff } from "./ComposerDiff.js";
 import { SynapseDashboard } from "./SynapseDashboard.js";
 import { logToOutput } from "./OutputPanel.js";
 import { RichComposer } from "./RichComposer.js";
 import { MermaidDiagramViewer } from "./MermaidDiagramViewer.js";
+
+import { ArtifactsViewer } from "./ArtifactsViewer";
+import { BackgroundTaskManager } from "./BackgroundTaskManager";
+
+type ChatMessage = {
+  role: "user" | "agent";
+  text: string;
+  thinkingText?: string;
+  thinkingMs?: number;
+  durationMs?: number;
+  steps?: string[];
+};
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem > 0 ? `${m}m ${rem}s` : `${m}m`;
+}
+
+function FormattedMessageText({ text }: { text: string }) {
+  if (text.startsWith("[Failover]")) {
+    const match = text.match(/^\[Failover\]\s+(.*?)\n\n([\s\S]*)$/);
+    if (match) {
+      return (
+        <div>
+          <div style={{
+            margin: "6px 0 10px 0", padding: "6px 10px",
+            backgroundColor: "rgba(250,204,21,0.1)",
+            border: "1px solid rgba(250,204,21,0.3)",
+            borderRadius: "6px", color: "#facc15", fontSize: "11px", fontWeight: 600
+          }}>
+            [WARN] {match[1]}
+          </div>
+          <FormattedMessageText text={match[2]} />
+        </div>
+      );
+    }
+  }
+
+  const parts = text.split(/(```[\s\S]*?```)/g);
+  return (
+    <div>
+      {parts.map((part, idx) => {
+        const codeMatch = part.match(/^```(\w+)?\n([\s\S]*?)```$/);
+        if (codeMatch) {
+          const lang = codeMatch[1] || "code";
+          const codeContent = codeMatch[2] || "";
+          return (
+            <div key={idx} style={{
+              position: "relative",
+              margin: "8px 0",
+              backgroundColor: "rgba(0,0,0,0.4)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: "6px",
+              overflow: "hidden"
+            }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "4px 10px", backgroundColor: "rgba(255,255,255,0.04)",
+                fontSize: "11px", color: "#a1a1aa", borderBottom: "1px solid rgba(255,255,255,0.05)"
+              }}>
+                <span>{lang}</span>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <button
+                    style={{ background: "none", border: "none", color: "#38bdf8", cursor: "pointer", fontSize: "10px", fontWeight: 600 }}
+                    onClick={() => navigator.clipboard.writeText(codeContent)}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    style={{ background: "none", border: "none", color: "#4ade80", cursor: "pointer", fontSize: "10px", fontWeight: 600 }}
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("atlas:apply-code-snippet", { detail: { code: codeContent } }));
+                    }}
+                  >
+                    Apply to File
+                  </button>
+                </div>
+              </div>
+              <pre style={{ margin: 0, padding: "10px", fontSize: "12px", fontFamily: "var(--font-mono)", overflowX: "auto", color: "#e4e4e7" }}>
+                {codeContent}
+              </pre>
+            </div>
+          );
+        }
+
+        const imgMatch = part.match(/!\[(.*?)\]\((.*?)\)/);
+        if (imgMatch) {
+          return (
+            <div key={idx} style={{ margin: "8px 0" }}>
+              <img src={imgMatch[2]} alt={imgMatch[1]} style={{ maxWidth: "100%", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.1)" }} />
+              {imgMatch[1] && <div style={{ fontSize: "11px", color: "#a1a1aa", marginTop: "2px" }}>{imgMatch[1]}</div>}
+            </div>
+          );
+        }
+
+        return <span key={idx} style={{ whiteSpace: "pre-wrap" }}>{part}</span>;
+      })}
+    </div>
+  );
+}
+
+function FormattedThoughtText({ text }: { text: string }) {
+  const parts = text.split(/(`[^`]+`|\b[A-Za-z0-9_]+\.(?:tsx|ts|jsx|js|py|json|md)\b|\b[A-Z][A-Za-z0-9_]{3,}\b)/g);
+
+  return (
+    <span>
+      {parts.map((part, idx) => {
+        if (!part) return null;
+        const isBacktick = part.startsWith("`") && part.endsWith("`");
+        const cleanText = isBacktick ? part.slice(1, -1) : part;
+        const isCodeSymbol = isBacktick || /^[A-Za-z0-9_]+\.(?:tsx|ts|jsx|js|py|json|md)$/.test(part) || /^[A-Z][A-Za-z0-9_]{3,}$/.test(part);
+
+        if (isCodeSymbol) {
+          const isFile = /^[A-Za-z0-9_]+\.(?:tsx|ts|jsx|js|py|json|md)$/.test(cleanText);
+          return (
+            <span
+              key={idx}
+              onClick={() => {
+                if (isFile) {
+                  window.dispatchEvent(new CustomEvent("atlas:open-file", { detail: { filePath: cleanText, line: 1 } }));
+                }
+              }}
+              style={{
+                display: "inline-block",
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
+                color: "#09090b",
+                fontFamily: "var(--font-mono)",
+                fontSize: "10.5px",
+                fontWeight: 600,
+                padding: "1px 6px",
+                borderRadius: "4px",
+                margin: "0 2px",
+                verticalAlign: "baseline",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+                cursor: isFile ? "pointer" : "default"
+              }}
+              title={isFile ? `Open ${cleanText}` : undefined}
+            >
+              {cleanText}
+            </span>
+          );
+        }
+        return <span key={idx}>{part}</span>;
+      })}
+    </span>
+  );
+}
+
+function getLangBadge(fileName: string) {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  if (ext === "tsx" || ext === "jsx") return { label: "⚛", color: "#c084fc", bg: "rgba(192,132,252,0.15)" };
+  if (ext === "ts") return { label: "TS", color: "#38bdf8", bg: "rgba(56,189,248,0.15)" };
+  if (ext === "js") return { label: "JS", color: "#facc15", bg: "rgba(250,204,21,0.15)" };
+  if (ext === "py") return { label: "PY", color: "#4ade80", bg: "rgba(74,222,128,0.15)" };
+  if (ext === "json") return { label: "JSON", color: "#fb923c", bg: "rgba(251,146,60,0.15)" };
+  return { label: ext.toUpperCase() || "FILE", color: "#a1a1aa", bg: "rgba(161,161,170,0.15)" };
+}
+
+function ProcessStepList({ steps }: { steps: string[] }) {
+  const [exploredExpanded, setExploredExpanded] = React.useState(false);
+  const [expandedCmdIndex, setExpandedCmdIndex] = React.useState<number | null>(null);
+
+  const exploredSteps = steps.filter(s => s.startsWith("Analyzed ") || s.toLowerCase().includes("search"));
+  const nonExploredSteps = steps.filter(s => !s.startsWith("Analyzed ") && !s.toLowerCase().includes("search"));
+
+  const fileCount = exploredSteps.filter(s => s.startsWith("Analyzed ")).length;
+  const searchCount = exploredSteps.filter(s => s.toLowerCase().includes("search")).length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "8px" }}>
+      {exploredSteps.length > 0 && (
+        <div>
+          <button
+            onClick={() => setExploredExpanded(!exploredExpanded)}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", gap: "6px",
+              color: "#a1a1aa", fontSize: "11px", fontWeight: 500, padding: "2px 0"
+            }}
+          >
+            <span>
+              Explored {fileCount} file{fileCount !== 1 ? "s" : ""}{searchCount > 0 ? `, ${searchCount} search` : ""}
+            </span>
+            <svg
+              width="9" height="9" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5"
+              style={{ transform: exploredExpanded ? "rotate(180deg)" : "rotate(90deg)", transition: "transform 0.15s" }}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+          {exploredExpanded && (
+            <div style={{ paddingLeft: "10px", marginTop: "4px", display: "flex", flexDirection: "column", gap: "3px" }}>
+              {exploredSteps.map((step, i) => {
+                const match = step.match(/^Analyzed\s+(.*?)\s*(#L\d+-\d+)?$/);
+                const fileName = match ? match[1] : step.replace(/^Analyzed\s*/, "");
+                const lineRange = match && match[2] ? match[2] : "";
+                const lineNum = lineRange ? parseInt(lineRange.replace("#L", "").split("-")[0]) : 1;
+                const badge = getLangBadge(fileName);
+                return (
+                  <div
+                    key={i}
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("atlas:open-file", { detail: { filePath: fileName, line: lineNum } }));
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", cursor: "pointer" }}
+                    title={`Open ${fileName} at line ${lineNum}`}
+                  >
+                    <span style={{ color: "#71717a" }}>Analyzed</span>
+                    <span style={{ backgroundColor: badge.bg, color: badge.color, padding: "0 4px", borderRadius: "3px", fontSize: "9.5px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                      {badge.label}
+                    </span>
+                    <span style={{ color: "#e4e4e7", fontWeight: 600, fontFamily: "var(--font-mono)", textDecoration: "underline" }}>{fileName}</span>
+                    {lineRange && (
+                      <span style={{ backgroundColor: "rgba(192,132,252,0.15)", color: "#c084fc", padding: "1px 5px", borderRadius: "3px", fontSize: "9.5px", fontFamily: "var(--font-mono)" }}>
+                        {lineRange}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {nonExploredSteps.map((step, i) => {
+        const isEdited = step.startsWith("Edited ") || step.startsWith("Modified ");
+        const isRan = step.startsWith("Ran ") || step.startsWith("Run ");
+        const isTimed = step.startsWith("Timed ");
+
+        if (isEdited) {
+          const match = step.match(/^(?:Edited|Modified)\s+(.*?)(?:\s+([+-]\d+)\s+([+-]\d+))?$/);
+          const fileName = match ? match[1] : step.replace(/^(?:Edited|Modified)\s*/, "");
+          const added = match && match[2] ? match[2] : "";
+          const deleted = match && match[3] ? match[3] : "";
+          const badge = getLangBadge(fileName);
+
+          return (
+            <div
+              key={i}
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("atlas:open-file", { detail: { filePath: fileName, line: 1 } }));
+              }}
+              style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11.5px", margin: "2px 0", cursor: "pointer" }}
+              title={`Open ${fileName}`}
+            >
+              <span style={{ color: "#a1a1aa", fontWeight: 500 }}>Edited</span>
+              <span style={{ backgroundColor: badge.bg, color: badge.color, padding: "1px 4px", borderRadius: "3px", fontSize: "9.5px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                {badge.label}
+              </span>
+              <span style={{ color: "#ffffff", fontWeight: 700, fontFamily: "var(--font-mono)", textDecoration: "underline" }}>{fileName}</span>
+              {added && <span style={{ color: "#4ade80", fontWeight: 600, fontFamily: "var(--font-mono)", fontSize: "10.5px" }}>{added}</span>}
+              {deleted && <span style={{ color: "#f87171", fontWeight: 600, fontFamily: "var(--font-mono)", fontSize: "10.5px" }}>{deleted}</span>}
+            </div>
+          );
+        }
+
+        if (isRan) {
+          const cmdText = step.replace(/^(?:Ran|Run)\s*/, "");
+          const isExpanded = expandedCmdIndex === i;
+          // Collect all subsequent TerminalOutput steps
+          const termOutputs: string[] = [];
+          for (let j = i + 1; j < nonExploredSteps.length; j++) {
+            if (nonExploredSteps[j].startsWith("TerminalOutput: ")) {
+              termOutputs.push(nonExploredSteps[j].replace(/^TerminalOutput:\s*/, ""));
+            } else {
+              break;
+            }
+          }
+
+          return (
+            <div key={i} style={{ margin: "3px 0" }}>
+              <button
+                onClick={() => setExpandedCmdIndex(isExpanded ? null : i)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "6px",
+                  color: "#e4e4e7", fontSize: "11px", padding: 0
+                }}
+              >
+                <span style={{ color: "#a1a1aa" }}>Run</span>
+                <code style={{ color: "#7dd3fc", fontFamily: "var(--font-mono)", fontSize: "10.5px", fontWeight: 600 }}>
+                  {cmdText.length > 35 ? cmdText.slice(0, 35) + "..." : cmdText}
+                </code>
+                <svg
+                  width="9" height="9" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5"
+                  style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(90deg)", transition: "transform 0.15s" }}
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+              {isExpanded && (
+                <div style={{
+                  marginTop: "4px", padding: "8px 10px",
+                  backgroundColor: "rgba(9, 9, 11, 0.9)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "6px", fontFamily: "var(--font-mono)",
+                  fontSize: "10.5px", color: "#e4e4e7", lineHeight: 1.5,
+                  maxHeight: "160px", overflowY: "auto"
+                }}>
+                  <div style={{ color: "#38bdf8", fontWeight: 600, marginBottom: "4px" }}>
+                    ~/.../Atlas $ {cmdText}
+                  </div>
+                  {termOutputs.length > 0 && (
+                    <div style={{ color: "#a1a1aa", whiteSpace: "pre-wrap" }}>
+                      {termOutputs.join("")}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        if (isTimed) {
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#a1a1aa", margin: "2px 0" }}>
+              <span style={{ color: "#38bdf8", fontWeight: 600 }}>⏱ {step}</span>
+            </div>
+          );
+        }
+
+        if (step.startsWith("AST Check:")) {
+          const isClean = step.includes("Valid");
+          return (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              fontSize: "11px", margin: "4px 0",
+              color: isClean ? "#4ade80" : "#f87171", fontWeight: 600
+            }}>
+              <span>{isClean ? "[PASS]" : "[WARN]"}</span>
+              <span>{step}</span>
+            </div>
+          );
+        }
+
+        if (step.startsWith("[CODER]")) {
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", margin: "3px 0" }}>
+              <span style={{ backgroundColor: "rgba(56,189,248,0.15)", color: "#38bdf8", padding: "1px 5px", borderRadius: "3px", fontSize: "9.5px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                [CODER]
+              </span>
+              <span style={{ color: "#e4e4e7", fontWeight: 600 }}>{step.replace(/^\[CODER\]\s*/, "")}</span>
+            </div>
+          );
+        }
+
+        if (step.startsWith("[TESTER]")) {
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", margin: "3px 0" }}>
+              <span style={{ backgroundColor: "rgba(250,204,21,0.15)", color: "#facc15", padding: "1px 5px", borderRadius: "3px", fontSize: "9.5px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                [TESTER]
+              </span>
+              <span style={{ color: "#e4e4e7", fontWeight: 600 }}>{step.replace(/^\[TESTER\]\s*/, "")}</span>
+            </div>
+          );
+        }
+
+        if (step.startsWith("[REVIEWER]")) {
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", margin: "3px 0" }}>
+              <span style={{ backgroundColor: "rgba(192,132,252,0.15)", color: "#c084fc", padding: "1px 5px", borderRadius: "3px", fontSize: "9.5px", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                [REVIEWER]
+              </span>
+              <span style={{ color: "#e4e4e7", fontWeight: 600 }}>{step.replace(/^\[REVIEWER\]\s*/, "")}</span>
+            </div>
+          );
+        }
+
+        return (
+          <div key={i} style={{ fontSize: "11px", color: "#a1a1aa" }}>
+            {step}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AgentMessageBubble({ msg }: { msg: ChatMessage }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const [thoughtExpanded, setThoughtExpanded] = React.useState(true);
+  const hasMeta = !!(msg.durationMs || msg.thinkingText || (msg.steps && msg.steps.length > 0));
+  const isError = msg.text.startsWith("Error:");
+  const mermaidMatch = msg.text.match(/```mermaid([\s\S]*?)```/);
+  const bodyText = msg.text.replace(/```mermaid[\s\S]*?```/, "").trim();
+
+  if (isError) {
+    return (
+      <div style={{
+        margin: "8px 0", padding: "10px 12px",
+        backgroundColor: "rgba(248,113,113,0.1)",
+        border: "1px solid rgba(248,113,113,0.3)",
+        borderRadius: "6px", color: "#f87171", fontSize: "12px", lineHeight: 1.5
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: "4px" }}>API Provider Notice</div>
+        {msg.text.replace(/^Error:\s*/, "")}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "4px 0", maxWidth: "95%", alignSelf: "flex-start" }}>
+      {hasMeta && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            background: "none", border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: "5px",
+            color: "#71717a", fontSize: "11px", fontWeight: 500,
+            padding: "2px 0", marginBottom: "4px",
+          }}
+        >
+          <svg
+            width="10" height="10" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5"
+            style={{ transform: expanded ? "rotate(180deg)" : "rotate(90deg)", transition: "transform 0.15s" }}
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          {msg.durationMs ? `Worked for ${formatDuration(msg.durationMs)}` : "Process details"}
+        </button>
+      )}
+
+      {expanded && (Boolean(msg.thinkingText) || Boolean(msg.steps && msg.steps.length > 0)) && (
+        <div style={{
+          marginBottom: "8px", padding: "8px 10px",
+          backgroundColor: "rgba(255,255,255,0.03)",
+          borderRadius: "6px", border: "1px solid rgba(255,255,255,0.06)"
+        }}>
+          {msg.thinkingText && (
+            <div>
+              <button
+                onClick={() => setThoughtExpanded(!thoughtExpanded)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: "5px",
+                  color: "#a1a1aa", fontSize: "11px", fontWeight: 500, padding: "0",
+                }}
+              >
+                <svg
+                  width="9" height="9" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5"
+                  style={{ transform: thoughtExpanded ? "rotate(180deg)" : "rotate(90deg)", transition: "transform 0.15s" }}
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+                {msg.thinkingMs ? `Thought for ${formatDuration(msg.thinkingMs)}` : "Thought"}
+              </button>
+              {thoughtExpanded && (
+                <div style={{
+                  marginTop: "6px", padding: "8px 10px",
+                  backgroundColor: "rgba(0,0,0,0.3)",
+                  borderRadius: "4px", borderLeft: "2px solid #38bdf8",
+                  fontSize: "11.5px", color: "#d4d4d8",
+                  lineHeight: 1.6,
+                  maxHeight: "240px", overflowY: "auto"
+                }}>
+                  <FormattedThoughtText text={msg.thinkingText} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ color: "var(--text-main, #e4e4e7)", lineHeight: 1.55, margin: 0, fontSize: "13px" }}>
+        <FormattedMessageText text={bodyText} />
+      </div>
+      {mermaidMatch && <MermaidDiagramViewer code={mermaidMatch[1]!} />}
+    </div>
+  );
+}
+
+function LiveRunBubble({ events, streamingText, elapsedMs }: { events: any[]; streamingText: string; elapsedMs: number }) {
+  const currentStep = [...events].reverse().find((e: any) =>
+    e.type === "state_change" || e.type === "step_start"
+  );
+  const stepLabel =
+    currentStep?.type === "state_change" ? currentStep.state :
+    currentStep?.type === "step_start" ? currentStep.step?.title ?? "Working" :
+    "Working";
+
+  return (
+    <div style={{ padding: "4px 0", maxWidth: "95%", alignSelf: "flex-start" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
+        <span style={{
+          width: 7, height: 7, borderRadius: "50%",
+          backgroundColor: "#38bdf8",
+          boxShadow: "0 0 6px #38bdf8",
+          display: "inline-block",
+          animation: "pulse 1.4s ease-in-out infinite"
+        }} />
+        <span style={{ color: "#71717a", fontSize: "11px", fontWeight: 500 }}>
+          {stepLabel} &middot; {formatDuration(elapsedMs)}
+        </span>
+      </div>
+      {streamingText && (
+        <p style={{ color: "var(--text-main, #e4e4e7)", fontSize: "13px", lineHeight: 1.55, margin: 0, whiteSpace: "pre-wrap" }}>
+          {streamingText}
+          <span style={{
+            display: "inline-block", width: "2px", height: "14px",
+            backgroundColor: "#38bdf8", marginLeft: "2px", verticalAlign: "text-bottom",
+            animation: "blink 1s step-end infinite"
+          }} />
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface AiSidebarProps {
   repoPath?: string;
@@ -60,11 +576,21 @@ const PROVIDER_MODELS: Record<string, Array<{ label: string; value: string }>> =
 export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, cursorLine, cursorSymbol, terminalHistory, diagnostics, width = 320, onClose, onOpenSettings }: AiSidebarProps) {
   const [prompt, setPrompt] = useState("");
   const [activeRuns, setActiveRuns] = useState<Set<string>>(new Set());
-  const [messages, setMessages] = useState<Array<{ role: "user" | "agent"; text: string }>>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]); 
   const [activeView, setActiveView] = useState<"chat" | "history" | "dashboard">("chat");
   const [composerOutput, setComposerOutput] = useState<any>(null);
   const [streamEvents, setStreamEvents] = useState<any[]>([]);
   const [streamingTokenText, setStreamingTokenText] = useState("");
+  const streamingTokenRef = useRef("");
+  // Run timing and metadata refs
+  const runStartTimeRef = useRef<number>(0);
+  const thinkingStartTimeRef = useRef<number>(0);
+  const thinkingMsRef = useRef<number>(0);
+  const thinkingTextRef = useRef<string>("");
+  const accumulatedStepsRef = useRef<string[]>([]);
+  // Live elapsed timer
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [awaitingHuman, setAwaitingHuman] = useState<string | null>(null);
   const [planningMode, setPlanningMode] = useState(false);
   const [planApprovalReq, setPlanApprovalReq] = useState<{reqId: string, plan: any} | null>(null);
@@ -74,6 +600,61 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
   const [selectedModel, setSelectedModel] = useState<string>("gemini-2.5-flash");
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      logToOutput("System", "[WARN] Speech Recognition not available in current environment", "warn");
+      return;
+    }
+
+    try {
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = "en-US";
+
+      rec.onstart = () => {
+        setIsListening(true);
+      };
+
+      rec.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            transcript += event.results[i][0].transcript;
+          }
+        }
+        if (transcript) {
+          setPrompt((prev) => (prev ? prev + " " + transcript.trim() : transcript.trim()));
+        }
+      };
+
+      rec.onerror = () => {
+        setIsListening(false);
+      };
+
+      rec.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = rec;
+      rec.start();
+    } catch (e: any) {
+      logToOutput("System", `[WARN] Voice input failed: ${e?.message || e}`, "warn");
+      setIsListening(false);
+    }
+  };
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -110,29 +691,57 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
 
     const unsub = api.onEvent((ev: any) => {
       setStreamEvents((prev) => [...prev, ev]);
+
+      // Token streaming
       if (ev.type === "token" && ev.content) {
+        streamingTokenRef.current += ev.content;
         setStreamingTokenText((prev) => prev + ev.content);
       }
+
+      // Planning state — start tracking thinking time
+      if (ev.type === "state_change" && ev.state === "PLANNING") {
+        thinkingStartTimeRef.current = Date.now();
+      }
+
+      // Planning reasoning captured — store it as the "thought" block
+      if (ev.type === "plan_ready" && ev.plan) {
+        const thinkingElapsed = thinkingStartTimeRef.current > 0 ? Date.now() - thinkingStartTimeRef.current : 0;
+        thinkingMsRef.current = thinkingElapsed;
+        if (ev.plan.planningReasoning) {
+          thinkingTextRef.current = ev.plan.planningReasoning;
+        }
+        if (ev.plan.steps && ev.plan.steps.length > 0) {
+          accumulatedStepsRef.current.push(`Plan: ${ev.plan.steps.length} step(s)`);
+        }
+      }
+
+      // Step start — track what's being worked on
+      if (ev.type === "step_start" && ev.step?.title) {
+        accumulatedStepsRef.current.push(ev.step.title);
+        logToOutput("Agent", `Step: ${ev.step.title}`, "info");
+      }
+
+      // Coder output — track files modified
+      if (ev.type === "coder_output" && ev.output) {
+        const count = ev.output.modifiedFiles?.length ?? 0;
+        if (count > 0) {
+          accumulatedStepsRef.current.push(`Modified ${count} file(s)`);
+        }
+      }
+
       if (ev.type === "log" && (ev.message || ev.content)) {
         const text = ev.message || ev.content;
         if (text && !text.startsWith("State:")) {
-          setStreamingTokenText((prev) => prev ? prev + "\n" + text : text);
           logToOutput("Agent", text, "info");
         }
       }
-      if (ev.type === "step_start" && ev.tool) {
-        logToOutput("Agent", `Tool: ${ev.tool}${ev.args ? ` (${JSON.stringify(ev.args).slice(0,60)})` : ""}`, "info");
-      }
+
       if (ev.type === "state_change") {
         const level = ev.state === "ERROR" ? "error" : ev.state === "DONE" ? "success" : "info";
         logToOutput("Agent", `State: ${ev.state}${ev.runId ? ` [${ev.runId.slice(0,8)}]` : ""}`, level);
-        setActiveRuns(prev => {
-          const next = new Set(prev);
-          next.delete(ev.runId);
-          return next;
-        });
         if (ev.state === "DONE" || ev.state === "CANCELLED" || ev.state === "APPROVED") setAwaitingHuman(null);
       }
+
       if (ev.type === "awaiting_human") {
         setAwaitingHuman(ev.reason);
         logToOutput("Agent", `Awaiting human input: ${ev.reason ?? ""}`, "warn");
@@ -166,6 +775,19 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
     setMessages(newMessages);
     setStreamEvents([]);
     setStreamingTokenText("");
+    streamingTokenRef.current = "";
+    // Reset run metadata
+    runStartTimeRef.current = Date.now();
+    thinkingStartTimeRef.current = 0;
+    thinkingMsRef.current = 0;
+    thinkingTextRef.current = "";
+    accumulatedStepsRef.current = [];
+    setElapsedMs(0);
+    // Start elapsed timer
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsedMs(Date.now() - runStartTimeRef.current);
+    }, 500);
     setAwaitingHuman(null);
 
     const api = window.atlasAPI;
@@ -226,14 +848,41 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             else window.atlasAPI?.openSettingsWindow?.();
           }
         } else {
-          const replyText = result.plan?.planningReasoning || streamingTokenText || (result.coderOutputs && result.coderOutputs.length > 0 ? `Completed changes in ${result.coderOutputs.length} step(s).` : "Response completed with no text output.");
-          setMessages((prev) => [...prev, { role: "agent", text: replyText }]);
+          let replyText = streamingTokenRef.current;
+          if (!replyText && result.plan) {
+            if (result.plan.planningReasoning) {
+              replyText = result.plan.planningReasoning;
+            }
+            if (result.plan.steps && result.plan.steps.length > 0) {
+              const stepsText = result.plan.steps.map((s: any, idx: number) => `**${idx + 1}. ${s.title}**\n${s.description}`).join("\n\n");
+              replyText = replyText ? `${replyText}\n\n${stepsText}` : stepsText;
+            }
+          }
+          if (!replyText && result.error) {
+            replyText = `Error: ${result.error}`;
+          }
+          if (replyText) {
+            const newMsg: ChatMessage = {
+              role: "agent",
+              text: replyText,
+              durationMs: Date.now() - runStartTimeRef.current,
+              thinkingText: thinkingTextRef.current || undefined,
+              thinkingMs: thinkingMsRef.current || undefined,
+              steps: accumulatedStepsRef.current.length > 0 ? [...accumulatedStepsRef.current] : undefined,
+            };
+            setMessages((prev) => [...prev, newMsg]);
+          }
           setAwaitingHuman(null);
-          
+
           if (result.coderOutputs && result.coderOutputs.length > 0) {
             const lastOutput = result.coderOutputs[result.coderOutputs.length - 1];
             if (lastOutput.filesBefore && lastOutput.filesAfter) {
-              setComposerOutput(lastOutput);
+              const hasActualChanges = Object.keys(lastOutput.filesAfter).some(
+                (fp) => lastOutput.filesBefore[fp] !== lastOutput.filesAfter[fp]
+              );
+              if (hasActualChanges) {
+                setComposerOutput(lastOutput);
+              }
             }
           }
         }
@@ -246,6 +895,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
         }
       } finally {
         setActiveRuns(prev => { const n = new Set(prev); n.delete(runKey); return n; });
+        if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null; }
       }
     } else {
       setMessages((prev) => [...prev, { role: "agent", text: "Error: AI Agent API is not connected or initialized." }]);
@@ -288,6 +938,12 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           <button style={styles.iconBtn} onClick={() => setActiveView("chat")} title="New Chat">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
+          <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "artifacts" ? "chat" : "artifacts")} title="Artifacts (Plans & Walkthroughs)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </button>
+          <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "tasks" ? "chat" : "tasks")} title="Background Processes">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </button>
           <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "dashboard" ? "chat" : "dashboard")} title="Synapse Flight Deck">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>
           </button>
@@ -306,6 +962,10 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
       <div ref={chatStreamRef} style={styles.chatStream}>
         {activeView === "dashboard" ? (
           <SynapseDashboard events={streamEvents} />
+        ) : activeView === "artifacts" ? (
+          <ArtifactsViewer repoPath={repoPath} onClose={() => setActiveView("chat")} />
+        ) : activeView === "tasks" ? (
+          <BackgroundTaskManager />
         ) : messages.length === 0 && activeView !== "history" ? (
           <div style={styles.emptyState}>
             <div style={styles.logoMark}>
@@ -320,72 +980,43 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
           </div>
         ) : (
           messages.map((msg, i) => {
-            const mermaidMatch = msg.text.match(/```mermaid([\s\S]*?)```/);
+            if (msg.role === "user") {
+              return (
+                <div key={i} className="anim-slide-up" style={styles.userBubble}>
+                  <p style={styles.bubbleText}>{msg.text}</p>
+                </div>
+              );
+            }
             return (
-              <div key={i} className="anim-slide-up" style={msg.role === "user" ? styles.userBubble : styles.agentBubble}>
-                <p style={styles.bubbleText}>{msg.text.replace(/```mermaid[\s\S]*?```/, "").trim()}</p>
-                {mermaidMatch && <MermaidDiagramViewer code={mermaidMatch[1]!} />}
+              <div key={i} className="anim-slide-up">
+                <AgentMessageBubble msg={msg} />
               </div>
             );
           })
         )}
         {activeRuns.size > 0 && (
-          <div style={styles.agentBubble}>
-            {streamEvents.map((ev, idx) => (
-              <div key={idx} style={{ fontSize: "11px", color: "var(--text-muted, #a1a1aa)", marginBottom: "4px" }}>
-                {ev.runId && <span style={{color: "var(--accent, #38bdf8)", marginRight: "4px"}}>[{ev.runId.substring(0,4)}]</span>}
-                {ev.type === "state_change" && `State: ${ev.state}`}
-                {ev.type === "plan_ready" && `Plan generated with ${ev.plan.steps.length} steps.`}
-                {ev.type === "step_start" && `Working on: ${ev.step.title}`}
-                {ev.type === "coder_output" && `Coder modified ${ev.output.modifiedFiles?.length || 0} files.`}
-                {ev.type === "test_result" && `Tests ${ev.result.status} (${ev.result.passed}/${ev.result.total}).`}
-                {ev.type === "review_result" && `Review complete: ${ev.result.overallRisk} risk.`}
-              </div>
-            ))}
+          <div className="anim-slide-up">
             {awaitingHuman && !planApprovalReq ? (
-              <p style={{ ...styles.bubbleText, color: "#f87171", marginTop: "8px" }}>
+              <p style={{ color: "#f87171", fontSize: "12px", margin: 0 }}>
                 [WARN] Awaiting Human: {awaitingHuman}
               </p>
             ) : planApprovalReq ? (
-              <div style={{ marginTop: "8px", padding: "8px", border: "1px solid #38bdf8", borderRadius: "4px" }}>
-                <p style={{ color: "var(--accent, #38bdf8)", fontWeight: "bold", marginBottom: "8px" }}>Plan Approval Required</p>
-                <p style={{ color: "var(--text-main, #e4e4e7)", fontSize: "11px", marginBottom: "12px" }}>Review the plan in artifacts.</p>
+              <div style={{ padding: "10px", border: "1px solid #38bdf8", borderRadius: "6px", backgroundColor: "rgba(56,189,248,0.05)" }}>
+                <p style={{ color: "#38bdf8", fontWeight: 600, marginBottom: "8px", fontSize: "12px" }}>Plan Approval Required</p>
+                <p style={{ color: "#a1a1aa", fontSize: "11px", marginBottom: "12px" }}>Review the proposed plan before continuing.</p>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button 
-                    style={{ ...styles.sendBtn, width: "auto", padding: "4px 12px", borderRadius: "4px", fontSize: "11px", fontWeight: "bold" }}
-                    onClick={() => {
-                      window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, true);
-                      setPlanApprovalReq(null);
-                      setAwaitingHuman(null);
-                    }}
-                  >
-                    Approve
-                  </button>
-                  <button 
-                    style={{ background: "var(--border-color, #3f3f46)", color: "var(--text-main, #e4e4e7)", border: "none", width: "auto", padding: "4px 12px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
-                    onClick={() => {
-                      window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, false);
-                      setPlanApprovalReq(null);
-                      setAwaitingHuman(null);
-                    }}
-                  >
-                    Reject
-                  </button>
+                  <button
+                    style={{ ...styles.sendBtn, width: "auto", padding: "4px 14px", borderRadius: "4px", fontSize: "11px", fontWeight: 600 }}
+                    onClick={() => { window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, true); setPlanApprovalReq(null); setAwaitingHuman(null); }}
+                  >Approve</button>
+                  <button
+                    style={{ background: "#27272a", color: "#e4e4e7", border: "none", width: "auto", padding: "4px 14px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
+                    onClick={() => { window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, false); setPlanApprovalReq(null); setAwaitingHuman(null); }}
+                  >Reject</button>
                 </div>
               </div>
             ) : (
-              <div style={{ marginTop: "8px" }}>
-                <p style={{ ...styles.bubbleText, display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span className="pulsing-dot" style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#38bdf8" }} />
-                  Running {activeRuns.size} task(s)...
-                </p>
-                {streamingTokenText && (
-                  <div style={{ marginTop: "8px", color: "var(--text-main, #e4e4e7)", fontSize: "13px", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-                    {streamingTokenText}
-                    <span style={{ display: "inline-block", width: "4px", height: "14px", backgroundColor: "#38bdf8", marginLeft: "4px", animation: "blink 1s step-end infinite" }} />
-                  </div>
-                )}
-              </div>
+              <LiveRunBubble events={streamEvents} streamingText={streamingTokenText} elapsedMs={elapsedMs} />
             )}
           </div>
         )}
@@ -511,8 +1142,15 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             {/* Right: Mic & Arrow Send Button */}
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <button
-                style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center" }}
-                title="Voice Input"
+                onClick={toggleVoiceInput}
+                style={{
+                  background: isListening ? "rgba(239, 68, 68, 0.2)" : "none",
+                  border: isListening ? "1px solid rgba(239, 68, 68, 0.4)" : "none",
+                  color: isListening ? "#ef4444" : "#a1a1aa",
+                  cursor: "pointer", padding: "4px", borderRadius: "4px",
+                  display: "flex", alignItems: "center", transition: "all 0.15s ease"
+                }}
+                title={isListening ? "Stop Voice Input" : "Start Voice Input"}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
               </button>

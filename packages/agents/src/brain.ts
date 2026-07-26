@@ -88,4 +88,52 @@ export class BrainManager {
     }
     return skills;
   }
+
+  public getRules(): Array<{ name: string; content: string }> {
+    const ruleDirs = [
+      path.join(this.repoRoot, ".agent", "rules"),
+      path.join(this.repoRoot, ".agents", "rules"),
+      path.join(this.repoRoot, ".atlas", "rules"),
+    ];
+
+    const rules: Array<{ name: string; content: string }> = [];
+    for (const dir of ruleDirs) {
+      if (fs.existsSync(dir)) {
+        try {
+          const files = fs.readdirSync(dir);
+          for (const file of files) {
+            if (file.endsWith(".md")) {
+              const content = fs.readFileSync(path.join(dir, file), "utf-8");
+              rules.push({ name: file, content });
+            }
+          }
+        } catch (e) {}
+      }
+    }
+    return rules;
+  }
+
+  public getWorkflows(): Array<{ name: string; content: string }> {
+    const workflowDirs = [
+      path.join(this.repoRoot, ".agent", "workflows"),
+      path.join(this.repoRoot, ".agents", "workflows"),
+      path.join(this.repoRoot, ".atlas", "workflows"),
+    ];
+
+    const workflows: Array<{ name: string; content: string }> = [];
+    for (const dir of workflowDirs) {
+      if (fs.existsSync(dir)) {
+        try {
+          const files = fs.readdirSync(dir);
+          for (const file of files) {
+            if (file.endsWith(".md")) {
+              const content = fs.readFileSync(path.join(dir, file), "utf-8");
+              workflows.push({ name: file, content });
+            }
+          }
+        } catch (e) {}
+      }
+    }
+    return workflows;
+  }
 }

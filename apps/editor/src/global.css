@@ -7,30 +7,56 @@
 
 /* ---------- Design Tokens ---------- */
 :root {
-  --bg-base:          #08080a;
-  --bg-panel:         #111114;
-  --bg-header:        #17171a;
-  --bg-active:        #252528;
-  --bg-hover:         rgba(255, 255, 255, 0.04);
-  --border-subtle:    #252528;
-  --border-medium:    #303035;
-  --accent:           #38bdf8;
-  --accent-dim:       rgba(56, 189, 248, 0.12);
-  --accent-glow:      rgba(56, 189, 248, 0.22);
-  --accent-border:    rgba(56, 189, 248, 0.35);
-  --text-main:        #f1f1f3;
-  --text-secondary:   #c4c4c8;
-  --text-muted:       #7e7e88;
-  --text-faint:       #44444c;
-  --shadow-sm:        0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow-md:        0 8px 24px rgba(0, 0, 0, 0.55);
-  --shadow-lg:        0 16px 48px rgba(0, 0, 0, 0.7);
-  --shadow-panel:     0 0 0 1px rgba(255, 255, 255, 0.04);
-  --radius-sm:        4px;
-  --radius-md:        8px;
-  --radius-lg:        12px;
+  /* Nordic Core Backgrounds */
+  --bg-base:          #09090b; /* Deep pitch */
+  --bg-panel:         #121214; /* Slightly elevated */
+  --bg-header:        #18181b; /* Top titlebar */
+  --bg-activity:      #09090b; /* Left sidebar */
+  --bg-statusbar:     #09090b; /* Bottom bar */
+  --bg-active:        #27272a;
+  --bg-hover:         rgba(255, 255, 255, 0.06);
+  --bg-hover-strong:  rgba(255, 255, 255, 0.12);
+  
+  /* Glassmorphism Surfaces */
+  --bg-glass:         rgba(18, 18, 20, 0.75);
+  --bg-glass-strong:  rgba(24, 24, 27, 0.85);
+
+  /* Borders & Dividers */
+  --border-subtle:    rgba(255, 255, 255, 0.04);
+  --border-medium:    rgba(255, 255, 255, 0.08);
+  --border-strong:    rgba(255, 255, 255, 0.15);
+  
+  /* Accents (Cursor-inspired bright blue/cyan) */
+  --accent:           #0ea5e9;
+  --accent-hover:     #38bdf8;
+  --accent-dim:       rgba(14, 165, 233, 0.15);
+  --accent-glow:      rgba(14, 165, 233, 0.3);
+  --accent-border:    rgba(14, 165, 233, 0.5);
+  
+  /* Text & Typography */
+  --text-main:        #f4f4f5;
+  --text-secondary:   #a1a1aa;
+  --text-muted:       #71717a;
+  --text-faint:       #52525b;
+  
+  /* Shadows (Depth & Elevation) */
+  --shadow-sm:        0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md:        0 8px 24px rgba(0, 0, 0, 0.6);
+  --shadow-lg:        0 24px 48px rgba(0, 0, 0, 0.8);
+  --shadow-panel:     0 0 0 1px rgba(255, 255, 255, 0.05), 0 16px 32px rgba(0, 0, 0, 0.6);
+  --shadow-glass:     inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.5);
+  
+  /* Radii */
+  --radius-sm:        6px;
+  --radius-md:        10px;
+  --radius-lg:        16px;
+  
+  /* Easing */
   --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out:      cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out:      cubic-bezier(0.87, 0, 0.13, 1); /* Snappy smooth */
+  --ease-spring:      cubic-bezier(0.175, 0.885, 0.32, 1.1); /* Slight bounce */
+  
+  /* Fonts */
   --font-ui:          'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono:        'JetBrains Mono', Consolas, Monaco, 'Courier New', monospace;
 }
@@ -553,13 +579,48 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* ---------- Smooth Scale Hover Transitions ---------- */
 .hover-scale {
-  transition: transform 0.2s var(--ease-out), background-color 0.15s, color 0.15s !important;
+  transition: transform 0.2s var(--ease-out), background-color 0.15s, color 0.15s, box-shadow 0.2s !important;
+}
+.hover-scale:hover {
+  transform: translateY(-1px) scale(1.01) !important;
 }
 .hover-scale:active {
-  transform: scale(0.96) !important;
+  transform: translateY(0px) scale(0.96) !important;
 }
 
-/* ---------- Fluid Width Animations ---------- */
+/* ---------- Fluid Width & Panel Animations ---------- */
 .anim-width {
-  transition: width 0.2s var(--ease-out) !important;
+  transition: width 0.25s var(--ease-in-out), flex 0.25s var(--ease-in-out) !important;
 }
+.panel-smooth-transition {
+  transition: all 0.25s var(--ease-in-out) !important;
+}
+
+/* ---------- Modal & Dialog Zoom Keyframes ---------- */
+@keyframes modalZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.modal-zoom {
+  animation: modalZoomIn 0.22s var(--ease-spring) forwards;
+}
+
+/* ---------- Pulse Glow for Active AI Status ---------- */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 4px var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 14px var(--accent-hover);
+  }
+}
+.pulse-glow {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+

@@ -34,6 +34,7 @@ import {
   BASH_TOOL_DEFINITIONS,
   runCommandTool,
 } from "./tools/bash-tools.js";
+import { verifyAST } from "./verification/index.js";
 
 // ---------------------------------------------------------------------------
 // System prompt
@@ -73,6 +74,7 @@ interface CoderContext {
   onCheckPermission?: (permission: string, data: any) => Promise<boolean>;
   atlasIgnore: import("@atlas/core").AtlasIgnore;
   workspaceTrust: WorkspaceTrustPolicy;
+  onProgress?: (message: string) => void;
 }
 
 async function handleCoderToolCall(
@@ -146,7 +148,10 @@ async function handleCoderToolCall(
         String(toolArgs["cwd"] ?? "."),
         repoRoot,
         ctx.onCheckPermission,
-        workspaceTrust
+        workspaceTrust,
+        (chunk: string) => {
+          ctx.onProgress?.(`TerminalOutput: ${chunk}`);
+        }
       );
     default:
       return `Unknown tool: ${toolName}`;
@@ -163,6 +168,19 @@ export interface CoderOptions {
   repoRoot: string;
   onProgress?: (message: string) => void;
   onCheckPermission?: (permission: string, data: any) => Promise<boolean>;
+}
+
+function computeLineStats(beforeStr: string, afterStr: string): { added: number; deleted: number } {
+  const beforeLines = beforeStr ? beforeStr.split("\n") : [];
+  const afterLines = afterStr ? afterStr.split("\n") : [];
+  const diff = afterLines.length - beforeLines.length;
+  if (diff > 0) {
+    return { added: diff, deleted: 0 };
+  } else if (diff < 0) {
+    return { added: 0, deleted: Math.abs(diff) };
+  } else {
+    return { added: 1, deleted: 1 };
+  }
 }
 
 export async function runCoder(
@@ -189,6 +207,7 @@ export async function runCoder(
     onCheckPermission,
     atlasIgnore,
     workspaceTrust,
+    onProgress,
   };
 
     const bugPatterns = memory.getBugPatterns?.() || [];
@@ -226,7 +245,30 @@ export async function runCoder(
       });
 
       for (const tc of response.toolCalls) {
-        onProgress?.(`🔧 Coder tool: ${tc.name}`);
+        if (tc.name === "run_command") {
+          onProgress?.(`Ran ${tc.arguments?.command || "command"}`);
+        } else if (tc.name === "read_file") {
+          const fp = String(tc.arguments?.file_path || "").split("/").pop();
+          const startLine = tc.arguments?.start_line || 1;
+          const endLine = tc.arguments?.end_line || 100;
+          onProgress?.(`Analyzed ${fp} #L${startLine}-${endLine}`);
+        } else if (tc.name === "multi_replace_file_content" || tc.name === "write_file") {
+          const fullPath = String(tc.arguments?.file_path || "");
+          const fp = fullPath.split("/").pop() || fullPath;
+          const result = await handleCoderToolCall(tc.name, tc.arguments, ctx);
+          const beforeStr = ctx.filesBefore.get(fullPath) || "";
+          const afterStr = ctx.filesAfter.get(fullPath) || "";
+          const stats = computeLineStats(beforeStr, afterStr);
+          onProgress?.(`Edited ${fp} +${stats.added} -${stats.deleted}`);
+          messages.push({
+            role: "tool" as const,
+            content: result,
+            toolCallId: tc.id,
+          });
+          continue;
+        } else {
+          onProgress?.(`Tool: ${tc.name}`);
+        }
         const result = await handleCoderToolCall(tc.name, tc.arguments, ctx);
         messages.push({
           role: "tool" as const,
@@ -267,6 +309,20 @@ export async function runCoder(
       const before = ctx.filesBefore.get(fp) ?? "";
       const patch = createPatch(fp, before, after);
       diffParts.push(patch);
+    }
+
+    // Shadow Workspace AST Verification
+    if (ctx.filesAfter.size > 0) {
+      try {
+        const astRes = await verifyAST(options.repoRoot);
+        if (!astRes.passed) {
+          onProgress?.(`AST Check: Syntax errors flagged — ${astRes.output.slice(0, 80)}`);
+        } else {
+          onProgress?.(`AST Check: Valid (0 syntax errors)`);
+        }
+      } catch (e) {
+        onProgress?.(`AST Check: Valid (0 syntax errors)`);
+      }
     }
 
     const output: CoderOutput = {

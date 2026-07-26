@@ -63,7 +63,7 @@ export class GeminiProvider implements ILLMProvider {
       .filter((m) => m.role !== "system")
       .slice(0, -1)
       .map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
+        role: (m.role === "assistant" || (m.role as string) === "agent") ? "model" : "user",
         parts: [{ text: m.content }],
       }));
 
@@ -114,16 +114,27 @@ export class GeminiProvider implements ILLMProvider {
       safetySettings: SAFETY_SETTINGS,
     });
 
+    const history = request.messages
+      .filter((m) => m.role !== "system")
+      .slice(0, -1)
+      .map((m) => ({
+        role: (m.role === "assistant" || (m.role as string) === "agent") ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
     const lastMessage = request.messages.filter((m) => m.role !== "system").at(-1);
     if (!lastMessage) throw new Error("No user message");
 
-    const result = await model.generateContentStream(lastMessage.content);
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessageStream(lastMessage.content);
     let fullContent = "";
 
     for await (const chunk of result.stream) {
       const text = chunk.text();
-      fullContent += text;
-      onChunk(text);
+      if (text) {
+        fullContent += text;
+        onChunk(text);
+      }
     }
 
     return {

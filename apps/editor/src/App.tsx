@@ -47,6 +47,8 @@ function getSync(key: string) {
   return res instanceof Promise ? null : res;
 }
 
+import { WebPreviewPanel } from "./components/WebPreviewPanel.js";
+
 interface EditorTab { 
   filePath: string;
   isDirty?: boolean;
@@ -56,7 +58,7 @@ interface EditorTab {
   targetColumn?: number;
   isBinary?: boolean;
 }
-type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel";
+type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
 interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; }
@@ -102,8 +104,14 @@ function AppInner() {
     } catch (err) {
       console.warn("[WARN] Failed to parse atlas_workspace_roots from localStorage:", err);
     }
-    return undefined;
+    return "/home/victor/My projects/Atlas";
   });
+
+  useEffect(() => {
+    if (repoPath && api()?.setRepoPath) {
+      api().setRepoPath(repoPath);
+    }
+  }, [repoPath]);
   const [workspaceRoots, setWorkspaceRoots] = useState<string[]>(() => {
     try { 
       const stored = JSON.parse(getSync("atlas_workspace_roots") || "[]");
@@ -214,7 +222,10 @@ function AppInner() {
         if (state.ui) {
           if (state.ui.showBottomPanel !== undefined) setShowBottomPanel(Boolean(state.ui.showBottomPanel));
           if (state.ui.showRightAiSidebar !== undefined) setShowRightAiSidebar(Boolean(state.ui.showRightAiSidebar));
-          if (state.ui.sidebarWidth !== undefined) setSidebarWidth(Number(state.ui.sidebarWidth));
+          if (state.ui.sidebarWidth !== undefined) {
+            const restored = Number(state.ui.sidebarWidth);
+            setSidebarWidth(restored > 380 ? 220 : Math.max(160, restored));
+          }
           if (state.ui.rightSidebarWidth !== undefined) setRightSidebarWidth(Number(state.ui.rightSidebarWidth));
           if (state.ui.bottomPanelHeight !== undefined) setBottomPanelHeight(Number(state.ui.bottomPanelHeight));
         }
@@ -237,6 +248,28 @@ function AppInner() {
       duration: 5000,
     });
   }, [showNotification]);
+
+  useEffect(() => {
+    const handleApplyCode = (e: any) => {
+      const code = e.detail?.code;
+      if (!code) return;
+      if (tabs.length === 0 || activeTabIndex < 0) {
+        showNotification({ message: "No active file open to apply code snippet.", type: "warning" });
+        return;
+      }
+      setTabs((prev) => {
+        const next = [...prev];
+        const active = next[activeTabIndex];
+        if (active) {
+          next[activeTabIndex] = { ...active, content: code, isDirty: true };
+        }
+        return next;
+      });
+      showNotification({ message: "Code snippet applied to active editor!", type: "success" });
+    };
+    window.addEventListener("atlas:apply-code-snippet", handleApplyCode);
+    return () => window.removeEventListener("atlas:apply-code-snippet", handleApplyCode);
+  }, [tabs, activeTabIndex, showNotification]);
 
   // Save Workspace State
   useEffect(() => {
@@ -310,8 +343,31 @@ function AppInner() {
     } catch (err) {
       logToOutput("System", `Failed to open file: ${err}`, "error");
       console.error("Failed to open file:", err);
-    };
+    }
   }, []);
+
+  useEffect(() => {
+    const handleOpenFileEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ filePath: string; line?: number }>;
+      if (customEvent.detail?.filePath) {
+        openFile(customEvent.detail.filePath, customEvent.detail.line);
+      }
+    };
+    window.addEventListener("atlas:open-file", handleOpenFileEvent);
+
+    const a = api();
+    if (a?.onEvent) {
+      a.onEvent((ev: any) => {
+        if (ev.type === "file_changed") {
+          window.dispatchEvent(new CustomEvent("atlas:file-changed", { detail: ev }));
+        }
+      });
+    }
+
+    return () => {
+      window.removeEventListener("atlas:open-file", handleOpenFileEvent);
+    };
+  }, [openFile]);
 
   const saveRecentProject = useCallback((path: string) => {
     setRecentProjects(prev => {
@@ -1023,7 +1079,7 @@ function AppInner() {
           )}
         </AnimatePresence>
 
-        <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} />
+        <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} onDoubleClick={() => setSidebarWidth(220)} title="Drag to resize sidebar, double-click to reset width" />
 
         <div style={{...s.center, flexDirection: settings.terminalPosition === "right" ? "row" : "column"}} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
@@ -1088,6 +1144,23 @@ function AppInner() {
                 title="Split Editor Right"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
+              </button>
+
+              {/* Live Web Preview Button */}
+              <button
+                className="hover-scale"
+                style={{
+                  background: activeSidebarView === "preview" ? "rgba(56, 189, 248, 0.2)" : "none",
+                  border: activeSidebarView === "preview" ? "1px solid rgba(56, 189, 248, 0.4)" : "none",
+                  color: activeSidebarView === "preview" ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
+                  cursor: "pointer", padding: "4px 8px", borderRadius: "4px", display: "flex", alignItems: "center", gap: "5px",
+                  fontSize: "11px", fontWeight: 600, fontFamily: "var(--font-mono)"
+                }}
+                onClick={() => setActiveSidebarView(activeSidebarView === "preview" ? "explorer" : "preview")}
+                title="Toggle Live Web App Preview"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <span>Preview</span>
               </button>
 
               {/* Navigate Back <- */}
@@ -1205,7 +1278,9 @@ function AppInner() {
               />
             )}
 
-            {showMergeConflict ? (
+            {activeSidebarView === "preview" ? (
+              <WebPreviewPanel onClose={() => setActiveSidebarView("explorer")} />
+            ) : showMergeConflict ? (
               <MergeConflictEditor filePath={activeTab?.filePath || "src/index.ts"} onComplete={()=>setShowMergeConflict(false)}/>
             ) : activeDiff ? (
               <DiffViewer filePath={activeDiff.filePath} diffText={activeDiff.diffText} onClose={()=>setActiveDiff(null)}/>

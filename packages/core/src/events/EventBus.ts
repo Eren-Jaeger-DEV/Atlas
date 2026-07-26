@@ -9,6 +9,8 @@ export type AtlasEventName =
   | "FileOpened"
   | "FileSaved"
   | "ActiveEditorChanged"
+  | "CursorMoved"
+  | "DiagnosticsUpdated"
   | "GitStatusChanged"
   | "TerminalCreated"
   | "ThemeChanged"
