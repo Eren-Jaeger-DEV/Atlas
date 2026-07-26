@@ -42,12 +42,6 @@ export function Breadcrumb({ filePath, repoPath, cursorSymbol, language, onForma
       </div>
 
       <div style={styles.rightGroup}>
-        {language && <span style={styles.langBadge}>{language}</span>}
-        {onFormat && (
-          <button className="hover-scale" style={styles.ctrlBtn} title="Format Document (Alt+Shift+F)" onClick={onFormat}>
-            Format
-          </button>
-        )}
         {onFind && (
           <button className="hover-scale" style={styles.ctrlBtn} title="Find & Replace (Ctrl+F)" onClick={onFind}>
             Find

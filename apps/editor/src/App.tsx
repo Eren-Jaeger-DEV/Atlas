@@ -157,6 +157,9 @@ function AppInner() {
   const [aiGoal, setAiGoal]           = useState("");
   const [aiRunning, setAiRunning]     = useState(false);
   const [aiEvents, setAiEvents]       = useState<string[]>([]);
+  const [showTabActionsMenu, setShowTabActionsMenu] = useState(false);
+  const [previewMode, setPreviewMode] = useState(true);
+  const [groupLocked, setGroupLocked] = useState(false);
   const [openMenu, setOpenMenu]       = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const activeTab = tabs[activeTabIndex];
@@ -1024,50 +1027,184 @@ function AppInner() {
         <div style={{...s.center, flexDirection: settings.terminalPosition === "right" ? "row" : "column"}} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
           <div style={s.tabBar}>
-            {tabs.map((tab,i)=>(
-              <div
-                key={tab.filePath}
-                className="editor-tab anim-slide-right"
-                style={{...s.tab,...(i===activeTabIndex&&!activeDiff?s.tabOn:{})}} 
-                onClick={()=>{setActiveDiff(null);setActiveTabIndex(i);}}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  showContextMenu({
-                    x: e.clientX,
-                    y: e.clientY,
-                    items: [
-                      { label: "Close", onClick: () => handleCloseTab(i, e) },
-                      { label: "Close Others", onClick: () => {
-                          setTabs([tab]);
-                          setActiveTabIndex(0);
-                      }},
-                      { label: "Close All", onClick: () => {
-                          setTabs([]);
-                          setActiveTabIndex(0);
-                      }},
-                      { separator: true },
-                      { label: "Copy Path", onClick: () => {
-                          navigator.clipboard.writeText(tab.filePath);
-                          showNotification({ message: "Path copied to clipboard", type: "success" });
-                      }}
-                    ]
-                  });
-                }}
-              >
-                <span style={s.tabName}>{tab.filePath.split(/[/\\]/).pop()}</span>
-                {tab.isDirty && <span style={s.tabDot} title="Unsaved changes">&#x25CF;</span>}
-                <span
-                  className="tab-close-btn"
-                  style={s.tabX}
-                  title="Close"
-                  onClick={e=>{ e.stopPropagation(); handleCloseTab(i,e); }}
+            <div style={{ display: "flex", flex: 1, overflowX: "auto", height: "100%", alignItems: "center" }}>
+              {tabs.map((tab,i)=>(
+                <div
+                  key={tab.filePath}
+                  className="editor-tab anim-slide-right"
+                  style={{...s.tab,...(i===activeTabIndex&&!activeDiff?s.tabOn:{})}} 
+                  onClick={()=>{setActiveDiff(null);setActiveTabIndex(i);}}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    showContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      items: [
+                        { label: "Close", onClick: () => handleCloseTab(i, e) },
+                        { label: "Close Others", onClick: () => {
+                            setTabs([tab]);
+                            setActiveTabIndex(0);
+                        }},
+                        { label: "Close All", onClick: () => {
+                            setTabs([]);
+                            setActiveTabIndex(0);
+                        }},
+                        { separator: true },
+                        { label: "Copy Path", onClick: () => {
+                            navigator.clipboard.writeText(tab.filePath);
+                            showNotification({ message: "Path copied to clipboard", type: "success" });
+                        }}
+                      ]
+                    });
+                  }}
                 >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
-                  </svg>
-                </span>
+                  <span style={s.tabName}>{tab.filePath.split(/[/\\]/).pop()}</span>
+                  {tab.isDirty && <span style={s.tabDot} title="Unsaved changes">&#x25CF;</span>}
+                  <span
+                    className="tab-close-btn"
+                    style={s.tabX}
+                    title="Close"
+                    onClick={e=>{ e.stopPropagation(); handleCloseTab(i,e); }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                    </svg>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Top Right Tab Controls matching Screenshot 2 & 3 */}
+            <div style={{ display: "flex", alignItems: "center", height: "100%", paddingRight: "8px", gap: "2px", flexShrink: 0, position: "relative" }}>
+              {/* Split Editor Button */}
+              <button
+                className="hover-scale"
+                style={{
+                  background: "none", border: "none", color: isSplit ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
+                  cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                }}
+                onClick={() => setIsSplit(!isSplit)}
+                title="Split Editor Right"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
+              </button>
+
+              {/* Navigate Back <- */}
+              <button
+                className="hover-scale"
+                style={{
+                  background: "none", border: "none", color: activeTabIndex > 0 ? "var(--text-muted, #a1a1aa)" : "var(--border-strong, #3f3f46)",
+                  cursor: activeTabIndex > 0 ? "pointer" : "default", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                }}
+                onClick={() => { if (activeTabIndex > 0) setActiveTabIndex(activeTabIndex - 1); }}
+                disabled={activeTabIndex <= 0}
+                title="Navigate to Previous Tab"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+
+              {/* Navigate Forward -> */}
+              <button
+                className="hover-scale"
+                style={{
+                  background: "none", border: "none", color: activeTabIndex < tabs.length - 1 ? "var(--text-muted, #a1a1aa)" : "var(--border-strong, #3f3f46)",
+                  cursor: activeTabIndex < tabs.length - 1 ? "pointer" : "default", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                }}
+                onClick={() => { if (activeTabIndex < tabs.length - 1) setActiveTabIndex(activeTabIndex + 1); }}
+                disabled={activeTabIndex >= tabs.length - 1}
+                title="Navigate to Next Tab"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+
+              {/* 3-Dot More Actions Button */}
+              <div style={{ position: "relative" }}>
+                <button
+                  className="hover-scale"
+                  style={{
+                    background: showTabActionsMenu ? "rgba(255,255,255,0.1)" : "none",
+                    border: "none", color: "var(--text-muted, #a1a1aa)", cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                  }}
+                  onClick={() => setShowTabActionsMenu(!showTabActionsMenu)}
+                  title="More Editor Actions..."
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                </button>
+
+                {/* Dropdown Menu matching Screenshot 3 */}
+                {showTabActionsMenu && (
+                  <div
+                    style={{
+                      position: "absolute", top: "32px", right: "0", zIndex: 10000,
+                      backgroundColor: "#0e0e12", border: "1px solid #27272a", borderRadius: "8px",
+                      padding: "4px", width: "210px", boxShadow: "0 8px 24px rgba(0,0,0,0.7)", fontFamily: "var(--font-ui)"
+                    }}
+                  >
+                    <div
+                      style={tabDropdownItemStyle}
+                      onClick={() => { setShowCommandPalette(true); setShowTabActionsMenu(false); }}
+                    >
+                      <span>Show Opened Editors</span>
+                    </div>
+
+                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
+
+                    <div
+                      style={tabDropdownItemStyle}
+                      onClick={() => { setTabs([]); setActiveTabIndex(0); setShowTabActionsMenu(false); }}
+                    >
+                      <span>Close All</span>
+                      <span style={{ fontSize: "10px", color: "#71717a" }}>Ctrl+K W</span>
+                    </div>
+
+                    <div
+                      style={tabDropdownItemStyle}
+                      onClick={() => {
+                        setTabs(prev => prev.filter(t => t.isDirty));
+                        setActiveTabIndex(0);
+                        setShowTabActionsMenu(false);
+                      }}
+                    >
+                      <span>Close Saved</span>
+                      <span style={{ fontSize: "10px", color: "#71717a" }}>Ctrl+K U</span>
+                    </div>
+
+                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
+
+                    <div
+                      style={tabDropdownItemStyle}
+                      onClick={() => { setPreviewMode(!previewMode); setShowTabActionsMenu(false); }}
+                    >
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {previewMode ? <span style={{ color: "#38bdf8", fontWeight: "bold" }}>✓</span> : <span style={{ width: "12px" }} />}
+                        <span>Enable Preview Editors</span>
+                      </span>
+                    </div>
+
+                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
+
+                    <div
+                      style={tabDropdownItemStyle}
+                      onClick={() => { setGroupLocked(!groupLocked); setShowTabActionsMenu(false); }}
+                    >
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {groupLocked ? <span style={{ color: "#38bdf8", fontWeight: "bold" }}>✓</span> : <span style={{ width: "12px" }} />}
+                        <span>Lock Group</span>
+                      </span>
+                    </div>
+
+                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
+
+                    <div
+                      style={tabDropdownItemStyle}
+                      onClick={() => { api()?.openSettingsWindow?.(); setShowTabActionsMenu(false); }}
+                    >
+                      <span>Configure Editors</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
+            </div>
           </div>
 
           {activeTab && (
@@ -1075,8 +1212,6 @@ function AppInner() {
               filePath={activeTab.filePath}
               repoPath={repoPath}
               cursorSymbol={cursorSymbol}
-              language={activeTab.language}
-              onFormat={() => activeEditorRef.current?.getAction?.("editor.action.formatDocument")?.run()}
               onFind={() => activeEditorRef.current?.getAction?.("actions.find")?.run()}
             />
           )}
@@ -1354,6 +1489,18 @@ export function App() {
     </QuickInputProvider>
   );
 }
+
+const tabDropdownItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "6px 10px",
+  fontSize: "12px",
+  color: "#fafafa",
+  borderRadius: "4px",
+  cursor: "pointer",
+  transition: "background 0.1s ease",
+};
 
 const s: Record<string,React.CSSProperties> = {
   /* ---- Root Shell ---- */
