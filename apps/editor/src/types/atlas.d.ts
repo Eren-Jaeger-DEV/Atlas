@@ -24,7 +24,8 @@ export interface AtlasAPI {
   moveFile: (srcPath: string, destPath: string) => Promise<void>;
   getSnippets: () => Promise<Record<string, any>>;
 
-  terminalCreate: (termId: string, cwd?: string) => Promise<void>;
+  terminalCreate: (termId: string, cwd?: string) => Promise<{ success: boolean; existed?: boolean; pid?: number; process?: string; cwd?: string }>;
+  terminalGetInfo: (termId: string) => Promise<{ pid?: number; process?: string; cwd?: string } | null>;
   terminalGetHistory: (termId: string) => Promise<string>;
   terminalInput: (termId: string, data: string) => Promise<void>;
   terminalResize: (termId: string, cols: number, rows: number) => Promise<void>;
@@ -52,6 +53,7 @@ export interface AtlasAPI {
   run: (input: string | any[], context?: any) => Promise<any>;
   getRuns: () => Promise<any[]>;
   onEvent: (handler: (event: OrchestratorEvent) => void) => () => void;
+  emitEvent: (eventName: string, payload: any) => Promise<void>;
 
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
@@ -65,6 +67,7 @@ export interface AtlasAPI {
   scanTodos: (repoPath: string) => Promise<{ total: number }>;
   listExtensions: () => Promise<any[]>;
   installExtension: (sourcePath: string) => Promise<boolean>;
+  installMarketplaceExtension: (manifest: any) => Promise<boolean>;
   executeExtensionCommand: (id: string, ...args: any[]) => Promise<any>;
   onExtensionRegisteredCommand: (handler: (payload: { id: string, label: string }) => void) => () => void;
   generateSbom: () => Promise<Record<string, unknown>>;

@@ -75,6 +75,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   terminalCreate: (termId: string, cwd?: string) =>
     ipcRenderer.invoke("atlas:terminal-create", termId, cwd),
 
+  terminalGetInfo: (termId: string) =>
+    ipcRenderer.invoke("atlas:terminal-get-info", termId),
+
   terminalGetHistory: (termId: string): Promise<string> =>
     ipcRenderer.invoke("atlas:terminal-get-history", termId),
 
@@ -155,6 +158,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     ipcRenderer.on("atlas:event", (_ipcEvent, event) => handler(event));
     return () => ipcRenderer.removeAllListeners("atlas:event");
   },
+  
+  emitEvent: (eventName: string, payload: any): Promise<void> =>
+    ipcRenderer.invoke("atlas:emit-event", eventName, payload),
 
   // Window controls
   windowMinimize:    () => ipcRenderer.invoke("window:minimize"),
@@ -202,6 +208,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
 
   installExtension: (sourcePath: string): Promise<boolean> =>
     ipcRenderer.invoke("atlas:extension-install", sourcePath),
+
+  installMarketplaceExtension: (manifest: any): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:extension-install-marketplace", manifest),
 
   executeExtensionCommand: (id: string, ...args: any[]): Promise<any> =>
     ipcRenderer.invoke("atlas:extension-execute-command", id, ...args),

@@ -28,6 +28,10 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
   const termMapRef = useRef<Map<string, { term: Terminal; fit: FitAddon }>>(new Map());
   const unsubMapRef = useRef<Map<string, () => void>>(new Map());
 
+  const [hoveredTabId, setHoveredTabId] = useState<string | null>(null);
+  const [hoverInfo, setHoverInfo] = useState<{ pid?: number; process?: string; cwd?: string } | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ top: number; right: number } | null>(null);
+
   const handleAddTab = () => {
     const newId = `term-${Date.now()}`;
     const newTab: TermTab = {
@@ -231,6 +235,21 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
                 ...(isActive ? styles.sessionItemActive : {})
               }}
               onClick={() => setActiveTabId(t.id)}
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setHoveredTabId(t.id);
+                setHoverPos({ top: rect.top, right: window.innerWidth - rect.left + 12 });
+                if (window.atlasAPI?.terminalGetInfo) {
+                  window.atlasAPI.terminalGetInfo(t.id).then(info => {
+                    if (info) setHoverInfo(info);
+                  });
+                }
+              }}
+              onMouseLeave={() => {
+                setHoveredTabId(null);
+                setHoverInfo(null);
+                setHoverPos(null);
+              }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
                 <div style={{
@@ -258,6 +277,44 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
           );
         })}
       </div>
+
+      {/* Hover Tooltip Card matching Antigravity Screenshot 100% */}
+      {hoveredTabId && hoverPos && (
+        <div
+          style={{
+            position: "fixed",
+            top: Math.max(10, hoverPos.top - 20),
+            right: hoverPos.right,
+            width: "380px",
+            backgroundColor: "#0d0e15",
+            border: "1px solid #27272a",
+            borderRadius: "6px",
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.7)",
+            padding: "10px 14px",
+            zIndex: 99999,
+            pointerEvents: "none",
+            fontFamily: "var(--font-mono, monospace)",
+          }}
+        >
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "#f4f4f5", marginBottom: "6px" }}>
+            {tabs.find(t => t.id === hoveredTabId)?.shell || "bash"}
+          </div>
+          <div style={{ height: "1px", backgroundColor: "#27272a", marginBottom: "8px" }} />
+          <div style={{ fontSize: "11px", color: "#a1a1aa", marginBottom: "6px" }}>
+            Process ID (PID): <span style={{ color: "#ffffff", fontWeight: 600 }}>{hoverInfo?.pid ? hoverInfo.pid : "Loading..."}</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "#a1a1aa", marginBottom: "6px", wordBreak: "break-all" }}>
+            Command line: <span style={{ color: "#e4e4e7" }}>{hoverInfo?.process ? hoverInfo.process : (isWin ? "cmd.exe" : "/usr/bin/bash")}</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "#a1a1aa", marginBottom: "8px" }}>
+            Shell integration: <span style={{ color: "#4ade80", fontWeight: 600 }}>Rich</span>
+          </div>
+          <div style={{ display: "flex", gap: "14px", fontSize: "10px", color: "#38bdf8", cursor: "pointer", paddingTop: "2px" }}>
+            <span style={{ textDecoration: "underline" }}>Show Environment Contributions</span>
+            <span style={{ textDecoration: "underline" }}>Show Details</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

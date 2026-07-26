@@ -1316,9 +1316,11 @@ const terminalProcesses = new Map<string, pty.IPty>();
 const terminalHistories = new Map<string, string[]>();
 
 ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: string) => {
-  if (terminalProcesses.has(termId)) return { success: true, existed: true };
-
   const targetCwd = cwd || global.__atlasRepoRoot || process.cwd();
+  if (terminalProcesses.has(termId)) {
+    const existing = terminalProcesses.get(termId);
+    return { success: true, existed: true, pid: existing?.pid, process: (existing as any)?.file || "bash", cwd: targetCwd };
+  }
 
   const settings = await getMergedSettings() as any;
   const isWin = process.platform === "win32";
@@ -1360,7 +1362,17 @@ ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: stri
     terminalHistories.delete(termId);
   });
 
-  return { success: true };
+  return { success: true, pid: proc.pid, process: shell, cwd: targetCwd };
+});
+
+ipcMain.handle("atlas:terminal-get-info", async (_event, termId: string) => {
+  const proc = terminalProcesses.get(termId);
+  if (!proc) return null;
+  return {
+    pid: proc.pid,
+    process: (proc as any).file || "bash",
+    cwd: (proc as any)._cwd || global.__atlasRepoRoot || process.cwd(),
+  };
 });
 
 ipcMain.handle("atlas:terminal-get-history", async (_event, termId: string) => {
