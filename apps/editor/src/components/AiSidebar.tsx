@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { ComposerDiff } from "./ComposerDiff.js";
 import { SynapseDashboard } from "./SynapseDashboard.js";
 import { logToOutput } from "./OutputPanel.js";
+import { RichComposer } from "./RichComposer.js";
+import { MermaidDiagramViewer } from "./MermaidDiagramViewer.js";
 
 interface AiSidebarProps {
   repoPath?: string;
@@ -164,7 +166,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             setShowKeySetup(true);
           }
         } else {
-          const replyText = result.plan?.planningReasoning || streamingTokenText || "Task completed successfully. Diff ready for review.";
+          const replyText = result.plan?.planningReasoning || streamingTokenText || (result.coderOutputs && result.coderOutputs.length > 0 ? `Completed changes in ${result.coderOutputs.length} step(s).` : "Response completed with no text output.");
           setMessages((prev) => [...prev, { role: "agent", text: replyText }]);
           setAwaitingHuman(null);
           
@@ -256,11 +258,15 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             <div style={{color: "#52525b", fontSize: "12px"}}>No past chats available yet.</div>
           </div>
         ) : (
-          messages.map((msg, i) => (
-            <div key={i} className="anim-slide-up" style={msg.role === "user" ? styles.userBubble : styles.agentBubble}>
-              <p style={styles.bubbleText}>{msg.text}</p>
-            </div>
-          ))
+          messages.map((msg, i) => {
+            const mermaidMatch = msg.text.match(/```mermaid([\s\S]*?)```/);
+            return (
+              <div key={i} className="anim-slide-up" style={msg.role === "user" ? styles.userBubble : styles.agentBubble}>
+                <p style={styles.bubbleText}>{msg.text.replace(/```mermaid[\s\S]*?```/, "").trim()}</p>
+                {mermaidMatch && <MermaidDiagramViewer code={mermaidMatch[1]!} />}
+              </div>
+            );
+          })
         )}
         {activeRuns.size > 0 && (
           <div style={styles.agentBubble}>
@@ -330,17 +336,12 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
             <button className="sidebar-action-btn" style={styles.addContextBtn} title="Add context, media, or files">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
-            <textarea
-              style={styles.textarea}
-              placeholder="Ask anything, @ to mention, / for actions"
+            <RichComposer
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
+              onChange={(val) => setPrompt(val)}
+              onSubmit={handleSend}
+              openTabs={openTabs}
+              disabled={activeRuns.size > 0}
             />
           </div>
           <div style={styles.inputBottom}>

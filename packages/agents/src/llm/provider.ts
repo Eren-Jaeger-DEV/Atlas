@@ -30,7 +30,7 @@ export const ROUTING_RUN_MODELS = [
 ] as const;
 
 export const ROUTING_RUN_BASE_URL = "https://api.routing.run/v1";
-export const ROUTING_RUN_DEFAULT_MODEL: string = "claude-sonnet-4-6";
+export const ROUTING_RUN_DEFAULT_MODEL: string = "kimi-k2.6";
 
 export function createProvider(config: LLMProviderConfig): ILLMProvider {
   switch (config.provider) {

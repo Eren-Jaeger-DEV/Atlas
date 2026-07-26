@@ -1687,9 +1687,10 @@ ipcMain.handle("atlas:test-provider-connection", async (event, providerName: str
       provider: providerName,
       apiKey: finalKey
     };
-    // routing.run: always inject its base URL for the test
+    // routing.run: always inject its base URL and a verified test model for the test
     if (providerName === "routing.run") {
       config.baseUrl = "https://api.routing.run/v1";
+      config.model = "kimi-k2.6";
     } else if (baseUrl) {
       config.baseUrl = baseUrl;
     }
