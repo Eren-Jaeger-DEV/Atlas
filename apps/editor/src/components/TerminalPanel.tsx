@@ -126,7 +126,7 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
             unsubMapRef.current.set(tab.id, unsub);
           }
 
-          api.terminalCreate(tab.id, repoPath).then(() => {
+          api.terminalCreate(tab.id, repoPath).then((res: any) => {
             term.onData((data: string) => api.terminalInput(tab.id, data));
             setTimeout(() => {
               try {
@@ -135,12 +135,13 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
                   api.terminalResize(tab.id, term.cols, term.rows);
                 }
               } catch {}
+            }, 50);
+
+            if (res?.existed) {
               api.terminalGetHistory(tab.id).then((hist: string) => {
-                if (hist) {
-                  term.write(hist);
-                }
+                if (hist) term.write(hist);
               });
-            }, 100);
+            }
           });
 
           // Copy text automatically when selected

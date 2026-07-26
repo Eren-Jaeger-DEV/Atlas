@@ -1316,7 +1316,7 @@ const terminalProcesses = new Map<string, pty.IPty>();
 const terminalHistories = new Map<string, string[]>();
 
 ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: string) => {
-  if (terminalProcesses.has(termId)) return { success: true };
+  if (terminalProcesses.has(termId)) return { success: true, existed: true };
 
   const targetCwd = cwd || global.__atlasRepoRoot || process.cwd();
 
