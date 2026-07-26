@@ -5,7 +5,7 @@
   "description": "Atlas Studio — AI-native code editor with a zero-AI editor core",
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "pnpm --filter @atlas/editor dev",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
     "lint": "turbo run lint",

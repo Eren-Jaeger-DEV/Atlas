@@ -174,6 +174,11 @@ function createWindow(): void {
 
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
     console.error(`[DID FAIL LOAD] ${errorCode}: ${errorDescription}`);
+    if (isDev && (errorCode === -102 || errorCode === -105 || errorCode === -106)) {
+      setTimeout(() => {
+        mainWindow?.loadURL("http://localhost:5173");
+      }, 1000);
+    }
   });
 
   // Open external links in browser
