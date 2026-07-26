@@ -374,8 +374,8 @@ async function createProvider(repoRoot: string) {
   return new ProviderRouter(config);
 }
 
-function getProjectRoot(): string | undefined {
-  return global.__atlasRepoRoot;
+function getProjectRoot(): string {
+  return global.__atlasRepoRoot || (global.__atlasWorkspaceRoots && global.__atlasWorkspaceRoots.length > 0 ? global.__atlasWorkspaceRoots[0] : process.cwd());
 }
 
 // ---------------------------------------------------------------------------
@@ -1620,7 +1620,10 @@ ipcMain.handle("atlas:add-repo", async (_event, repoPath: string) => {
 
 // Agent run — delegates to agent runtime subprocess
 ipcMain.handle("atlas:run", async (event, input: string | any[], context?: any) => {
-  const repoRoot = getProjectRoot() || app.getPath("userData");
+  const repoRoot = context?.repoPath || getProjectRoot() || process.cwd();
+  if (context?.repoPath && !global.__atlasRepoRoot) {
+    global.__atlasRepoRoot = context.repoPath;
+  }
 
   try {
     const provider = await createProvider(repoRoot);
@@ -1741,8 +1744,7 @@ let globalWorkerPool: any = null;
 let lastParallelPlan: any = null;
 
 ipcMain.handle("atlas:parallel-spawn", async (event, payload: { goal: string; repoPath: string }) => {
-  const repoRoot = payload.repoPath || getProjectRoot();
-  if (!repoRoot) return { error: "No active workspace" };
+  const repoRoot = payload.repoPath || getProjectRoot() || process.cwd();
 
   try {
     const provider = await createProvider(repoRoot);

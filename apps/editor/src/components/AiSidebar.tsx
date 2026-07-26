@@ -205,6 +205,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
         } catch (e) {}
 
         const context = {
+          repoPath,
           activeFilePath,
           activeContent,
           openTabs,
