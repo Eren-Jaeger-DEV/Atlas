@@ -61,7 +61,7 @@ interface EditorTab {
 type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
-interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; }
+interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; checked?: boolean; submenu?: MenuItem[]; }
 
 function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
   return (
@@ -141,7 +141,10 @@ function AppInner() {
   const [showMergeConflict, setShowMergeConflict]   = useState(false);
   const [showAiSafety, setShowAiSafety]             = useState(false);
   const [aiSafetyData, setAiSafetyData]             = useState<any>(null);
-  
+   const [autoSaveEnabled, setAutoSaveEnabled]       = useState<boolean>(() => localStorage.getItem("atlas_auto_save") === "true");
+  const [submenuOpen, setSubmenuOpen]               = useState<number | null>(null);
+  const untitledCounterRef                           = useRef(1);
+
   // Plan Approval state
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ reqId: string, plan: any } | null>(null);
   const [showInlineAi, setShowInlineAi]             = useState(false);
@@ -159,6 +162,21 @@ function AppInner() {
 
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
   const [tabs, setTabs]               = useState<EditorTab[]>([]);
+
+  useEffect(() => {
+    localStorage.setItem("atlas_auto_save", String(autoSaveEnabled));
+    if (!autoSaveEnabled) return;
+    const timer = setInterval(() => {
+      tabs.forEach(tab => {
+        if (tab.isDirty && tab.filePath && !tab.filePath.startsWith("Untitled")) {
+          api()?.writeFile(tab.filePath, tab.content).then(() => {
+            setTabs(prev => prev.map(t => t.filePath === tab.filePath ? { ...t, isDirty: false } : t));
+          }).catch(() => {});
+        }
+      });
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [autoSaveEnabled, tabs]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [activeDiff, setActiveDiff]   = useState<{ filePath: string; diffText: string } | null>(null);
   const [cursorSymbol, setCursorSymbol] = useState<string | undefined>();
@@ -378,9 +396,9 @@ function AppInner() {
     storageProvider.setItem("atlas_last_repo", path);
   }, []);
 
-  const handleSelectRepo = useCallback(async () => {
+  const handleSelectRepo = useCallback(async (customPath?: string) => {
     const a = api(); if (!a?.selectDirectory) return;
-    const sel = await a.selectDirectory();
+    const sel = customPath || (await a.selectDirectory());
     if (sel) {
       setRepoPath(sel);
       setWorkspaceRoots([sel]);
@@ -684,16 +702,236 @@ function AppInner() {
 
   const menus: Record<string, MenuItem[]> = {
     File: [
-      { label:"New File",              shortcut:"Ctrl+N",       action:()=>{} },
-      { label:"Open Workspace Folder", shortcut:"Ctrl+O",       action:handleSelectRepo },
-      { label:"Add Folder to Workspace...",                     action:handleAddFolder },
-      { label:"separator", separator:true },
-      { label:"Save",                  shortcut:"Ctrl+S",       action:handleSave },
-      { label:"Save All",              shortcut:"Ctrl+Shift+S", action:handleSave },
-      { label:"separator2", separator:true },
-      { label:"Close Editor",          shortcut:"Ctrl+W",       action:()=>{ if(tabs.length>0) setTabs(p=>p.filter((_,i)=>i!==activeTabIndex)); } },
-      { label:"separator3", separator:true },
-      { label:"Exit",                  shortcut:"Alt+F4",       action:()=>api()?.windowClose() },
+      {
+        label: "New Text File",
+        shortcut: "Ctrl+N",
+        action: () => {
+          const untitledName = `Untitled-${untitledCounterRef.current++}.ts`;
+          setTabs(prev => [...prev, { filePath: untitledName, content: "// New File\n", isDirty: true, isBinary: false, language: "typescript" }]);
+          setActiveTabIndex(tabs.length);
+        }
+      },
+      {
+        label: "New File...",
+        shortcut: "Ctrl+Alt+Super+N",
+        action: () => {
+          const fileName = prompt("Enter new file path (relative to workspace):", "src/newFile.ts");
+          if (fileName) {
+            handleOpenFile(fileName);
+          }
+        }
+      },
+      {
+        label: "New Window",
+        shortcut: "Ctrl+Shift+N",
+        action: () => api()?.newWindow?.()
+      },
+      {
+        label: "New Window with Profile",
+        submenu: [
+          { label: "Default Profile", action: () => api()?.newWindow?.({ profile: "default" }) },
+          { label: "Web Development (React / TS)", action: () => api()?.newWindow?.({ profile: "webdev" }) },
+          { label: "Python AI & Data Science", action: () => api()?.newWindow?.({ profile: "python" }) },
+          { label: "Baremetal C / C++", action: () => api()?.newWindow?.({ profile: "cpp" }) },
+        ]
+      },
+      { label: "sep1", separator: true },
+      {
+        label: "Open File...",
+        shortcut: "Ctrl+O",
+        action: async () => {
+          const path = await api()?.openFileDialog?.();
+          if (path) handleOpenFile(path);
+        }
+      },
+      {
+        label: "Open Folder...",
+        shortcut: "Ctrl+K Ctrl+O",
+        action: handleSelectRepo
+      },
+      {
+        label: "Open Workspace from File...",
+        action: async () => {
+          const wsPath = await api()?.openWorkspaceFileDialog?.();
+          if (wsPath) {
+            try {
+              const content = await api()?.readFile(wsPath);
+              const data = JSON.parse(content || "{}");
+              if (data.folders && Array.isArray(data.folders)) {
+                const paths = data.folders.map((f: any) => f.path);
+                setWorkspaceRoots(paths);
+                if (paths[0]) handleSelectRepo(paths[0]);
+              }
+            } catch (e) {
+              showNotification({ message: "Failed to parse workspace file", type: "error" });
+            }
+          }
+        }
+      },
+      {
+        label: "Open Recent",
+        submenu: [
+          ...recentProjects.map(p => ({
+            label: p.split(/[/\\]/).pop() || p,
+            shortcut: p.length > 25 ? "..." + p.slice(-20) : p,
+            action: () => handleSelectRepo(p)
+          })),
+          { label: "sepRecent", separator: true },
+          {
+            label: "Clear Recent",
+            action: () => {
+              setRecentProjects([]);
+              localStorage.removeItem("atlas_recent_projects");
+              showNotification({ message: "Cleared recent workspace history", type: "info" });
+            }
+          }
+        ]
+      },
+      { label: "sep2", separator: true },
+      {
+        label: "Add Folder to Workspace...",
+        action: handleAddFolder
+      },
+      {
+        label: "Save Workspace As...",
+        action: async () => {
+          const target = await api()?.saveWorkspaceAsDialog?.(repoPath ? `${repoPath}/workspace.atlas-workspace` : undefined);
+          if (target) {
+            const data = {
+              folders: workspaceRoots.map(r => ({ path: r })),
+              settings: {}
+            };
+            await api()?.writeFile(target, JSON.stringify(data, null, 2));
+            showNotification({ message: `Workspace saved to ${target}`, type: "success" });
+          }
+        }
+      },
+      {
+        label: "Duplicate Workspace",
+        action: () => {
+          if (repoPath) api()?.newWindow?.();
+        }
+      },
+      { label: "sep3", separator: true },
+      {
+        label: "Save",
+        shortcut: "Ctrl+S",
+        action: handleSave
+      },
+      {
+        label: "Save As...",
+        shortcut: "Ctrl+Shift+S",
+        action: async () => {
+          if (!activeTab) return;
+          const target = await api()?.saveFileAsDialog?.(activeTab.filePath);
+          if (target) {
+            await api()?.writeFile(target, activeTab.content);
+            handleOpenFile(target);
+            showNotification({ message: `Saved as ${target}`, type: "success" });
+          }
+        }
+      },
+      {
+        label: "Save All",
+        shortcut: "Ctrl+Alt+S",
+        action: () => {
+          tabs.forEach(tab => {
+            if (tab.isDirty && tab.filePath) {
+              api()?.writeFile(tab.filePath, tab.content);
+            }
+          });
+          setTabs(prev => prev.map(t => ({ ...t, isDirty: false })));
+          showNotification({ message: "All dirty files saved", type: "success" });
+        }
+      },
+      { label: "sep4", separator: true },
+      {
+        label: "Share",
+        submenu: [
+          {
+            label: "Export Code Snippet (Gist / Markdown)",
+            action: () => {
+              if (activeTab) {
+                const markdown = `\`\`\`${activeTab.filePath.split('.').pop() || ''}\n// ${activeTab.filePath}\n${activeTab.content}\n\`\`\``;
+                navigator.clipboard.writeText(markdown);
+                showNotification({ message: "Copied code snippet markdown to clipboard!", type: "success" });
+              }
+            }
+          },
+          {
+            label: "Export Trajectory Replay Log",
+            action: () => {
+              showNotification({ message: "Trajectory Replay exported to .atlas/brain/trajectory.json", type: "info" });
+            }
+          }
+        ]
+      },
+      { label: "sep5", separator: true },
+      {
+        label: "Auto Save",
+        checked: autoSaveEnabled,
+        action: () => setAutoSaveEnabled(prev => !prev)
+      },
+      {
+        label: "Preferences",
+        submenu: [
+          { label: "Editor Settings", action: handleOpenSettings },
+          { label: "Atlas IDE Settings", shortcut: "Ctrl+,", action: handleOpenSettings },
+          { label: "Keyboard Shortcuts", shortcut: "Ctrl+K Ctrl+S", action: () => setShowKeybindings(true) },
+          { label: "Tasks", action: () => { setShowBottomPanel(true); setBottomTab("terminal"); } },
+          {
+            label: "Themes",
+            submenu: [
+              { label: "Color Theme", shortcut: "Ctrl+K Ctrl+T", action: () => setShowThemeSelector(true) },
+              { label: "File Icon Theme", action: () => showNotification({ message: "Default Atlas File Icons active", type: "info" }) },
+              { label: "Product Icon Theme", action: () => showNotification({ message: "Atlas Product Icons active", type: "info" }) }
+            ]
+          },
+          { label: "Extensions", shortcut: "Ctrl+Shift+X", action: () => setActiveSidebar("extensions") },
+        ]
+      },
+      { label: "sep6", separator: true },
+      {
+        label: "Revert File",
+        action: async () => {
+          if (!activeTab || !activeTab.filePath) return;
+          try {
+            const freshContent = await api()?.readFile(activeTab.filePath);
+            if (freshContent !== undefined) {
+              setTabs(prev => prev.map((t, idx) => idx === activeTabIndex ? { ...t, content: freshContent, isDirty: false } : t));
+              showNotification({ message: "File reverted to disk version", type: "info" });
+            }
+          } catch (e) {}
+        }
+      },
+      {
+        label: "Close Editor",
+        shortcut: "Ctrl+W",
+        action: () => {
+          if (tabs.length > 0) setTabs(prev => prev.filter((_, i) => i !== activeTabIndex));
+        }
+      },
+      {
+        label: "Close Folder",
+        shortcut: "Ctrl+K F",
+        action: () => {
+          setWorkspaceRoots([]);
+          setRepoPath(undefined);
+          setTabs([]);
+          showNotification({ message: "Workspace closed", type: "info" });
+        }
+      },
+      {
+        label: "Close Window",
+        shortcut: "Alt+F4",
+        action: () => api()?.windowClose?.()
+      },
+      { label: "sep7", separator: true },
+      {
+        label: "Exit",
+        shortcut: "Ctrl+Q",
+        action: () => api()?.windowClose?.()
+      }
     ],
     Edit: [
       { label:"Undo",       shortcut:"Ctrl+Z",       action:()=>document.execCommand("undo") },
@@ -892,16 +1130,80 @@ function AppInner() {
                   {menus[name]!.map((item, i) => (
                     item.separator
                       ? <div key={i} style={s.dropSep} />
-                      : <button
+                      : <div
                           key={i}
-                          className="drop-item"
-                          style={{ ...s.dropItem, ...(item.disabled ? s.dropDisabled : {}) }}
-                          disabled={item.disabled}
-                          onClick={() => { item.action?.(); setOpenMenu(null); }}
+                          style={{ position: "relative" }}
+                          onMouseEnter={() => setSubmenuOpen(item.submenu ? i : null)}
                         >
-                          <span>{item.label}</span>
-                          {item.shortcut && <span style={s.dropShortcut}>{item.shortcut}</span>}
-                        </button>
+                          <button
+                            className="drop-item"
+                            style={{ ...s.dropItem, ...(item.disabled ? s.dropDisabled : {}), display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}
+                            disabled={item.disabled}
+                            onClick={() => {
+                              if (!item.submenu) {
+                                item.action?.();
+                                setOpenMenu(null);
+                                setSubmenuOpen(null);
+                              }
+                            }}
+                          >
+                            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              {item.checked !== undefined ? (
+                                <span style={{ width: "12px", display: "inline-block", color: "#38bdf8", fontWeight: "bold", fontSize: "11px" }}>
+                                  {item.checked ? "✓" : ""}
+                                </span>
+                              ) : null}
+                              <span>{item.label}</span>
+                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              {item.shortcut && <span style={s.dropShortcut}>{item.shortcut}</span>}
+                              {item.submenu && <span style={{ opacity: 0.6, fontSize: "9px" }}>▶</span>}
+                            </div>
+                          </button>
+
+                          {/* Nested Submenu Dropdown */}
+                          {item.submenu && submenuOpen === i && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                left: "100%",
+                                top: "0",
+                                marginTop: "-4px",
+                                marginLeft: "2px",
+                                backgroundColor: "var(--bg-glass-strong, rgba(14, 14, 18, 0.98))",
+                                backdropFilter: "blur(20px)",
+                                border: "1px solid var(--border-strong, #27272a)",
+                                borderRadius: "6px",
+                                boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+                                padding: "4px",
+                                minWidth: "190px",
+                                zIndex: 100000
+                              }}
+                              onMouseLeave={() => setSubmenuOpen(null)}
+                            >
+                              {item.submenu.map((sub, j) => (
+                                sub.separator ? (
+                                  <div key={j} style={s.dropSep} />
+                                ) : (
+                                  <button
+                                    key={j}
+                                    className="drop-item"
+                                    style={{ ...s.dropItem, ...(sub.disabled ? s.dropDisabled : {}), display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}
+                                    disabled={sub.disabled}
+                                    onClick={() => {
+                                      sub.action?.();
+                                      setSubmenuOpen(null);
+                                      setOpenMenu(null);
+                                    }}
+                                  >
+                                    <span>{sub.label}</span>
+                                    {sub.shortcut && <span style={s.dropShortcut}>{sub.shortcut}</span>}
+                                  </button>
+                                )
+                              ))}
+                            </div>
+                          )}
+                        </div>
                   ))}
                 </div>
               )}
@@ -1352,7 +1654,7 @@ function AppInner() {
                   <div style={s.welcomeRow}>
                     <button 
                       style={s.wBtnLink} 
-                      onClick={handleSelectRepo} 
+                      onClick={() => handleSelectRepo()} 
                       onMouseOver={(e)=>e.currentTarget.style.textDecoration="underline"}
                       onMouseOut={(e)=>e.currentTarget.style.textDecoration="none"}
                     >

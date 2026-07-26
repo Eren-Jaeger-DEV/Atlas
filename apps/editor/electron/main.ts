@@ -457,6 +457,53 @@ ipcMain.handle("atlas:add-directory", async () => {
   return selectedPath;
 });
 
+ipcMain.handle("atlas:new-window", async () => {
+  createWindow();
+  return { success: true };
+});
+
+ipcMain.handle("atlas:open-file-dialog", async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile"],
+    title: "Open File"
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0]!.replace(/\\/g, "/");
+});
+
+ipcMain.handle("atlas:save-file-as-dialog", async (_event, defaultPath?: string) => {
+  if (!mainWindow) return null;
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Save File As",
+    defaultPath: defaultPath || "Untitled"
+  });
+  if (result.canceled || !result.filePath) return null;
+  return result.filePath.replace(/\\/g, "/");
+});
+
+ipcMain.handle("atlas:save-workspace-as-dialog", async (_event, defaultPath?: string) => {
+  if (!mainWindow) return null;
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: "Save Workspace As...",
+    defaultPath: defaultPath || "workspace.atlas-workspace",
+    filters: [{ name: "Atlas Workspace", extensions: ["atlas-workspace", "code-workspace", "json"] }]
+  });
+  if (result.canceled || !result.filePath) return null;
+  return result.filePath.replace(/\\/g, "/");
+});
+
+ipcMain.handle("atlas:open-workspace-file-dialog", async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile"],
+    title: "Open Workspace from File...",
+    filters: [{ name: "Workspace Files", extensions: ["atlas-workspace", "code-workspace", "json"] }]
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0]!.replace(/\\/g, "/");
+});
+
 // Permission Engine
 let permissionEngineInstance: any = null;
 async function getPermissionEngine() {

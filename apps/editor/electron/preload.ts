@@ -49,6 +49,21 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   addRepo: (repoPath: string): Promise<any> =>
     ipcRenderer.invoke("atlas:add-repo", repoPath),
 
+  newWindow: (options?: { profile?: string }): Promise<any> =>
+    ipcRenderer.invoke("atlas:new-window", options),
+
+  openFileDialog: (): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:open-file-dialog"),
+
+  saveFileAsDialog: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:save-file-as-dialog", defaultPath),
+
+  saveWorkspaceAsDialog: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:save-workspace-as-dialog", defaultPath),
+
+  openWorkspaceFileDialog: (): Promise<string | null> =>
+    ipcRenderer.invoke("atlas:open-workspace-file-dialog"),
+
   // File Operations
   onFileChanged: (handler: (payload: { path: string; event: string }) => void) => {
     const listener = (_ipcEvent: any, payload: { path: string; event: string }) => handler(payload);

@@ -13,6 +13,11 @@ export interface AtlasAPI {
   selectDirectory: () => Promise<string | null>;
   addDirectory: () => Promise<string | null>;
   addRepo: (repoPath: string) => Promise<any>;
+  newWindow: (options?: { profile?: string }) => Promise<any>;
+  openFileDialog: () => Promise<string | null>;
+  saveFileAsDialog: (defaultPath?: string) => Promise<string | null>;
+  saveWorkspaceAsDialog: (defaultPath?: string) => Promise<string | null>;
+  openWorkspaceFileDialog: () => Promise<string | null>;
 
   onFileChanged: (handler: (payload: { path: string; event: string }) => void) => () => void;
   readDir: (dirPath: string) => Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
