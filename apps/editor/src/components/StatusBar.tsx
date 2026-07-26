@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface StatusBarProps {
   repoPath?: string;
@@ -8,6 +9,8 @@ interface StatusBarProps {
   cursorCol?: number;
   lsStatus?: "loading" | "ready" | "error";
   healthScore?: number | null;
+  selectedModel?: string;
+  onChangeModel?: (model: string) => void;
   onChangeLanguage?: (lang: string) => void;
   onChangeIndentation?: (spaces: number, useTab: boolean) => void;
   onChangeEol?: (eol: "LF" | "CRLF") => void;
@@ -17,7 +20,6 @@ interface StatusBarProps {
   eol?: "LF" | "CRLF";
 }
 
-// ---- Picker popup -----
 interface PickerProps {
   items: string[];
   onSelect: (val: string) => void;
@@ -42,25 +44,28 @@ function Picker({ items, onSelect, onClose, title, anchor }: PickerProps) {
     if (e.key === "Escape") { e.preventDefault(); onClose(); }
   };
 
-  const top = Math.min(anchor.y, window.innerHeight - (Math.min(filtered.length, 8) * 28 + 80));
-  const left = Math.max(0, Math.min(anchor.x - 140, window.innerWidth - 300));
+  const top = Math.max(10, Math.min(anchor.y - (Math.min(filtered.length, 8) * 28 + 90), window.innerHeight - 300));
+  const left = Math.max(10, Math.min(anchor.x - 140, window.innerWidth - 300));
 
   return (
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 999997 }} onClick={onClose}>
-      <div
-        className="anim-scale-in"
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 8 }}
+        transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: "fixed", top, left,
-          width: 280, backgroundColor: "rgba(24, 24, 27, 0.7)",
-          backdropFilter: "blur(16px) saturate(1.5)",
-          WebkitBackdropFilter: "blur(16px) saturate(1.5)",
-          border: "1px solid var(--border-medium)", borderRadius: 6,
-          boxShadow: "var(--shadow-lg), var(--shadow-panel)", overflow: "hidden",
+          width: 290, backgroundColor: "var(--bg-glass-strong, rgba(14, 14, 18, 0.95))",
+          backdropFilter: "blur(20px) saturate(1.5)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+          border: "1px solid var(--border-strong, #27272a)", borderRadius: 8,
+          boxShadow: "var(--shadow-lg), 0 20px 40px rgba(0,0,0,0.6)", overflow: "hidden",
           fontFamily: "var(--font-ui)", zIndex: 999998
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div style={{ padding: "8px 10px 4px", fontSize: 11, color: "var(--text-muted, #71717a)", fontWeight: 600, letterSpacing: "0.5px", borderBottom: "1px solid var(--border-color, #27272a)", marginBottom: 2 }}>
+        <div style={{ padding: "8px 12px 6px", fontSize: 10, color: "var(--accent, #38bdf8)", fontWeight: 700, letterSpacing: "1px", borderBottom: "1px solid var(--border-subtle, #27272a)", textTransform: "uppercase" }}>
           {title}
         </div>
         <div style={{ padding: "6px 8px" }}>
@@ -69,28 +74,27 @@ function Picker({ items, onSelect, onClose, title, anchor }: PickerProps) {
             value={filter}
             onChange={e => setFilter(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Search..."
+            placeholder="Search options..."
             style={{
               width: "100%", boxSizing: "border-box",
-              background: "rgba(0, 0, 0, 0.2)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 4, padding: "5px 8px", fontSize: 13,
-              color: "var(--text-main)", outline: "none",
-              transition: "border-color 0.15s, box-shadow 0.15s"
+              background: "var(--bg-base, #09090b)",
+              border: "1px solid var(--border-strong, #27272a)",
+              borderRadius: 4, padding: "6px 10px", fontSize: 12,
+              color: "var(--text-main, #fafafa)", outline: "none",
             }}
           />
         </div>
-        <div style={{ maxHeight: 224, overflowY: "auto", paddingBottom: 6 }}>
+        <div style={{ maxHeight: 220, overflowY: "auto", padding: "4px" }}>
           {filtered.length === 0
-            ? <div style={{ padding: "8px 16px", fontSize: 12, color: "var(--text-muted, #777)" }}>No results</div>
+            ? <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-muted, #71717a)" }}>No results matching</div>
             : filtered.map((item, idx) => (
               <div
                 key={item}
                 style={{
-                  padding: "5px 16px", fontSize: 13, cursor: "pointer",
-                  backgroundColor: idx === hoveredIdx ? "var(--accent)" : "transparent",
-                  color: idx === hoveredIdx ? "#fff" : "var(--text-main)",
-                  transition: "background-color 0.1s"
+                  padding: "6px 10px", fontSize: 12, cursor: "pointer", borderRadius: 4,
+                  backgroundColor: idx === hoveredIdx ? "var(--bg-hover-strong, rgba(255,255,255,0.08))" : "transparent",
+                  color: idx === hoveredIdx ? "var(--accent, #38bdf8)" : "var(--text-main, #fafafa)",
+                  transition: "all 0.1s ease"
                 }}
                 onMouseEnter={() => setHoveredIdx(idx)}
                 onClick={() => { onSelect(item); onClose(); }}
@@ -100,7 +104,7 @@ function Picker({ items, onSelect, onClose, title, anchor }: PickerProps) {
             ))
           }
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -111,6 +115,28 @@ const LANGUAGES = [
   "YAML", "Rust", "Go", "C", "C++", "Java", "Kotlin",
   "Ruby", "PHP", "SQL", "Plain Text"
 ];
+
+const PROVIDER_MODELS: Record<string, string[]> = {
+  "routing.run": [
+    "kimi-k2.6 (Fast)",
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+    "gpt-5.6-sol",
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "kimi-k2.6-nitro",
+    "kimi-k2.7-code",
+    "glm-5.2",
+    "glm-5.2-nitro",
+    "nemotron-3-ultra",
+    "qwen3.5-9b"
+  ],
+  "openai": ["gpt-4o", "gpt-4o-mini", "o3-mini"],
+  "anthropic": ["claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus"],
+  "gemini": ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+};
 
 const LANGUAGE_ID_MAP: Record<string, string> = {
   "TypeScript": "typescript", "TypeScript JSX": "typescriptreact",
@@ -131,7 +157,7 @@ const INDENT_OPTIONS = [
   "Indent Using Tabs: 2", "Indent Using Tabs: 4"
 ];
 
-type PickerKind = "language" | "indent" | "eol" | null;
+type PickerKind = "language" | "indent" | "eol" | "model" | "branch" | null;
 
 export function StatusBar({
   repoPath,
@@ -141,6 +167,8 @@ export function StatusBar({
   cursorCol = 1,
   lsStatus = "ready",
   healthScore,
+  selectedModel = "Gemini 2.5 Flash",
+  onChangeModel,
   onChangeLanguage,
   onChangeIndentation,
   onChangeEol,
@@ -151,6 +179,26 @@ export function StatusBar({
 }: StatusBarProps) {
   const [activePicker, setActivePicker] = useState<PickerKind>(null);
   const [pickerAnchor, setPickerAnchor] = useState({ x: 0, y: 0 });
+  const [currentProvider, setCurrentProvider] = useState<string>("gemini");
+  const [activeModel, setActiveModel] = useState<string>(selectedModel);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      const api = (window as any).atlasAPI;
+      if (api?.getSettings) {
+        const s = await api.getSettings();
+        if (s) {
+          if (s.aiProvider) setCurrentProvider(s.aiProvider);
+          if (s.aiModel) setActiveModel(s.aiModel);
+        }
+      }
+    };
+    loadSettings();
+    window.addEventListener("focus", loadSettings);
+    return () => window.removeEventListener("focus", loadSettings);
+  }, []);
+
+  const modelOptions = PROVIDER_MODELS[currentProvider] ?? PROVIDER_MODELS["gemini"] ?? [];
 
   const openPicker = (kind: PickerKind, e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -179,6 +227,16 @@ export function StatusBar({
     onChangeEol?.(option as "LF" | "CRLF");
   };
 
+  const handleModelSelect = (m: string) => {
+    const cleanModel = m.split(" ")[0] || m;
+    setActiveModel(cleanModel);
+    onChangeModel?.(cleanModel);
+    const api = (window as any).atlasAPI;
+    if (api?.updateSettings) {
+      api.updateSettings({ aiModel: cleanModel });
+    }
+  };
+
   const itemStyle = (clickable = true): React.CSSProperties => ({
     display: "flex", alignItems: "center", height: "100%",
     padding: "0 8px", gap: "4px", cursor: clickable ? "pointer" : "default",
@@ -196,17 +254,41 @@ export function StatusBar({
           <div style={{ ...itemStyle(), backgroundColor: "var(--accent, #0ea5e9)", color: "#fff", padding: "0 12px", fontFamily: "monospace", fontWeight: "bold", letterSpacing: "-1px", fontSize: 12 }}>
             &gt;&lt;
           </div>
+          
+          {/* Branch Picker */}
+          <div
+            id="statusbar-branch"
+            className="statusbar-item"
+            style={itemStyle()}
+            title="Git Branch"
+            onClick={e => openPicker("branch", e)}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            <span>main</span>
+          </div>
         </div>
 
         {/* RIGHT */}
         <div style={s.rightGroup}>
+          {/* Active AI Model */}
+          <div
+            id="statusbar-model"
+            className="statusbar-item"
+            style={itemStyle()}
+            title="Active AI Model"
+            onClick={e => openPicker("model", e)}
+          >
+            <span style={{ color: "var(--accent, #38bdf8)", fontWeight: 700 }}>AI:</span>
+            <span>{activeModel}</span>
+          </div>
+
           {cursorSymbol && (
             <div style={itemStyle(false)}>
               <span style={{ opacity: 0.7 }}>{cursorSymbol}</span>
             </div>
           )}
 
-          {/* Cursor position — click = Go to Line */}
+          {/* Cursor position */}
           <div
             id="statusbar-cursor"
             className="statusbar-item"
@@ -239,7 +321,6 @@ export function StatusBar({
             {eol}
           </div>
 
-
           {/* Language picker */}
           <div
             id="statusbar-language"
@@ -263,46 +344,58 @@ export function StatusBar({
             </div>
           )}
 
-          {/* Notifications bell */}
-          <div className="statusbar-item" style={itemStyle()} title="Notifications">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
-          </div>
-
           <div className="statusbar-item" style={itemStyle(false)}>Atlas Studio</div>
         </div>
       </footer>
 
-      {/* Picker overlays */}
-      {activePicker === "language" && (
-        <Picker
-          title="SELECT LANGUAGE MODE"
-          items={LANGUAGES}
-          onSelect={handleLanguageSelect}
-          onClose={() => setActivePicker(null)}
-          anchor={pickerAnchor}
-        />
-      )}
-      {activePicker === "indent" && (
-        <Picker
-          title="SELECT INDENTATION"
-          items={INDENT_OPTIONS}
-          onSelect={handleIndentSelect}
-          onClose={() => setActivePicker(null)}
-          anchor={pickerAnchor}
-        />
-      )}
-      {activePicker === "eol" && (
-        <Picker
-          title="SELECT END OF LINE SEQUENCE"
-          items={["LF", "CRLF"]}
-          onSelect={handleEolSelect}
-          onClose={() => setActivePicker(null)}
-          anchor={pickerAnchor}
-        />
-      )}
+      {/* Animated Picker overlays */}
+      <AnimatePresence>
+        {activePicker === "language" && (
+          <Picker
+            title="SELECT LANGUAGE MODE"
+            items={LANGUAGES}
+            onSelect={handleLanguageSelect}
+            onClose={() => setActivePicker(null)}
+            anchor={pickerAnchor}
+          />
+        )}
+        {activePicker === "indent" && (
+          <Picker
+            title="SELECT INDENTATION"
+            items={INDENT_OPTIONS}
+            onSelect={handleIndentSelect}
+            onClose={() => setActivePicker(null)}
+            anchor={pickerAnchor}
+          />
+        )}
+        {activePicker === "eol" && (
+          <Picker
+            title="SELECT END OF LINE SEQUENCE"
+            items={["LF", "CRLF"]}
+            onSelect={handleEolSelect}
+            onClose={() => setActivePicker(null)}
+            anchor={pickerAnchor}
+          />
+        )}
+        {activePicker === "model" && (
+          <Picker
+            title="SELECT AI MODEL"
+            items={modelOptions}
+            onSelect={handleModelSelect}
+            onClose={() => setActivePicker(null)}
+            anchor={pickerAnchor}
+          />
+        )}
+        {activePicker === "branch" && (
+          <Picker
+            title="SWITCH GIT BRANCH"
+            items={["main", "feature/ai-composer", "release/v1.0", "origin/main"]}
+            onSelect={() => setActivePicker(null)}
+            onClose={() => setActivePicker(null)}
+            anchor={pickerAnchor}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -310,9 +403,10 @@ export function StatusBar({
 const s: Record<string, React.CSSProperties> = {
   statusBar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    height: "22px", backgroundColor: "#000000",
-    borderTop: "1px solid #38bdf8", color: "var(--text-main, #e4e4e7)",
+    height: "22px", backgroundColor: "var(--bg-statusbar, #09090b)",
+    color: "#ffffff",
     userSelect: "none", overflow: "hidden", flexShrink: 0,
+    borderTop: "1px solid var(--border-subtle, #27272a)",
   },
   leftGroup: { display: "flex", alignItems: "center", height: "100%" },
   rightGroup: { display: "flex", alignItems: "center", height: "100%" },
