@@ -87,6 +87,7 @@ async function handleCoderToolCall(
   switch (toolName) {
     case "read_file": {
       const fp = String(toolArgs["file_path"] ?? "");
+      ctx.onProgress?.(`Analyzed ${fp} #L1-100`);
       const content = await readFileTool(fp, repoRoot, atlasIgnore);
       // Snapshot original content for diffing (skip if access was denied)
       if (!filesBefore.has(fp) && !content.startsWith("[Access denied")) filesBefore.set(fp, content);
@@ -94,6 +95,7 @@ async function handleCoderToolCall(
     }
     case "write_file": {
       const fp = String(toolArgs["file_path"] ?? "");
+      ctx.onProgress?.(`Edited ${fp}`);
       const content = String(toolArgs["content"] ?? "");
       // Capture original before first write
       if (!filesBefore.has(fp)) {
@@ -106,6 +108,7 @@ async function handleCoderToolCall(
     }
     case "multi_replace_file_content": {
       const fp = String(toolArgs["file_path"] ?? "");
+      ctx.onProgress?.(`Edited ${fp}`);
       const chunks = toolArgs["chunks"] as Array<{ targetContent: string; replacementContent: string }>;
       
       if (!filesBefore.has(fp)) {
@@ -118,8 +121,11 @@ async function handleCoderToolCall(
       filesAfter.set(fp, newContent);
       return result;
     }
-    case "list_directory":
-      return listDirectoryTool(String(toolArgs["dir_path"] ?? "."), repoRoot, atlasIgnore);
+    case "list_directory": {
+      const dp = String(toolArgs["dir_path"] ?? ".");
+      ctx.onProgress?.(`Explored directory: ${dp}`);
+      return listDirectoryTool(dp, repoRoot, atlasIgnore);
+    }
     case "query_memory":
       return queryMemoryTool(String(toolArgs["query"] ?? ""), { memory, repoRoot });
     case "get_impact":

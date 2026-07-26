@@ -71,6 +71,7 @@ export class Orchestrator {
   private config: OrchestratorConfig;
   private maxCoderRetries: number;
   private brain: BrainManager;
+  private currentRunId: string = "run-active";
 
   constructor(config: OrchestratorConfig) {
     this.config = config;
@@ -84,8 +85,19 @@ export class Orchestrator {
   }
 
   private progress(message: string) {
-    // Emit as console-friendly progress (used by CLI)
     process.stdout.write(message + "\n");
+    this.emit({
+      type: "step_start",
+      runId: this.currentRunId,
+      step: {
+        id: sha256(`step:${message}:${Date.now()}`).slice(0, 16),
+        title: message,
+        description: "",
+        relevantFiles: [],
+        reasoning: "",
+        order: 0
+      }
+    });
   }
 
   /**
@@ -191,6 +203,7 @@ export class Orchestrator {
     const messages = isChatMode ? input as { role: string; text: string }[] : [];
     const goal = isChatMode && messages.length > 0 ? (messages[messages.length - 1]?.text || "") : (input as string);
     const runId = sha256(`run:${goal}:${Date.now()}`).slice(0, 24);
+    this.currentRunId = runId;
     const startedAt = Date.now();
 
     const coderOutputs: CoderOutput[] = [];

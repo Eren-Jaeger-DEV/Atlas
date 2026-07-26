@@ -57,8 +57,20 @@ async function handlePlannerToolCall(
   toolName: string,
   toolArgs: Record<string, unknown>,
   memory: MemoryEngine,
-  repoRoot: string
+  repoRoot: string,
+  onProgress?: (msg: string) => void
 ): Promise<string> {
+  if (toolName === "read_file") {
+    const fp = String(toolArgs["file_path"] ?? "");
+    onProgress?.(`Analyzed ${fp} #L1-100`);
+    return readFileTool(fp, repoRoot);
+  }
+  if (toolName === "list_directory") {
+    const dp = String(toolArgs["dir_path"] ?? ".");
+    onProgress?.(`Explored directory: ${dp}`);
+    return listDirectoryTool(dp, repoRoot);
+  }
+  onProgress?.(`Tool: ${toolName}`);
   switch (toolName) {
     case "query_memory":
       return queryMemoryTool(String(toolArgs["query"] ?? ""), { memory, repoRoot });
@@ -68,10 +80,6 @@ async function handlePlannerToolCall(
         toolArgs["symbol_name"] ? String(toolArgs["symbol_name"]) : undefined,
         { memory, repoRoot }
       );
-    case "read_file":
-      return readFileTool(String(toolArgs["file_path"] ?? ""), repoRoot);
-    case "list_directory":
-      return listDirectoryTool(String(toolArgs["dir_path"] ?? "."), repoRoot);
     default:
       return `Unknown tool: ${toolName}`;
   }
@@ -136,7 +144,8 @@ export async function runPlanner(
           tc.name,
           tc.arguments,
           memory,
-          repoRoot
+          repoRoot,
+          onProgress
         );
         messages.push({
           role: "tool" as const,
