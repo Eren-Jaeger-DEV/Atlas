@@ -138,8 +138,6 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
               api.terminalGetHistory(tab.id).then((hist: string) => {
                 if (hist) {
                   term.write(hist);
-                } else {
-                  api.terminalInput(tab.id, "\r");
                 }
               });
             }, 100);
