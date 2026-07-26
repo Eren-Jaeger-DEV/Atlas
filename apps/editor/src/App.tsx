@@ -465,7 +465,7 @@ function AppInner() {
     const a = api();
     if (a?.getSettings) {
       a.getSettings().then((s: any) => {
-        if (s) setSettings(s);
+        if (s) setSettings({ ...DEFAULT_SETTINGS, ...s, wordWrap: "off" });
       });
     }
 
