@@ -102,6 +102,11 @@ export class AnthropicProvider implements ILLMProvider {
       model,
       system: systemMessage || undefined,
       messages,
+      tools: request.tools?.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.parameters as any,
+      })),
       max_tokens: request.maxTokens ?? 8096,
       stream: true,
     });

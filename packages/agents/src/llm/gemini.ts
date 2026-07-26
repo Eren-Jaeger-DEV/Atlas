@@ -112,6 +112,17 @@ export class GeminiProvider implements ILLMProvider {
       model: modelName,
       systemInstruction: systemInstruction || undefined,
       safetySettings: SAFETY_SETTINGS,
+      tools: request.tools
+        ? [
+            {
+              functionDeclarations: request.tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters as any,
+              })),
+            },
+          ]
+        : undefined,
     });
 
     const history = request.messages
@@ -130,7 +141,10 @@ export class GeminiProvider implements ILLMProvider {
     let fullContent = "";
 
     for await (const chunk of result.stream) {
-      const text = chunk.text();
+      let text = "";
+      try {
+        text = chunk.text();
+      } catch (e) {}
       if (text) {
         fullContent += text;
         onChunk(text);
