@@ -1,5 +1,6 @@
 import "./global.css";
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { EditorPane } from "./components/EditorPane.js";
 import { FileExplorer } from "./components/FileExplorer.js";
 import { GlobalSearchPanel } from "./components/GlobalSearchPanel.js";
@@ -10,6 +11,7 @@ import { OutputPanel, logToOutput } from "./components/OutputPanel.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { DiffViewer } from "./components/DiffViewer.js";
 import { CommandPalette } from "./components/CommandPalette.js";
+import { CommandPaletteQuickPicker } from "./components/CommandPaletteQuickPicker.js";
 import { SettingsPanel, EditorSettings, DEFAULT_SETTINGS } from "./components/SettingsPanel.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { StatusBar } from "./components/StatusBar.js";
@@ -28,6 +30,7 @@ import { PlanApprovalModal } from "./components/PlanApprovalModal.js";
 import { AboutAtlasModal } from "./components/AboutAtlasModal.js";
 import { KeybindingsPanel, DEFAULT_KEYBINDINGS } from "./components/KeybindingsPanel.js";
 import { ThemeSelectorPanel } from "./components/ThemeSelectorPanel.js";
+import { Files, Search, GitBranch, Bug, Blocks, Settings, X, Search as SearchIcon, X as XIcon, Menu, Bot } from "lucide-react";
 import { ThemeManager } from "./components/ThemeManager.js";
 import { OutlinePanel, DocumentSymbol } from "./components/OutlinePanel.js";
 import { Tooltip } from "./components/Tooltip.js";
@@ -158,6 +161,12 @@ function AppInner() {
   const menuRef = useRef<HTMLDivElement>(null);
   const activeTab = tabs[activeTabIndex];
   const splitTab = tabs[splitTabIndex];
+
+  useEffect(() => {
+    if (activeTab?.filePath && api()?.emitEvent) {
+      api().emitEvent("ActiveEditorChanged", { filePath: activeTab.filePath, language: activeTab.language });
+    }
+  }, [activeTab?.filePath, activeTab?.language]);
   const isWorkspaceLoaded = useRef(false);
   const activeEditorRef = useRef<any>(null);
   const splitEditorRef = useRef<any>(null);
@@ -783,6 +792,22 @@ function AppInner() {
     }
   }, []);
 
+  const handleCursorChange = useCallback((lineContent: string, line: number, col: number) => {
+    setActiveCursorPos({ line, col });
+    const m = lineContent.match(/\b([A-Za-z_]\w*)\b/);
+    if(m) setCursorSymbol(m[1]);
+    
+    // Globally emit for extensions
+    if (api()?.emitEvent) {
+      api().emitEvent("CursorMoved", { line, col });
+    }
+  }, []);
+
+  const handleSymbolsChange = useCallback((symbols: any[], currentSymbol?: string) => {
+    setActiveSymbols(symbols);
+    if(currentSymbol) setCursorSymbol(currentSymbol);
+  }, []);
+
   const wname = repoPath ? repoPath.split(/[/\\]/).pop() : "Atlas Studio";
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
 
@@ -824,9 +849,10 @@ function AppInner() {
           ))}
         </div>
 
-        <div style={s.tbCenter}>
-          <span style={s.centerTxt}>{wname}</span>
-        </div>
+          <div style={{ ...s.tbCenter, cursor: "pointer" }} onClick={() => setShowCommandPalette(true)} className="hover-scale">
+            <SearchIcon size={12} color="var(--text-faint)" />
+            <span style={s.centerTxt}>{wname}</span>
+          </div>
 
         <div style={{ ...s.tbRight, ...nodrag }}>
           <Tooltip content="Search (Ctrl+K)" position="bottom">
@@ -946,39 +972,52 @@ function AppInner() {
           </div>
         </nav>
 
-        <aside style={{ ...s.sidebar, width: `${sidebarWidth}px`, borderRight: settings.sidebarPosition === "right" ? "none" : "1px solid #27272a", borderLeft: settings.sidebarPosition === "right" ? "1px solid #27272a" : "none" }}>
-          {activeSidebar==="explorer"   && <FileExplorer workspaceRoots={workspaceRoots} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo} onAddFolder={handleAddFolder} onOpenInTerminal={(dir) => { setActiveSidebar("explorer"); setBottomTab("terminal"); setShowBottomPanel(true); /* terminal cwd change handled by TerminalPanel via focusTerminal event */ window.dispatchEvent(new CustomEvent("atlas:open-terminal-at", { detail: { cwd: dir } })); }}/>}
-          {activeSidebar==="search"     && <GlobalSearchPanel workspaceRoot={repoPath!} onFileSelect={(f, l) => handleOpenFile(f, l)} />}
-          {activeSidebar==="git"        && <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff}/>}
-          {activeSidebar==="debug"      && <DebugPanel />}
-          {activeSidebar==="history"    && <GitHistoryPanel repoPath={repoPath}/>}
-          {activeSidebar==="timeline"   && <TimelinePanel repoPath={repoPath}/>}
-          {activeSidebar==="parallel"   && <ParallelAgentsDashboard repoPath={repoPath} />}
-          {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
-          {activeSidebar==="extensions" && <ExtensionGallery />}
-          {activeSidebar==="ai"         && (
-            <div style={s.agentPane}>
-              <p style={s.paneHdr}>ATLAS AI AGENT</p>
-              <textarea style={s.agentArea} placeholder="Describe task..." value={aiGoal} onChange={e=>setAiGoal(e.target.value)}/>
-              <button style={s.agentBtn} disabled={aiRunning} onClick={async()=>{
-                if(!aiGoal.trim()||!repoPath) return;
-                const a=api(); if(!a?.run) return;
-                setAiRunning(true);
-                logToOutput("Agent", `Starting: ${aiGoal.slice(0,80)}${aiGoal.length>80?"...":""}`, "info");
-                try {
-                  const r=await a.run(aiGoal);
-                  const msg = r.error ? `[FAIL] ${r.error}` : "[PASS] Done";
-                  setAiEvents(p=>[...p, msg]);
-                  logToOutput("Agent", msg, r.error ? "error" : "success");
-                }
-                catch(e){
-                  setAiEvents(p=>[...p,`[FAIL] ${e}`]);
-                  logToOutput("Agent", `[FAIL] ${e}`, "error");
-                } finally { setAiRunning(false); }
-              }}>{aiRunning?"Running...":"Run Agent"}</button>
-            </div>
+        <AnimatePresence initial={false}>
+          {activeSidebar && (
+            <motion.aside 
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: sidebarWidth, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              style={{ ...s.sidebar, borderRight: settings.sidebarPosition === "right" ? "none" : "1px solid var(--border-subtle)", borderLeft: settings.sidebarPosition === "right" ? "1px solid var(--border-subtle)" : "none" }}
+            >
+              {activeSidebar==="explorer"   && <FileExplorer workspaceRoots={workspaceRoots} onOpenFile={handleOpenFile} onSelectRepo={handleSelectRepo} onAddFolder={handleAddFolder} onOpenInTerminal={(dir) => { setActiveSidebar("explorer"); setBottomTab("terminal"); setShowBottomPanel(true); /* terminal cwd change handled by TerminalPanel via focusTerminal event */ window.dispatchEvent(new CustomEvent("atlas:open-terminal-at", { detail: { cwd: dir } })); }}/>}
+              {activeSidebar==="search"     && <GlobalSearchPanel workspaceRoot={repoPath!} onFileSelect={(f, l) => handleOpenFile(f, l)} />}
+              {activeSidebar==="git"        && <GitPanel repoPath={repoPath} onViewDiff={handleViewDiff}/>}
+              {activeSidebar==="debug"      && <DebugPanel />}
+              {activeSidebar==="history"    && <GitHistoryPanel repoPath={repoPath}/>}
+              {activeSidebar==="timeline"   && <TimelinePanel repoPath={repoPath}/>}
+              {activeSidebar==="parallel"   && <ParallelAgentsDashboard repoPath={repoPath} />}
+              {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
+              {activeSidebar==="extensions" && <ExtensionGallery />}
+              {activeSidebar==="ai"         && (
+                <div style={s.agentPane}>
+                  <p style={s.paneHdr}>ATLAS AI AGENT</p>
+                  <textarea style={s.agentArea} placeholder="Describe task..." value={aiGoal} onChange={e=>setAiGoal(e.target.value)}/>
+                  <button style={s.agentBtn} disabled={aiRunning} onClick={async()=>{
+                    if(!aiGoal.trim()||!repoPath) return;
+                    const a=api(); if(!a?.run) return;
+                    setAiRunning(true);
+                    logToOutput("Agent", `Starting: ${aiGoal.slice(0,80)}${aiGoal.length>80?"...":""}`, "info");
+                    try {
+                      const r=await a.run(aiGoal);
+                      const msg = r.error ? `[FAIL] ${r.error}` : "[PASS] Done";
+                      setAiEvents(p=>[...p, msg]);
+                      logToOutput("Agent", msg, r.error ? "error" : "success");
+                    }
+                    catch(e){
+                      setAiEvents(p=>[...p,`[FAIL] ${e}`]);
+                      logToOutput("Agent", `[FAIL] ${e}`, "error");
+                    }
+                    setAiRunning(false);
+                  }}>
+                    {aiRunning?"Running...":"Run (Enter)"}
+                  </button>
+                </div>
+              )}
+            </motion.aside>
           )}
-        </aside>
+        </AnimatePresence>
 
         <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} />
 
@@ -1073,15 +1112,8 @@ function AppInner() {
                         targetLine={activeTab.targetLine}
                         targetColumn={activeTab.targetColumn}
                         onChange={c=>setTabs(p=>p.map((t,i)=>i===activeTabIndex?{...t,content:c,isDirty:true}:t))}
-                        onCursorChange={(l, line, col)=>{ 
-                          setActiveCursorPos({ line, col });
-                          const m=l.match(/\b([A-Za-z_]\w*)\b/); 
-                          if(m) setCursorSymbol(m[1]); 
-                        }}
-                        onSymbolsChange={(symbols, currentSymbol) => {
-                          setActiveSymbols(symbols);
-                          if(currentSymbol) setCursorSymbol(currentSymbol);
-                        }}
+                        onCursorChange={handleCursorChange}
+                        onSymbolsChange={handleSymbolsChange}
                         onEditorMount={(editor) => {
                           activeEditorRef.current = editor;
                         }}
@@ -1168,48 +1200,56 @@ function AppInner() {
 
           {showBottomPanel && <div className={settings.terminalPosition === "right" ? "resizer-x" : "resizer-y"} style={settings.terminalPosition === "right" ? s.resizerX : s.resizerY} onMouseDown={e => { e.preventDefault(); draggingRef.current = "bottom"; document.body.style.cursor = settings.terminalPosition === "right" ? "col-resize" : "row-resize"; }} />}
 
-          {showBottomPanel && (
-            <div style={{ ...s.dock, width: settings.terminalPosition === "right" ? `${bottomPanelHeight}px` : undefined, height: settings.terminalPosition === "right" ? "100%" : `${bottomPanelHeight}px`, borderTop: settings.terminalPosition === "right" ? "none" : "1px solid var(--border-color, #27272a)", borderLeft: settings.terminalPosition === "right" ? "1px solid var(--border-color, #27272a)" : "none" }}>
-              <div style={s.dockTabs}>
-                {(["terminal","problems","output","ai"] as BottomTab[]).map(t=>(
-                  <button 
-                    key={t} 
-                    style={{...s.dockTab,...(bottomTab===t?s.dockOn:{})}} 
-                    onClick={()=>setBottomTab(t)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      showContextMenu({
-                        x: e.clientX,
-                        y: e.clientY,
-                        items: [
-                          { label: "Hide Panel", onClick: () => setShowBottomPanel(false) },
-                          { 
-                            label: settings.terminalPosition === "right" ? "Move Panel to Bottom" : "Move Panel Right", 
-                            onClick: () => {
-                              setSettings(prev => ({ ...prev, terminalPosition: prev.terminalPosition === "right" ? "bottom" : "right" }));
+          <AnimatePresence initial={false}>
+            {showBottomPanel && (
+              <motion.div 
+                initial={settings.terminalPosition === "right" ? { width: 0, opacity: 0 } : { height: 0, opacity: 0 }}
+                animate={settings.terminalPosition === "right" ? { width: bottomPanelHeight, opacity: 1 } : { height: bottomPanelHeight, opacity: 1 }}
+                exit={settings.terminalPosition === "right" ? { width: 0, opacity: 0 } : { height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                style={{ ...s.dock, borderTop: settings.terminalPosition === "right" ? "none" : "1px solid var(--border-subtle)", borderLeft: settings.terminalPosition === "right" ? "1px solid var(--border-subtle)" : "none" }}
+              >
+                <div style={s.dockTabs}>
+                  {(["terminal","problems","output","ai"] as BottomTab[]).map(t=>(
+                    <button 
+                      key={t} 
+                      style={{...s.dockTab,...(bottomTab===t?s.dockOn:{})}} 
+                      onClick={()=>setBottomTab(t)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        showContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          items: [
+                            { label: "Hide Panel", onClick: () => setShowBottomPanel(false) },
+                            { 
+                              label: settings.terminalPosition === "right" ? "Move Panel to Bottom" : "Move Panel Right", 
+                              onClick: () => {
+                                setSettings(prev => ({ ...prev, terminalPosition: prev.terminalPosition === "right" ? "bottom" : "right" }));
+                              }
                             }
-                          }
-                        ]
-                      });
-                    }}
-                  >
-                    {t==="terminal"?"TERMINAL":t==="problems"?"PROBLEMS":t==="output"?"OUTPUT":"AI STREAM"}
-                  </button>
-                ))}
-                <button style={{...s.dockTab,marginLeft:"auto",fontSize:"10px"}} onClick={()=>setShowBottomPanel(false)}>x</button>
-              </div>
-              <div style={{flex:1, overflow:"hidden"}}>
-                {bottomTab==="terminal" && <TerminalPanel repoPath={repoPath}/>}
-                {bottomTab==="problems" && <ProblemsPanel onJump={(p,l,c) => openFile(p,l,c)}/>}
-                {bottomTab==="output"   && <OutputPanel/>}
-                {bottomTab==="ai"       && <div style={s.log}>{aiEvents.length===0?<p style={s.logDim}>No agent runs.</p>:aiEvents.map((e,i)=><p key={i} style={s.logLine}>{e}</p>)}</div>}
-              </div>
-            </div>
-          )}
+                          ]
+                        });
+                      }}
+                    >
+                      {t==="terminal"?"TERMINAL":t==="problems"?"PROBLEMS":t==="output"?"OUTPUT":"AI STREAM"}
+                    </button>
+                  ))}
+                  <button style={{...s.dockTab,marginLeft:"auto",fontSize:"10px", borderBottom:"none", opacity: 0.7}} onClick={()=>setShowBottomPanel(false)}>✕</button>
+                </div>
+                <div style={{flex:1, overflow:"hidden"}}>
+                  {bottomTab==="terminal" && <TerminalPanel repoPath={repoPath}/>}
+                  {bottomTab==="problems" && <ProblemsPanel onJump={(p,l,c) => openFile(p,l,c)}/>}
+                  {bottomTab==="output"   && <OutputPanel/>}
+                  {bottomTab==="ai"       && <div style={s.log}>{aiEvents.length===0?<p style={s.logDim}>No agent runs.</p>:aiEvents.map((e,i)=><p key={i} style={s.logLine}>{e}</p>)}</div>}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {showRightAiSidebar && <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "right-sidebar"; document.body.style.cursor = "col-resize"; }} />}
-        {showRightAiSidebar && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} activeContent={activeTab?.content} openTabs={tabs.map(t => ({ filePath: t.filePath, content: t.content }))} cursorLine={activeCursorPos?.line} cursorSymbol={cursorSymbol} onClose={() => setShowRightAiSidebar(false)} />}
+        {showRightAiSidebar && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} activeContent={activeTab?.content} openTabs={tabs.map(t => ({ filePath: t.filePath, content: t.content }))} cursorLine={activeCursorPos?.line} cursorSymbol={cursorSymbol} onClose={() => setShowRightAiSidebar(false)} onOpenSettings={handleOpenSettings} />}
       </div>
 
       {showAboutModal && <AboutAtlasModal onClose={()=>setShowAboutModal(false)} />}
@@ -1284,12 +1324,9 @@ function AppInner() {
         }}
         onGoToLine={() => { activeEditorRef.current?.getAction?.("editor.action.gotoLine")?.run(); }}
       />
-      <CommandPalette 
-        isOpen={showCommandPalette} 
-        commandService={commandService} 
-        openFiles={tabs.map(t => t.filePath)}
-        onSelectFile={(f) => handleOpenFile(f)}
-        onClose={()=>setShowCommandPalette(false)}
+      <CommandPaletteQuickPicker
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
       />
     </div>
   );
@@ -1311,85 +1348,85 @@ export function App() {
 
 const s: Record<string,React.CSSProperties> = {
   /* ---- Root Shell ---- */
-  root:{ display:"flex",flexDirection:"column",height:"100vh",width:"100vw",backgroundColor:"var(--bg-base, #08080a)",color:"var(--text-main, #f1f1f3)",fontFamily:"var(--font-ui, Inter, system-ui, sans-serif)",overflow:"hidden",userSelect:"none" },
+  root:{ display:"flex",flexDirection:"column",height:"100vh",width:"100vw",backgroundColor:"var(--bg-base)",color:"var(--text-main)",fontFamily:"var(--font-ui)",overflow:"hidden",userSelect:"none" },
 
   /* ---- Titlebar ---- */
-  titlebar:{ display:"flex",alignItems:"center",height:"32px",backgroundColor:"rgba(0,0,0,0.95)",borderBottom:"1px solid var(--border-subtle, #252528)",flexShrink:0,WebkitAppRegion:"drag" } as any,
-  tbLeft:{ display:"flex",alignItems:"center",flexShrink:0,paddingLeft:"8px",gap:"0" },
-  logo:{ width:"15px",height:"15px",objectFit:"contain",marginRight:"8px",flexShrink:0,opacity:0.9 },
+  titlebar:{ display:"flex",alignItems:"center",height:"36px",backgroundColor:"var(--bg-header)",borderBottom:"1px solid var(--border-subtle)",flexShrink:0,WebkitAppRegion:"drag" } as any,
+  tbLeft:{ display:"flex",alignItems:"center",flexShrink:0,paddingLeft:"12px",gap:"4px" },
+  logo:{ width:"16px",height:"16px",objectFit:"contain",marginRight:"8px",flexShrink:0,opacity:0.9 },
   menuWrapper:{ position:"relative" as const },
-  menuItem:{ background:"none",border:"none",color:"var(--text-muted, #7e7e88)",fontSize:"12.5px",padding:"0 9px",height:"32px",cursor:"pointer",display:"flex",alignItems:"center",whiteSpace:"nowrap" as const,transition:"color 0.12s, background 0.12s",borderRadius:"0",WebkitAppRegion:"no-drag" } as any,
-  menuItemOn:{ backgroundColor:"rgba(255,255,255,0.07)",color:"var(--text-main, #f1f1f3)" },
-  dropdown:{ position:"absolute" as const,top:"33px",left:"0",backgroundColor:"rgba(14,14,18,0.97)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"8px",minWidth:"228px",zIndex:9999,boxShadow:"0 16px 48px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.04)",padding:"4px 0",WebkitAppRegion:"no-drag",animation:"slideDownFade 0.15s cubic-bezier(0.16,1,0.3,1) forwards" } as any,
-  dropItem:{ display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",color:"var(--text-secondary, #c4c4c8)",fontSize:"12.5px",padding:"6px 14px",cursor:"pointer",textAlign:"left" as const,gap:"24px",transition:"background 0.1s, color 0.1s",borderRadius:"0" },
-  dropDisabled:{ color:"var(--text-faint, #44444c)",cursor:"default" },
-  dropSep:{ height:"1px",backgroundColor:"rgba(255,255,255,0.06)",margin:"4px 10px" },
-  dropShortcut:{ color:"var(--text-faint, #44444c)",fontSize:"11px",flexShrink:0,fontFamily:"var(--font-mono)" },
-  tbCenter:{ position:"absolute" as const,left:"50%",transform:"translateX(-50%)",pointerEvents:"none" },
-  centerTxt:{ fontSize:"12px",color:"var(--text-faint, #44444c)",whiteSpace:"nowrap" as const,letterSpacing:"0.02em" },
-  tbRight:{ display:"flex",alignItems:"center",marginLeft:"auto",gap:"0" },
-  iconBtn:{ width:"32px",height:"32px",background:"none",border:"none",color:"var(--text-muted, #7e7e88)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"4px",transition:"color 0.15s, background 0.15s",WebkitAppRegion:"no-drag" } as any,
-  iconOn:{ color:"var(--text-main, #f1f1f3)" },
-  winSep:{ width:"1px",height:"14px",backgroundColor:"rgba(255,255,255,0.07)",margin:"0 4px",flexShrink:0 },
-  wc:{ width:"46px",height:"32px",background:"none",border:"none",color:"var(--text-muted, #7e7e88)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.15s, color 0.15s",WebkitAppRegion:"no-drag",borderRadius:"0" } as any,
+  menuItem:{ background:"none",border:"none",color:"var(--text-secondary)",fontSize:"13px",cursor:"pointer",padding:"4px 10px",borderRadius:"var(--radius-sm)",transition:"all 0.15s ease",WebkitAppRegion:"no-drag",fontWeight:500 } as any,
+  menuItemOn:{ backgroundColor:"var(--bg-hover-strong)",color:"var(--text-main)" },
+  dropdown:{ position:"absolute" as const,top:"34px",left:"0",backgroundColor:"var(--bg-glass-strong)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",border:"1px solid var(--border-medium)",borderRadius:"var(--radius-md)",minWidth:"240px",zIndex:9999,boxShadow:"var(--shadow-lg), var(--shadow-panel)",padding:"6px 0",WebkitAppRegion:"no-drag",animation:"slideDownFade 0.2s cubic-bezier(0.16,1,0.3,1) forwards" } as any,
+  dropItem:{ display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",color:"var(--text-secondary)",fontSize:"13px",padding:"8px 16px",cursor:"pointer",textAlign:"left" as const,gap:"24px",transition:"all 0.1s",borderRadius:"0" },
+  dropDisabled:{ color:"var(--text-faint)",cursor:"default" },
+  dropSep:{ height:"1px",backgroundColor:"var(--border-medium)",margin:"6px 12px" },
+  dropShortcut:{ color:"var(--text-faint)",fontSize:"11px",flexShrink:0,fontFamily:"var(--font-mono)" },
+  tbCenter:{ position:"absolute" as const,left:"50%",transform:"translateX(-50%)",pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center",padding:"4px 80px",backgroundColor:"var(--bg-glass)",backdropFilter:"blur(8px)",borderRadius:"var(--radius-md)",border:"1px solid var(--border-medium)",boxShadow:"var(--shadow-sm)",minWidth:"320px",transition:"all 0.2s" },
+  centerTxt:{ fontSize:"12px",color:"var(--text-main)",whiteSpace:"nowrap" as const,letterSpacing:"0.2px",fontWeight:500 },
+  tbRight:{ display:"flex",alignItems:"center",marginLeft:"auto",gap:"2px",paddingRight:"4px" },
+  iconBtn:{ width:"32px",height:"32px",background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"var(--radius-sm)",transition:"all 0.15s",WebkitAppRegion:"no-drag" } as any,
+  iconOn:{ color:"var(--text-main)", backgroundColor:"var(--bg-hover)" },
+  winSep:{ width:"1px",height:"16px",backgroundColor:"var(--border-medium)",margin:"0 6px",flexShrink:0 },
+  wc:{ width:"46px",height:"32px",background:"none",border:"none",color:"var(--text-muted)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s",WebkitAppRegion:"no-drag",borderRadius:"0" } as any,
   wcClose:{ },
 
   /* ---- Body ---- */
-  body:{ display:"flex",flex:1,overflow:"hidden" },
+  body:{ display:"flex",flex:1,overflow:"hidden", backgroundColor:"var(--bg-base)" },
 
   /* ---- Activity Bar ---- */
-  actBar:{ width:"48px",backgroundColor:"rgba(0,0,0,0.8)",borderRight:"1px solid var(--border-subtle, #252528)",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"6px",paddingBottom:"6px",flexShrink:0 },
-  actTop:{ display:"flex",flexDirection:"column",gap:"2px",alignItems:"center" },
-  actBot:{ display:"flex",flexDirection:"column",alignItems:"center",gap:"2px" },
-  actBtn:{ width:"40px",height:"40px",border:"none",background:"transparent",color:"var(--text-faint, #44444c)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:"8px",transition:"color 0.15s, background 0.15s",position:"relative" as const },
-  actOn:{ color:"var(--text-main, #f1f1f3)",backgroundColor:"rgba(56,189,248,0.1)",boxShadow:"inset 0 0 0 1px rgba(56,189,248,0.2)" },
+  actBar:{ width:"52px",backgroundColor:"var(--bg-activity)",borderRight:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"12px",paddingBottom:"12px",flexShrink:0,zIndex:2 },
+  actTop:{ display:"flex",flexDirection:"column",gap:"8px",alignItems:"center" },
+  actBot:{ display:"flex",flexDirection:"column",alignItems:"center",gap:"8px" },
+  actBtn:{ width:"48px",height:"48px",border:"none",background:"transparent",color:"var(--text-faint)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s var(--ease-out)",position:"relative" as const, borderRadius:"var(--radius-md)", margin:"0 2px" },
+  actOn:{ color:"var(--text-main)", backgroundColor:"var(--bg-hover)" },
   actLbl:{ display:"none" },
 
   /* ---- Sidebar ---- */
-  sidebar:{ backgroundColor:"var(--bg-base, #08080a)",borderRight:"1px solid var(--border-subtle, #252528)",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0,transition:"width 0.22s cubic-bezier(0.16, 1, 0.3, 1)" },
+  sidebar:{ backgroundColor:"var(--bg-panel)",borderRight:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0,boxShadow:"var(--shadow-sm)" },
 
   /* ---- Resizers ---- */
   resizerX:{ width:"4px",backgroundColor:"transparent",cursor:"col-resize",zIndex:10,transition:"background-color 0.2s",flexShrink:0 },
   resizerY:{ height:"4px",backgroundColor:"transparent",cursor:"row-resize",zIndex:10,transition:"background-color 0.2s",flexShrink:0 },
 
   /* ---- Editor Area ---- */
-  center:{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden" },
-  tabBar:{ display:"flex",height:"36px",backgroundColor:"rgba(0,0,0,0.9)",borderBottom:"1px solid var(--border-subtle, #252528)",overflowX:"auto" as const,flexShrink:0,scrollbarWidth:"none" as const },
-  tab:{ display:"flex",alignItems:"center",gap:"5px",padding:"0 10px 0 12px",minWidth:"90px",maxWidth:"180px",height:"100%",backgroundColor:"transparent",borderRight:"1px solid rgba(255,255,255,0.05)",color:"var(--text-faint, #44444c)",fontSize:"12.5px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0,transition:"color 0.12s, background 0.12s",position:"relative" as const },
-  tabOn:{ backgroundColor:"var(--bg-base, #08080a)",color:"var(--text-main, #f1f1f3)",borderTop:"2px solid var(--accent, #38bdf8)",boxShadow:"0 1px 0 0 var(--bg-base) inset" },
-  tabName:{ flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,fontWeight:400,letterSpacing:"0.01em" },
-  tabDot:{ color:"#f59e0b",fontSize:"8px",lineHeight:"1",flexShrink:0 },
-  tabX:{ fontSize:"13px",color:"var(--text-faint, #44444c)",padding:"2px 2px",cursor:"pointer",borderRadius:"3px",transition:"color 0.1s, background 0.1s",opacity:0,lineHeight:"1",display:"flex",alignItems:"center" },
+  center:{ flex:1,display:"flex",flexDirection:"column",overflow:"hidden",backgroundColor:"var(--bg-base)" },
+  tabBar:{ display:"flex",height:"38px",backgroundColor:"var(--bg-panel)",borderBottom:"1px solid var(--border-subtle)",alignItems:"center",padding:"0", overflowX:"auto", overflowY:"hidden" },
+  tab:{ display:"flex",alignItems:"center",gap:"8px",padding:"0 12px 0 16px",minWidth:"140px",maxWidth:"220px",height:"100%",backgroundColor:"var(--bg-panel)",borderRight:"1px solid var(--border-subtle)",color:"var(--text-faint)",fontSize:"13px",cursor:"pointer",borderTop:"2px solid transparent",flexShrink:0,transition:"all 0.15s ease",position:"relative" as const },
+  tabOn:{ backgroundColor:"var(--bg-base)",color:"var(--accent)",borderTop:"2px solid var(--accent)", boxShadow:"inset 0 1px 0 rgba(255,255,255,0.05)" },
+  tabName:{ flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,fontWeight:500,letterSpacing:"0.2px" },
+  tabDot:{ color:"var(--text-main)",fontSize:"12px",lineHeight:"1",flexShrink:0 },
+  tabX:{ fontSize:"14px",color:"var(--text-muted)",padding:"4px",cursor:"pointer",borderRadius:"var(--radius-sm)",transition:"all 0.15s ease",opacity:0,lineHeight:"1",display:"flex",alignItems:"center" },
   editorArea:{ flex:1,overflow:"hidden",position:"relative" as const },
-  splitPlaceholder:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:"var(--text-faint, #44444c)",fontSize:"12px",backgroundColor:"var(--bg-base)" },
+  splitPlaceholder:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",color:"var(--text-faint)",fontSize:"13px",backgroundColor:"var(--bg-base)", fontWeight:500 },
 
   /* ---- Welcome Screen ---- */
   welcome:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",backgroundColor:"var(--bg-base)",position:"relative" as const },
-  welcomeLogoBg:{ position:"absolute" as const,width:"360px",height:"360px",objectFit:"contain",opacity:0.025,pointerEvents:"none" as const,top:"50%",left:"50%",transform:"translate(-50%, -50%)",filter:"blur(0px)" },
-  welcomeCard:{ display:"flex",flexDirection:"column",alignItems:"flex-start",padding:"24px",maxWidth:"420px",width:"100%",zIndex:1 },
-  welcomeH2:{ margin:"0 0 6px",fontSize:"24px",fontWeight:300,color:"var(--text-main, #f1f1f3)",letterSpacing:"-0.5px" },
-  welcomeP:{ margin:"0 0 28px",fontSize:"13px",color:"var(--text-muted, #7e7e88)",lineHeight:"1.6" },
-  welcomeRow:{ display:"flex",flexDirection:"column" as const,gap:"6px",width:"100%",alignItems:"flex-start" },
-  wBtnLink:{ background:"transparent",border:"none",color:"var(--accent, #38bdf8)",padding:"0",fontSize:"13px",cursor:"pointer",textDecoration:"none",transition:"opacity 0.1s",opacity:0.85 },
-  recentBox:{ marginTop:"36px",width:"100%",display:"flex",flexDirection:"column",gap:"2px" },
-  recentHdr:{ fontSize:"10px",fontWeight:600,color:"var(--text-faint, #44444c)",margin:"0 0 8px",letterSpacing:"0.8px",textTransform:"uppercase" as const },
-  recentItem:{ display:"flex",flexDirection:"column" as const,alignItems:"flex-start",backgroundColor:"transparent",border:"none",padding:"7px 10px",cursor:"pointer",textAlign:"left" as const,transition:"background 0.1s",borderRadius:"6px",width:"100%" },
-  recentName:{ fontSize:"13px",color:"var(--text-secondary, #c4c4c8)",marginBottom:"2px",fontWeight:500 },
-  recentPath:{ fontSize:"11px",color:"var(--text-faint, #44444c)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,width:"100%" },
+  welcomeLogoBg:{ position:"absolute" as const,width:"420px",height:"420px",objectFit:"contain",opacity:0.02,pointerEvents:"none" as const,top:"50%",left:"50%",transform:"translate(-50%, -50%)",filter:"blur(0px)" },
+  welcomeCard:{ display:"flex",flexDirection:"column",alignItems:"flex-start",padding:"32px",maxWidth:"480px",width:"100%",zIndex:1, backgroundColor:"var(--bg-panel)", borderRadius:"var(--radius-lg)", border:"1px solid var(--border-medium)", boxShadow:"var(--shadow-lg)" },
+  welcomeH2:{ margin:"0 0 8px",fontSize:"28px",fontWeight:400,color:"var(--text-main)",letterSpacing:"-0.5px" },
+  welcomeP:{ margin:"0 0 32px",fontSize:"14px",color:"var(--text-muted)",lineHeight:"1.6" },
+  welcomeRow:{ display:"flex",flexDirection:"column" as const,gap:"8px",width:"100%",alignItems:"flex-start" },
+  wBtnLink:{ background:"transparent",border:"none",color:"var(--accent)",padding:"0",fontSize:"14px",cursor:"pointer",textDecoration:"none",transition:"all 0.15s",opacity:0.9, fontWeight:500 },
+  recentBox:{ marginTop:"40px",width:"100%",display:"flex",flexDirection:"column",gap:"4px" },
+  recentHdr:{ fontSize:"11px",fontWeight:700,color:"var(--text-faint)",margin:"0 0 12px",letterSpacing:"1px",textTransform:"uppercase" as const },
+  recentItem:{ display:"flex",flexDirection:"column" as const,alignItems:"flex-start",backgroundColor:"transparent",padding:"10px 14px",cursor:"pointer",textAlign:"left" as const,transition:"all 0.15s ease",borderRadius:"var(--radius-md)",width:"100%", border:"1px solid transparent" },
+  recentName:{ fontSize:"14px",color:"var(--text-main)",marginBottom:"4px",fontWeight:600 },
+  recentPath:{ fontSize:"12px",color:"var(--text-faint)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,width:"100%" },
 
   /* ---- Bottom Dock ---- */
-  dock:{ backgroundColor:"rgba(0,0,0,0.85)",borderTop:"1px solid var(--border-subtle, #252528)",display:"flex",flexDirection:"column",flexShrink:0 },
-  dockTabs:{ display:"flex",height:"28px",backgroundColor:"transparent",borderBottom:"1px solid var(--border-subtle, #252528)",flexShrink:0,paddingLeft:"4px" },
-  dockTab:{ background:"none",border:"none",borderBottom:"2px solid transparent",color:"var(--text-faint, #44444c)",padding:"0 12px",fontSize:"11px",cursor:"pointer",transition:"color 0.12s, border-color 0.12s",letterSpacing:"0.3px",fontWeight:500 },
-  dockOn:{ color:"var(--text-main, #f1f1f3)",borderBottom:"2px solid var(--accent, #38bdf8)" },
-  dockContent:{ flex:1,overflow:"hidden" },
-  log:{ padding:"6px 12px",fontFamily:"var(--font-mono, 'JetBrains Mono', monospace)",fontSize:"12px",overflowY:"auto" as const,height:"100%" },
-  logLine:{ color:"var(--text-secondary, #c4c4c8)",lineHeight:"1.7",margin:0 },
-  logDim:{ color:"var(--text-faint, #44444c)",margin:0 },
+  dock:{ backgroundColor:"var(--bg-panel)",borderTop:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",flexShrink:0, boxShadow:"var(--shadow-sm)" },
+  dockTabs:{ display:"flex",height:"32px",backgroundColor:"transparent",borderBottom:"1px solid var(--border-subtle)",flexShrink:0,paddingLeft:"8px", gap:"4px", alignItems:"center" },
+  dockTab:{ background:"none",border:"none",borderBottom:"2px solid transparent",color:"var(--text-faint)",padding:"0 16px",height:"100%",fontSize:"11px",cursor:"pointer",transition:"all 0.15s ease",letterSpacing:"0.5px",fontWeight:600, textTransform:"uppercase" as const },
+  dockOn:{ color:"var(--accent)",borderBottom:"2px solid var(--accent)" },
+  dockContent:{ flex:1,overflow:"hidden", backgroundColor:"var(--bg-base)" },
+  log:{ padding:"12px 16px",fontFamily:"var(--font-mono)",fontSize:"13px",overflowY:"auto" as const,height:"100%" },
+  logLine:{ color:"var(--text-secondary)",lineHeight:"1.8",margin:0 },
+  logDim:{ color:"var(--text-faint)",margin:0 },
 
   /* ---- Agent Pane ---- */
-  agentPane:{ display:"flex",flexDirection:"column",height:"100%",padding:"10px",gap:"8px" },
-  paneHdr:{ fontSize:"10px",fontWeight:700,letterSpacing:"0.8px",color:"var(--text-muted, #7e7e88)",margin:0,textTransform:"uppercase" as const },
-  agentArea:{ flex:1,maxHeight:"100px",backgroundColor:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",color:"var(--text-main, #f1f1f3)",borderRadius:"6px",padding:"8px",fontSize:"12.5px",resize:"none" as const,fontFamily:"inherit",lineHeight:"1.5" },
-  agentBtn:{ backgroundColor:"rgba(255,255,255,0.08)",color:"var(--text-main, #f1f1f3)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"6px",padding:"7px 12px",fontWeight:600,fontSize:"12px",cursor:"pointer",transition:"background 0.15s" },
+  agentPane:{ display:"flex",flexDirection:"column",height:"100%",padding:"12px",gap:"12px" },
+  paneHdr:{ fontSize:"11px",fontWeight:700,letterSpacing:"1px",color:"var(--text-muted)",margin:0,textTransform:"uppercase" as const },
+  agentArea:{ flex:1,maxHeight:"120px",backgroundColor:"var(--bg-base)",border:"1px solid var(--border-medium)",color:"var(--text-main)",borderRadius:"var(--radius-md)",padding:"10px 12px",fontSize:"13px",resize:"none" as const,fontFamily:"inherit",lineHeight:"1.6", transition:"all 0.2s", boxShadow:"inset 0 2px 4px rgba(0,0,0,0.2)" },
+  agentBtn:{ backgroundColor:"var(--accent)",color:"#fff",border:"none",borderRadius:"var(--radius-md)",padding:"8px 16px",fontWeight:600,fontSize:"13px",cursor:"pointer",transition:"all 0.15s", boxShadow:"var(--shadow-sm)" },
 };

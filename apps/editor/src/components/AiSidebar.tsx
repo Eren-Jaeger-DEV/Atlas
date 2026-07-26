@@ -16,9 +16,48 @@ interface AiSidebarProps {
   diagnostics?: string;
   width?: number;
   onClose?: () => void;
+  onOpenSettings?: () => void;
 }
 
-export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, cursorLine, cursorSymbol, terminalHistory, diagnostics, width = 320, onClose }: AiSidebarProps) {
+const PROVIDER_MODELS: Record<string, Array<{ label: string; value: string }>> = {
+  "routing.run": [
+    { label: "Kimi K2.6 (Fast)", value: "kimi-k2.6" },
+    { label: "Claude Opus 4.8", value: "claude-opus-4-8" },
+    { label: "Claude Sonnet 4.6", value: "claude-sonnet-4-6" },
+    { label: "DeepSeek V4 Pro", value: "deepseek-v4-pro" },
+    { label: "DeepSeek V4 Flash", value: "deepseek-v4-flash" },
+    { label: "GPT-5.6 Sol", value: "gpt-5.6-sol" },
+    { label: "GPT-5.6 Luna", value: "gpt-5.6-luna" },
+    { label: "GPT-5.6 Terra", value: "gpt-5.6-terra" },
+    { label: "Kimi K2.6 Nitro", value: "kimi-k2.6-nitro" },
+    { label: "Kimi K2.7 Code", value: "kimi-k2.7-code" },
+    { label: "Kimi K2.7 Code Nitro", value: "kimi-k2.7-code-nitro" },
+    { label: "GLM 5.2", value: "glm-5.2" },
+    { label: "GLM 5.2 Nitro", value: "glm-5.2-nitro" },
+    { label: "Nemotron 3 Ultra", value: "nemotron-3-ultra" },
+    { label: "Qwen 3.5 9B", value: "qwen3.5-9b" },
+  ],
+  "openai": [
+    { label: "GPT-4o", value: "gpt-4o" },
+    { label: "GPT-4o Mini", value: "gpt-4o-mini" },
+    { label: "o3-mini", value: "o3-mini" },
+  ],
+  "anthropic": [
+    { label: "Claude 3.5 Sonnet", value: "claude-3-5-sonnet" },
+    { label: "Claude 3.5 Haiku", value: "claude-3-5-haiku" },
+    { label: "Claude 3 Opus", value: "claude-3-opus" },
+  ],
+  "gemini": [
+    { label: "Gemini 2.5 Flash", value: "gemini-2.5-flash" },
+    { label: "Gemini 2.5 Pro", value: "gemini-2.5-pro" },
+    { label: "Gemini 2.0 Flash", value: "gemini-2.0-flash" },
+  ],
+  "openai-compatible": [
+    { label: "Custom OpenAI-Compatible", value: "custom" },
+  ],
+};
+
+export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, cursorLine, cursorSymbol, terminalHistory, diagnostics, width = 320, onClose, onOpenSettings }: AiSidebarProps) {
   const [prompt, setPrompt] = useState("");
   const [activeRuns, setActiveRuns] = useState<Set<string>>(new Set());
   const [messages, setMessages] = useState<Array<{ role: "user" | "agent"; text: string }>>([]);
@@ -30,11 +69,34 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
   const [planningMode, setPlanningMode] = useState(false);
   const [planApprovalReq, setPlanApprovalReq] = useState<{reqId: string, plan: any} | null>(null);
 
-  // Model & Key setup state
-  const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash");
-  const [showKeySetup, setShowKeySetup] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [keySaveMsg, setKeySaveMsg] = useState<string | null>(null);
+  // Model & Provider state (syncs with Settings)
+  const [currentProvider, setCurrentProvider] = useState<string>("gemini");
+  const [selectedModel, setSelectedModel] = useState<string>("gemini-2.5-flash");
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      const api = window.atlasAPI;
+      if (api?.getSettings) {
+        const s = await api.getSettings();
+        if (s) {
+          if (s.aiProvider) setCurrentProvider(s.aiProvider);
+          if (s.aiModel) setSelectedModel(s.aiModel);
+        }
+      }
+    };
+    loadSettings();
+    window.addEventListener("focus", loadSettings);
+  }, []);
+
+  const availableModels = PROVIDER_MODELS[currentProvider] || PROVIDER_MODELS["gemini"] || [];
+
+  const handleModelChange = (modelVal: string) => {
+    setSelectedModel(modelVal);
+    const api = window.atlasAPI;
+    if (api?.updateSettings) {
+      api.updateSettings({ aiModel: modelVal });
+    }
+  };
 
   useEffect(() => {
     const api = window.atlasAPI;
@@ -163,7 +225,8 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
         if (result.error) {
           setMessages((prev) => [...prev, { role: "agent", text: `Error: ${result.error}` }]);
           if (result.error.toLowerCase().includes("key") || result.error.toLowerCase().includes("provider")) {
-            setShowKeySetup(true);
+            if (onOpenSettings) onOpenSettings();
+            else window.atlasAPI?.openSettingsWindow?.();
           }
         } else {
           const replyText = result.plan?.planningReasoning || streamingTokenText || (result.coderOutputs && result.coderOutputs.length > 0 ? `Completed changes in ${result.coderOutputs.length} step(s).` : "Response completed with no text output.");
@@ -181,7 +244,8 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
         const errMsg = String(err);
         setMessages((prev) => [...prev, { role: "agent", text: `Error: ${errMsg}` }]);
         if (errMsg.toLowerCase().includes("key") || errMsg.toLowerCase().includes("provider")) {
-          setShowKeySetup(true);
+          if (onOpenSettings) onOpenSettings();
+          else window.atlasAPI?.openSettingsWindow?.();
         }
       } finally {
         setActiveRuns(prev => { const n = new Set(prev); n.delete(runKey); return n; });
@@ -344,20 +408,18 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
               disabled={activeRuns.size > 0}
             />
           </div>
-          <div style={styles.inputBottom}>
             <select
               style={{
                 backgroundColor: "#18181b", border: "1px solid #27272a", color: "#38bdf8",
-                borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 600, outline: "none"
+                borderRadius: 4, padding: "2px 6px", fontSize: 11, fontWeight: 600, outline: "none",
+                maxWidth: 150
               }}
               value={selectedModel}
-              onChange={e => setSelectedModel(e.target.value)}
+              onChange={e => handleModelChange(e.target.value)}
             >
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-              <option value="gpt-4o">GPT-4o</option>
-              <option value="claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-              <option value="ollama">Ollama (Local)</option>
+              {availableModels.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
             </select>
 
             <button
@@ -372,8 +434,11 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
 
             <button
               style={{ fontSize: 10, background: "none", border: "1px solid #38bdf8", borderRadius: 4, color: "#38bdf8", padding: "2px 6px", cursor: "pointer" }}
-              onClick={() => setShowKeySetup(true)}
-              title="Configure Provider API Key"
+              onClick={() => {
+                if (onOpenSettings) onOpenSettings();
+                else window.atlasAPI?.openSettingsWindow?.();
+              }}
+              title="Open AI Configuration Settings"
             >
               [Key]
             </button>
@@ -394,62 +459,6 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
         <div style={styles.disclaimer}>
           AI may make mistakes. Double-check all generated code.
         </div>
-      </div>
-
-      {/* API Key Setup Modal */}
-      {showKeySetup && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 99999, fontFamily: "system-ui, sans-serif"
-        }}>
-          <div style={{
-            backgroundColor: "#18181b", border: "1px solid #27272a", borderRadius: 8,
-            width: 380, padding: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.6)"
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#fafafa", marginBottom: 6 }}>
-              Configure Provider API Key
-            </div>
-            <div style={{ fontSize: 11, color: "#a1a1aa", marginBottom: 12 }}>
-              Set your API Key for Gemini, OpenAI, or Anthropic to enable live AI responses.
-            </div>
-            <input
-              type="password"
-              placeholder="Paste your API key here (e.g. AIzaSy... / sk-...)"
-              value={apiKeyInput}
-              onChange={e => setApiKeyInput(e.target.value)}
-              style={{
-                width: "100%", boxSizing: "border-box", background: "#09090b", border: "1px solid #38bdf8",
-                borderRadius: 4, padding: "8px 10px", fontSize: 12, color: "#fafafa", outline: "none", marginBottom: 12
-              }}
-            />
-            {keySaveMsg && <div style={{ fontSize: 11, color: "#22c55e", marginBottom: 10 }}>{keySaveMsg}</div>}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button
-                style={{ background: "#27272a", border: "none", borderRadius: 4, color: "#e4e4e7", fontSize: 12, padding: "6px 14px", cursor: "pointer" }}
-                onClick={() => setShowKeySetup(false)}
-              >
-                Cancel
-              </button>
-              <button
-                style={{ background: "#38bdf8", border: "none", borderRadius: 4, color: "#000", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" }}
-                onClick={async () => {
-                  if (!apiKeyInput.trim()) return;
-                  const api = window.atlasAPI;
-                  if (api?.setSecureKey) {
-                    await api.setSecureKey("GEMINI_API_KEY", apiKeyInput.trim());
-                    await api.setSecureKey("OPENAI_API_KEY", apiKeyInput.trim());
-                  }
-                  setKeySaveMsg("Key saved successfully!");
-                  setTimeout(() => { setShowKeySetup(false); setKeySaveMsg(null); setApiKeyInput(""); }, 1000);
-                }}
-              >
-                Save Key
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       </div>
     </>
   );
