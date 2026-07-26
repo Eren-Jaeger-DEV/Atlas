@@ -157,12 +157,6 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
 
   const handleSend = async () => {
     if (!prompt.trim()) return;
-    
-    if (!repoPath) {
-      setMessages((prev) => [...prev, { role: "user", text: prompt.trim() }, { role: "agent", text: "Error: No workspace is currently open. Please open a folder first using the Explorer sidebar." }]);
-      setPrompt("");
-      return;
-    }
 
     const userMsg = prompt.trim();
     setPrompt("");
@@ -178,7 +172,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
       setActiveRuns(prev => { const n = new Set(prev); n.add(runKey); return n; });
       try {
         let gitStatusSummary = "<Not Provided>";
-        if (api.gitStatus) {
+        if (api.gitStatus && repoPath) {
           try {
             const status = await api.gitStatus(repoPath);
             if (status && status.length > 0) {

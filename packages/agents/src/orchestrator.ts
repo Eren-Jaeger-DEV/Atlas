@@ -243,9 +243,9 @@ export class Orchestrator {
 
       // Quick intent classifier for chat
       if (isChatMode) {
-        const lastMsg = goal.toLowerCase();
-        // Simple heuristic: if it looks like a question and doesn't contain action verbs, treat as chat
-        const isLikelyTask = /add|create|update|refactor|fix|change|remove|delete|implement|write/i.test(lastMsg);
+        const lastMsg = goal.toLowerCase().trim();
+        const isGreeting = /^(hi|hey|hello|yo|howdy|greetings|good\s*(morning|afternoon|evening|day))[\s!.]*$/i.test(lastMsg);
+        const isLikelyTask = !isGreeting && /\b(add|create|update|refactor|fix|change|remove|delete|implement|write|build|test|debug|run)\b/i.test(lastMsg);
         
         if (!isLikelyTask) {
           const developerProfile = this.config.memory.getDeveloperProfile?.("default");

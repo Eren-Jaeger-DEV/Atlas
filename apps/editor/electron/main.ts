@@ -1608,8 +1608,7 @@ ipcMain.handle("atlas:add-repo", async (_event, repoPath: string) => {
 
 // Agent run — delegates to agent runtime subprocess
 ipcMain.handle("atlas:run", async (event, input: string | any[], context?: any) => {
-  const repoRoot = getProjectRoot();
-  if (!repoRoot) return { error: "No active workspace" };
+  const repoRoot = getProjectRoot() || app.getPath("userData");
 
   try {
     const provider = await createProvider(repoRoot);
