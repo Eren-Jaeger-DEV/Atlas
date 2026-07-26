@@ -117,16 +117,16 @@ export function ComposerDiff({
       if (e.altKey && e.code === "KeyJ") {
         e.preventDefault();
         const currentIdx = filePaths.indexOf(activeFile);
-        if (currentIdx < filePaths.length - 1) {
-          setActiveFile(filePaths[currentIdx + 1]);
+        if (currentIdx < filePaths.length - 1 && filePaths[currentIdx + 1]) {
+          setActiveFile(filePaths[currentIdx + 1]!);
         }
       }
       // Alt+K: Previous hunk / file
       else if (e.altKey && e.code === "KeyK") {
         e.preventDefault();
         const currentIdx = filePaths.indexOf(activeFile);
-        if (currentIdx > 0) {
-          setActiveFile(filePaths[currentIdx - 1]);
+        if (currentIdx > 0 && filePaths[currentIdx - 1]) {
+          setActiveFile(filePaths[currentIdx - 1]!);
         }
       }
       // Alt+Enter: Accept

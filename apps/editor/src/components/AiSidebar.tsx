@@ -29,7 +29,7 @@ function formatDuration(ms: number): string {
 function FormattedMessageText({ text }: { text: string }) {
   if (text.startsWith("[Failover]")) {
     const match = text.match(/^\[Failover\]\s+(.*?)\n\n([\s\S]*)$/);
-    if (match) {
+    if (match && match[2]) {
       return (
         <div>
           <div style={{
@@ -203,9 +203,10 @@ function ProcessStepList({ steps }: { steps: string[] }) {
             <div style={{ paddingLeft: "10px", marginTop: "4px", display: "flex", flexDirection: "column", gap: "3px" }}>
               {exploredSteps.map((step, i) => {
                 const match = step.match(/^Analyzed\s+(.*?)\s*(#L\d+-\d+)?$/);
-                const fileName = match ? match[1] : step.replace(/^Analyzed\s*/, "");
-                const lineRange = match && match[2] ? match[2] : "";
-                const lineNum = lineRange ? parseInt(lineRange.replace("#L", "").split("-")[0]) : 1;
+                const fileName = (match && match[1]) ? match[1] : step.replace(/^Analyzed\s*/, "");
+                const lineRange = (match && match[2]) ? match[2] : "";
+                const firstLineStr = lineRange ? lineRange.replace("#L", "").split("-")[0] : "";
+                const lineNum = firstLineStr ? parseInt(firstLineStr) : 1;
                 const badge = getLangBadge(fileName);
                 return (
                   <div
@@ -241,9 +242,9 @@ function ProcessStepList({ steps }: { steps: string[] }) {
 
         if (isEdited) {
           const match = step.match(/^(?:Edited|Modified)\s+(.*?)(?:\s+([+-]\d+)\s+([+-]\d+))?$/);
-          const fileName = match ? match[1] : step.replace(/^(?:Edited|Modified)\s*/, "");
-          const added = match && match[2] ? match[2] : "";
-          const deleted = match && match[3] ? match[3] : "";
+          const fileName = (match && match[1]) ? match[1] : step.replace(/^(?:Edited|Modified)\s*/, "");
+          const added = (match && match[2]) ? match[2] : "";
+          const deleted = (match && match[3]) ? match[3] : "";
           const badge = getLangBadge(fileName);
 
           return (
@@ -272,8 +273,9 @@ function ProcessStepList({ steps }: { steps: string[] }) {
           // Collect all subsequent TerminalOutput steps
           const termOutputs: string[] = [];
           for (let j = i + 1; j < nonExploredSteps.length; j++) {
-            if (nonExploredSteps[j].startsWith("TerminalOutput: ")) {
-              termOutputs.push(nonExploredSteps[j].replace(/^TerminalOutput:\s*/, ""));
+            const nextStep = nonExploredSteps[j];
+            if (nextStep && nextStep.startsWith("TerminalOutput: ")) {
+              termOutputs.push(nextStep.replace(/^TerminalOutput:\s*/, ""));
             } else {
               break;
             }
@@ -577,7 +579,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
   const [prompt, setPrompt] = useState("");
   const [activeRuns, setActiveRuns] = useState<Set<string>>(new Set());
   const [messages, setMessages] = useState<ChatMessage[]>([]); 
-  const [activeView, setActiveView] = useState<"chat" | "history" | "dashboard">("chat");
+  const [activeView, setActiveView] = useState<"chat" | "history" | "dashboard" | "artifacts" | "tasks">("chat");
   const [composerOutput, setComposerOutput] = useState<any>(null);
   const [streamEvents, setStreamEvents] = useState<any[]>([]);
   const [streamingTokenText, setStreamingTokenText] = useState("");
