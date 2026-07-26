@@ -3,6 +3,8 @@
  *
  * Sandboxed file system operations. All paths are validated against
  * the repo root — agents cannot read/write outside the workspace.
+ * File access is additionally gated by AtlasIgnore so that .atlasignore
+ * patterns (and built-in credential rules) are enforced at the tool layer.
  */
 
 import { readFile, writeFile, readdir, stat } from "node:fs/promises";
@@ -10,6 +12,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { createPatch } from "diff";
 import type { LLMToolDefinition } from "@atlas/core";
+import { AtlasIgnore } from "@atlas/core";
 
 // ---------------------------------------------------------------------------
 // Sandbox validation
@@ -23,15 +26,36 @@ export function validatePath(filePath: string, repoRoot: string): string {
   return resolved;
 }
 
+/**
+ * Build an AtlasIgnore instance for the given repo root.
+ * Reads `.atlasignore` from the repo root if it exists.
+ * Built-in rules (.env, id_rsa, *.pem, etc.) are always active regardless.
+ */
+export async function createAtlasIgnoreForRepo(repoRoot: string): Promise<AtlasIgnore> {
+  const ignore = new AtlasIgnore();
+  try {
+    const ignoreFilePath = path.join(repoRoot, ".atlasignore");
+    const content = await readFile(ignoreFilePath, "utf-8");
+    ignore.loadRules(content);
+  } catch {
+    // No .atlasignore present — built-in rules still apply
+  }
+  return ignore;
+}
+
 // ---------------------------------------------------------------------------
 // Tool implementations
 // ---------------------------------------------------------------------------
 
 export async function readFileTool(
   filePath: string,
-  repoRoot: string
+  repoRoot: string,
+  atlasIgnore?: AtlasIgnore
 ): Promise<string> {
   const resolved = validatePath(filePath, repoRoot);
+  if (atlasIgnore?.isIgnored(filePath)) {
+    return `[Access denied: '${filePath}' is protected by .atlasignore rules]`;
+  }
   try {
     return await readFile(resolved, "utf-8");
   } catch {
@@ -43,9 +67,13 @@ export async function writeFileTool(
   filePath: string,
   content: string,
   repoRoot: string,
-  onCheckPermission?: (permission: string, data: any) => Promise<boolean>
+  onCheckPermission?: (permission: string, data: any) => Promise<boolean>,
+  atlasIgnore?: AtlasIgnore
 ): Promise<string> {
   const resolved = validatePath(filePath, repoRoot);
+  if (atlasIgnore?.isIgnored(filePath)) {
+    throw new Error(`[Access denied: '${filePath}' is protected by .atlasignore rules]`);
+  }
   if (onCheckPermission) {
     const granted = await onCheckPermission("workspace.write", { filePath, proposedCode: content });
     if (!granted) throw new Error("Permission denied by user.");
@@ -56,12 +84,18 @@ export async function writeFileTool(
 
 export async function listDirectoryTool(
   dirPath: string,
-  repoRoot: string
+  repoRoot: string,
+  atlasIgnore?: AtlasIgnore
 ): Promise<string> {
   const resolved = validatePath(dirPath, repoRoot);
   try {
     const entries = await readdir(resolved, { withFileTypes: true });
     return entries
+      .filter((e) => {
+        if (!atlasIgnore) return true;
+        const entryRelPath = path.join(dirPath, e.name);
+        return !atlasIgnore.isIgnored(entryRelPath);
+      })
       .map((e) => `${e.isDirectory() ? "dir" : "file"} ${e.name}`)
       .join("\n");
   } catch {
@@ -73,8 +107,12 @@ export async function multiReplaceFileContentTool(
   filePath: string,
   chunks: Array<{ targetContent: string; replacementContent: string }>,
   repoRoot: string,
-  onCheckPermission?: (permission: string, data: any) => Promise<boolean>
+  onCheckPermission?: (permission: string, data: any) => Promise<boolean>,
+  atlasIgnore?: AtlasIgnore
 ): Promise<string> {
+  if (atlasIgnore?.isIgnored(filePath)) {
+    throw new Error(`[Access denied: '${filePath}' is protected by .atlasignore rules]`);
+  }
   const resolved = validatePath(filePath, repoRoot);
   const content = await readFile(resolved, "utf-8");
   let newContent = content;

@@ -1,13 +1,16 @@
 /**
  * @atlas/agents — Bash Tools
  *
- * Sandboxed command execution for agents.
+ * Sandboxed command execution for agents. Commands are gated by
+ * WorkspaceTrustPolicy before execution, and wrapped by SandboxWrapper
+ * for platform-native OS-level isolation (macOS sandbox-exec / Linux bwrap).
  */
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import type { LLMToolDefinition } from "@atlas/core";
+import { WorkspaceTrustPolicy, SandboxWrapper } from "@atlas/core";
 
 const execAsync = promisify(exec);
 
@@ -15,11 +18,17 @@ export async function runCommandTool(
   command: string,
   cwd: string,
   repoRoot: string,
-  onCheckPermission?: (permission: string, data: any) => Promise<boolean>
+  onCheckPermission?: (permission: string, data: any) => Promise<boolean>,
+  workspaceTrust?: WorkspaceTrustPolicy
 ): Promise<string> {
   const resolvedCwd = path.resolve(repoRoot, cwd);
   if (!resolvedCwd.startsWith(path.resolve(repoRoot))) {
     return `[Error: Path escapes repo root: ${cwd}]`;
+  }
+
+  // Trust gate: block execution if workspace is not in TRUSTED state
+  if (workspaceTrust && !workspaceTrust.isCommandExecutionAllowed()) {
+    return `[Error: Command execution blocked — workspace trust status is '${workspaceTrust.getTrustStatus()}'. Set workspace to TRUSTED to allow agent commands.]`;
   }
 
   if (onCheckPermission) {
@@ -29,8 +38,11 @@ export async function runCommandTool(
     }
   }
 
+  // Wrap the command with platform-native sandbox isolation
+  const sandboxedCommand = SandboxWrapper.wrapCommand(command, { repoPath: repoRoot });
+
   try {
-    const { stdout, stderr } = await execAsync(command, { cwd: resolvedCwd, timeout: 10000 });
+    const { stdout, stderr } = await execAsync(sandboxedCommand, { cwd: resolvedCwd, timeout: 10000 });
     let output = "";
     if (stdout) output += `STDOUT:\n${stdout}\n`;
     if (stderr) output += `STDERR:\n${stderr}\n`;
@@ -42,6 +54,7 @@ export async function runCommandTool(
     return output.trim();
   }
 }
+
 
 export const BASH_TOOL_DEFINITIONS: LLMToolDefinition[] = [
   {

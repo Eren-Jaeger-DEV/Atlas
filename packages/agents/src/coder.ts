@@ -13,6 +13,7 @@
 import { sha256 } from "js-sha256";
 import { createPatch } from "diff";
 import type { ILLMProvider, PlanStep, CoderOutput } from "@atlas/core";
+import { WorkspaceTrustPolicy } from "@atlas/core";
 import type { MemoryEngine } from "@atlas/graph";
 import {
   FS_TOOL_DEFINITIONS,
@@ -20,6 +21,7 @@ import {
   writeFileTool,
   listDirectoryTool,
   multiReplaceFileContentTool,
+  createAtlasIgnoreForRepo,
 } from "./tools/fs-tools.js";
 import {
   GRAPH_TOOL_DEFINITIONS,
@@ -69,6 +71,8 @@ interface CoderContext {
   memory: MemoryEngine;
   repoRoot: string;
   onCheckPermission?: (permission: string, data: any) => Promise<boolean>;
+  atlasIgnore: import("@atlas/core").AtlasIgnore;
+  workspaceTrust: WorkspaceTrustPolicy;
 }
 
 async function handleCoderToolCall(
@@ -76,14 +80,14 @@ async function handleCoderToolCall(
   toolArgs: Record<string, unknown>,
   ctx: CoderContext
 ): Promise<string> {
-  const { memory, repoRoot, filesBefore, filesAfter } = ctx;
+  const { memory, repoRoot, filesBefore, filesAfter, atlasIgnore, workspaceTrust } = ctx;
 
   switch (toolName) {
     case "read_file": {
       const fp = String(toolArgs["file_path"] ?? "");
-      const content = await readFileTool(fp, repoRoot);
-      // Snapshot original content for diffing
-      if (!filesBefore.has(fp)) filesBefore.set(fp, content);
+      const content = await readFileTool(fp, repoRoot, atlasIgnore);
+      // Snapshot original content for diffing (skip if access was denied)
+      if (!filesBefore.has(fp) && !content.startsWith("[Access denied")) filesBefore.set(fp, content);
       return content;
     }
     case "write_file": {
@@ -91,29 +95,29 @@ async function handleCoderToolCall(
       const content = String(toolArgs["content"] ?? "");
       // Capture original before first write
       if (!filesBefore.has(fp)) {
-        const existing = await readFileTool(fp, repoRoot);
-        filesBefore.set(fp, existing.startsWith("[Error") ? "" : existing);
+        const existing = await readFileTool(fp, repoRoot, atlasIgnore);
+        filesBefore.set(fp, existing.startsWith("[Error") || existing.startsWith("[Access") ? "" : existing);
       }
       filesAfter.set(fp, content);
-      await writeFileTool(fp, content, repoRoot, ctx.onCheckPermission);
-      return `✓ Written: ${fp}`;
+      await writeFileTool(fp, content, repoRoot, ctx.onCheckPermission, atlasIgnore);
+      return `[PASS] Written: ${fp}`;
     }
     case "multi_replace_file_content": {
       const fp = String(toolArgs["file_path"] ?? "");
       const chunks = toolArgs["chunks"] as Array<{ targetContent: string; replacementContent: string }>;
       
       if (!filesBefore.has(fp)) {
-        const existing = await readFileTool(fp, repoRoot);
-        filesBefore.set(fp, existing.startsWith("[Error") ? "" : existing);
+        const existing = await readFileTool(fp, repoRoot, atlasIgnore);
+        filesBefore.set(fp, existing.startsWith("[Error") || existing.startsWith("[Access") ? "" : existing);
       }
       
-      const result = await multiReplaceFileContentTool(fp, chunks, repoRoot, ctx.onCheckPermission);
-      const newContent = await readFileTool(fp, repoRoot);
+      const result = await multiReplaceFileContentTool(fp, chunks, repoRoot, ctx.onCheckPermission, atlasIgnore);
+      const newContent = await readFileTool(fp, repoRoot, atlasIgnore);
       filesAfter.set(fp, newContent);
       return result;
     }
     case "list_directory":
-      return listDirectoryTool(String(toolArgs["dir_path"] ?? "."), repoRoot);
+      return listDirectoryTool(String(toolArgs["dir_path"] ?? "."), repoRoot, atlasIgnore);
     case "query_memory":
       return queryMemoryTool(String(toolArgs["query"] ?? ""), { memory, repoRoot });
     case "get_impact":
@@ -141,7 +145,8 @@ async function handleCoderToolCall(
         String(toolArgs["command"] ?? ""),
         String(toolArgs["cwd"] ?? "."),
         repoRoot,
-        ctx.onCheckPermission
+        ctx.onCheckPermission,
+        workspaceTrust
       );
     default:
       return `Unknown tool: ${toolName}`;
@@ -168,12 +173,22 @@ export async function runCoder(
 
   onProgress?.(`Coder: working on "${step.title}"...`);
 
+  // Build security context for this run:
+  // - atlasIgnore: enforces .atlasignore + built-in credential protection rules
+  // - workspaceTrust: defaults to TRUSTED (preserving existing behavior); can be
+  //   set to UNTRUSTED by a caller to block all agent command execution
+  const atlasIgnore = await createAtlasIgnoreForRepo(repoRoot);
+  const workspaceTrust = new WorkspaceTrustPolicy(repoRoot);
+  workspaceTrust.setTrustStatus("TRUSTED"); // Default: trusted workspace
+
   const ctx: CoderContext = {
     filesBefore: new Map(),
     filesAfter: new Map(),
     memory,
     repoRoot,
     onCheckPermission,
+    atlasIgnore,
+    workspaceTrust,
   };
 
     const bugPatterns = memory.getBugPatterns?.() || [];

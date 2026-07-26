@@ -8,11 +8,11 @@ Atlas Studio is a professional, high-performance desktop IDE engineered for comp
 
 ## Product Pillars
 
-1. **Professional IDE Experience**: High-speed code editing, tabs, split panes, interactive SVG dependency graphs, 3-way merge conflict editor, and integrated terminal.
-2. **Deterministic Project Intelligence**: Fast AST symbol indexing, cycle detection, project health dashboard, and definition peek popovers.
-3. **Sandboxed Extension SDK (`@atlas/sdk`)**: Secure plugin framework with granular permission gates (`workspace.read`, `workspace.write`, `terminal.execute`, `network.fetch`).
-4. **Unprivileged AI Runtime**: Multi-provider LLM router (Google Gemini, OpenAI, Anthropic, Ollama), token-bounded ContextEngine, and human approval edit preview modal.
-5. **Local-First Architecture**: 100% offline-ready core with optional account synchronization, workspace profiles (Personal, Work, Open Source, Research), and release quality assurance.
+1. **Professional IDE Experience**: High-speed code editing, framer-motion spring animations, Web Worker LSP isolation, CallGraphVisualizer (interactive SVG node graph), PromptStudio (AI prompt engineering workbench), ProjectHealthDashboard (tech debt meter), TrajectoryReplayViewer (timeline scrubber), ToastBannerManager (glassmorphic animated notifications), GitBlameGutter (inline line annotations), WorkspaceProfileSwitcher, live Mermaid.js chat diagram renderer, Jupyter Notebook viewer (`.ipynb`), SettingsConfigViewer (graphical settings manager), MultiDiffTabViewer (multi-file batch diff reviews), WorkflowEditor GUI builder, CommandPaletteQuickPicker (`Ctrl+Shift+P`), TerminalSuggestEngine (1-click AI terminal fixes), rich `@mentions` chat composer, glassmorphic context menus with hotkey badges, animated toast stack, interactive status bar quick-picks (`StatusBarRegistry`), floating inline AI `Ctrl+K` bar, tabs, split panes, interactive SVG dependency graphs, 3-way merge conflict editor, and integrated terminal.
+2. **Deterministic Project Intelligence**: Fast AST symbol indexing, WorkspaceSearchIndexer (fast regex & glob text search), SecurityAuditEngine (AST secret & vulnerability scanner), ShadowWorkspace unrendered background engine, CompetitorSettingsImporter (Cursor/Windsurf migration), FeatureFlagManager (Statsig flags & telemetry), cycle detection, project health dashboard, and definition peek popovers.
+3. **Sandboxed Extension SDK (`@atlas/sdk`)**: Secure plugin framework with live OS kernel sandboxing (`sandbox-exec` on macOS, `bwrap` on Linux via `SandboxWrapper`) wired into every agent command, `AtlasIgnore` pattern enforcement on all agent file reads/writes/lists (with built-in `.env`, `*.pem`, `id_rsa` protection active by default), `WorkspaceTrustPolicy` trust gate blocking command execution in untrusted workspaces, `ExtensionMarketplaceManager` (Open VSX registry), `RemoteAuthorityTunnel` (SSH/WSL stub, shape preserved for future implementation), `McpOAuthGateway` (credential cache with Bearer header injection; full PKCE flow is a planned future feature), and granular permission gates (`workspace.read`, `workspace.write`, `terminal.execute`, `network.fetch`).
+4. **Unprivileged AI Runtime**: Multi-provider LLM router (Google Gemini, OpenAI, Anthropic, Ollama), SelfHealingLoop (automated post-edit repair cycle), SmartModelClassifier (intent-based Smart Mode routing), SessionManager (`.atlas/chats/*.json` persistence), MultiRegionApiRouter (failover endpoint topology), PerformanceProfiler (heap & event loop telemetry), three-tier persistent memory engine (`MemoryStore`), ExecutionSubagent log filter, DiffZoneTransport binary stream framing, token-bounded ContextEngine, and human approval edit preview modal.
+5. **Local-First Architecture & Quality Assurance**: 100% offline-ready core with automated unit test suites (`SessionManager`, `TerminalSuggestEngine`, `WorkspaceSearchIndexer`, `WorkspaceTrustPolicy`, `SmartModelClassifier`), optional account synchronization, workspace profiles (Personal, Enterprise, Open Source, Research), and release quality assurance.
 
 ---
 
@@ -107,6 +107,25 @@ Engineering decisions and architectural evolutions are formally documented as RF
 - [`RFC-015-release-engineering-and-quality-assurance.md`](file:///f:/projects/Atlas/docs/architecture/RFC-015-release-engineering-and-quality-assurance.md): Release Engineering & Performance Budgets
 - [`RFC-016-v1.0-release-specification-and-final-architecture.md`](file:///home/victor/My%20projects/Atlas/docs/architecture/RFC-016-v1.0-release-specification-and-final-architecture.md): Atlas Studio v1.0 System Blueprint
 - [`RFC-017-autonomous-browser-and-dom-tools.md`](file:///home/victor/My%20projects/Atlas/docs/architecture/RFC-017-autonomous-browser-and-dom-tools.md): Autonomous Browser & Dynamic DOM Subsystem Architecture
+
+---
+
+## Research & Competitive Intelligence
+
+A deep-dive reverse engineering study of the three major AI IDEs has been conducted to inform Atlas Studio's architecture and feature roadmap:
+
+### Studied IDEs
+- **Cursor** (Anysphere) — 13 research chapters covering extension pipeline, permission system, Canvas runtime, complete protobuf API surface (`aiserver.v1`, `agent.v1`), MCP SDK patches, and background agent orchestration
+- **Antigravity IDE** (Google) — 13 research chapters covering the Jetski agent, macOS kernel sandbox, protobuf transport, Colab integration, Cloudtop SSH remote, and the `.agyignore` format
+- **VS Code** (Microsoft) — 7 research chapters covering the Copilot API proposal surface, trusted extension auth, mermaid chat rendering, and OSS vs. proprietary build differences
+
+### Key Findings Applied to Atlas
+- **Permission system**: Atlas implements a `.cursor/permissions.json`-style permission file with `approvalMode`, MCP allowlists, and natural language auto-run rules
+- **Background agents**: Multi-agent architecture inspired by Cursor's `BackgroundSubagent` spawn model and Antigravity's Jetski parallel execution
+- **Sandbox security**: Terminal command sandboxing pattern based on Antigravity's `sandbox-wrapper.sh` approach
+- **KV store tiers**: Agent state persistence tiers inspired by Cursor's `agent_kv.*` multi-layer store
+
+**Full study**: [`docs/REVERSE_ENGINEERING_INDEX.md`](./docs/REVERSE_ENGINEERING_INDEX.md)
 
 ---
 
