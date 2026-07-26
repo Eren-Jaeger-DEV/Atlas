@@ -1118,92 +1118,62 @@ function AppInner() {
               </button>
 
               {/* 3-Dot More Actions Button */}
-              <div style={{ position: "relative" }}>
-                <button
-                  className="hover-scale"
-                  style={{
-                    background: showTabActionsMenu ? "rgba(255,255,255,0.1)" : "none",
-                    border: "none", color: "var(--text-muted, #a1a1aa)", cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
-                  }}
-                  onClick={() => setShowTabActionsMenu(!showTabActionsMenu)}
-                  title="More Editor Actions..."
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-                </button>
-
-                {/* Dropdown Menu matching Screenshot 3 */}
-                {showTabActionsMenu && (
-                  <div
-                    style={{
-                      position: "absolute", top: "32px", right: "0", zIndex: 10000,
-                      backgroundColor: "#0e0e12", border: "1px solid #27272a", borderRadius: "8px",
-                      padding: "4px", width: "210px", boxShadow: "0 8px 24px rgba(0,0,0,0.7)", fontFamily: "var(--font-ui)"
-                    }}
-                  >
-                    <div
-                      style={tabDropdownItemStyle}
-                      onClick={() => { setShowCommandPalette(true); setShowTabActionsMenu(false); }}
-                    >
-                      <span>Show Opened Editors</span>
-                    </div>
-
-                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
-
-                    <div
-                      style={tabDropdownItemStyle}
-                      onClick={() => { setTabs([]); setActiveTabIndex(0); setShowTabActionsMenu(false); }}
-                    >
-                      <span>Close All</span>
-                      <span style={{ fontSize: "10px", color: "#71717a" }}>Ctrl+K W</span>
-                    </div>
-
-                    <div
-                      style={tabDropdownItemStyle}
-                      onClick={() => {
-                        setTabs(prev => prev.filter(t => t.isDirty));
-                        setActiveTabIndex(0);
-                        setShowTabActionsMenu(false);
-                      }}
-                    >
-                      <span>Close Saved</span>
-                      <span style={{ fontSize: "10px", color: "#71717a" }}>Ctrl+K U</span>
-                    </div>
-
-                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
-
-                    <div
-                      style={tabDropdownItemStyle}
-                      onClick={() => { setPreviewMode(!previewMode); setShowTabActionsMenu(false); }}
-                    >
-                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        {previewMode ? <span style={{ color: "#38bdf8", fontWeight: "bold" }}>✓</span> : <span style={{ width: "12px" }} />}
-                        <span>Enable Preview Editors</span>
-                      </span>
-                    </div>
-
-                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
-
-                    <div
-                      style={tabDropdownItemStyle}
-                      onClick={() => { setGroupLocked(!groupLocked); setShowTabActionsMenu(false); }}
-                    >
-                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        {groupLocked ? <span style={{ color: "#38bdf8", fontWeight: "bold" }}>✓</span> : <span style={{ width: "12px" }} />}
-                        <span>Lock Group</span>
-                      </span>
-                    </div>
-
-                    <div style={{ height: "1px", backgroundColor: "#27272a", margin: "4px 0" }} />
-
-                    <div
-                      style={tabDropdownItemStyle}
-                      onClick={() => { api()?.openSettingsWindow?.(); setShowTabActionsMenu(false); }}
-                    >
-                      <span>Configure Editors</span>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                className="hover-scale"
+                style={{
+                  background: "none",
+                  border: "none", color: "var(--text-muted, #a1a1aa)", cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  showContextMenu({
+                    x: Math.max(10, rect.right - 210),
+                    y: rect.bottom + 4,
+                    items: [
+                      {
+                        label: "Show Opened Editors",
+                        onClick: () => setShowCommandPalette(true),
+                      },
+                      { separator: true },
+                      {
+                        label: "Close All",
+                        shortcut: "Ctrl+K W",
+                        onClick: () => {
+                          setTabs([]);
+                          setActiveTabIndex(0);
+                        },
+                      },
+                      {
+                        label: "Close Saved",
+                        shortcut: "Ctrl+K U",
+                        onClick: () => {
+                          setTabs(prev => prev.filter(t => t.isDirty));
+                          setActiveTabIndex(0);
+                        },
+                      },
+                      { separator: true },
+                      {
+                        label: `${previewMode ? "✓  " : "    "}Enable Preview Editors`,
+                        onClick: () => setPreviewMode(prev => !prev),
+                      },
+                      { separator: true },
+                      {
+                        label: `${groupLocked ? "✓  " : "    "}Lock Group`,
+                        onClick: () => setGroupLocked(prev => !prev),
+                      },
+                      { separator: true },
+                      {
+                        label: "Configure Editors",
+                        onClick: () => api()?.openSettingsWindow?.(),
+                      },
+                    ]
+                  });
+                }}
+                title="More Editor Actions..."
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+              </button>
             </div>
           </div>
 
