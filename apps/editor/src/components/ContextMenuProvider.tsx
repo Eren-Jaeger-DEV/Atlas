@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 
 export interface ContextMenuItem {
   label?: string;
+  icon?: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   separator?: boolean;
@@ -47,81 +49,113 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     };
 
     if (menu) {
-      document.addEventListener("click", handleGlobalClick);
-      document.addEventListener("contextmenu", handleGlobalClick);
+      const timer = setTimeout(() => {
+        document.addEventListener("click", handleGlobalClick);
+        document.addEventListener("contextmenu", handleGlobalClick);
+      }, 50);
       document.addEventListener("keydown", handleGlobalEsc);
+
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener("click", handleGlobalClick);
+        document.removeEventListener("contextmenu", handleGlobalClick);
+        document.removeEventListener("keydown", handleGlobalEsc);
+      };
     }
-    return () => {
-      document.removeEventListener("click", handleGlobalClick);
-      document.removeEventListener("contextmenu", handleGlobalClick);
-      document.removeEventListener("keydown", handleGlobalEsc);
-    };
   }, [menu]);
 
   return (
     <ContextMenuContext.Provider value={{ showContextMenu, hideContextMenu }}>
       {children}
-      {menu && createPortal(
-        <div
-          className="anim-scale-in"
-          style={{
-            position: "fixed",
-            top: Math.min(menu.y, window.innerHeight - (menu.items.length * 30)),
-            left: Math.min(menu.x, window.innerWidth - 200),
-            width: "200px",
-            backgroundColor: "rgba(24, 24, 27, 0.7)",
-            backdropFilter: "blur(12px) saturate(1.5)",
-            WebkitBackdropFilter: "blur(12px) saturate(1.5)",
-            border: "1px solid var(--border-medium)",
-            borderRadius: "6px",
-            boxShadow: "var(--shadow-lg), var(--shadow-panel)",
-            zIndex: 999999,
-            padding: "4px 0",
-            fontFamily: "var(--font-ui)"
-          }}
-          onClick={(e) => e.stopPropagation()}
-          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-        >
-          {menu.items.map((item, idx) => {
-            if (item.separator) {
-              return <div key={idx} style={{ height: "1px", backgroundColor: "var(--border-subtle)", margin: "4px 0" }} />;
-            }
-            return (
-              <div
-                key={idx}
-                style={{
-                  padding: "6px 12px",
-                  fontSize: "12px",
-                  color: item.disabled ? "var(--text-faint)" : "var(--text-main)",
-                  cursor: item.disabled ? "default" : "pointer",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  opacity: item.disabled ? 0.6 : 1,
-                  transition: "background-color 0.1s"
-                }}
-                onMouseOver={(e) => {
-                  if (!item.disabled) e.currentTarget.style.backgroundColor = "var(--accent)";
-                }}
-                onMouseOut={(e) => {
-                  if (!item.disabled) e.currentTarget.style.backgroundColor = "transparent";
-                }}
-                onClick={() => {
-                  if (!item.disabled && item.onClick) {
-                    item.onClick();
-                    hideContextMenu();
-                  }
-                }}
-              >
-                <span>{item.label}</span>
-                {item.shortcut && <span style={{ opacity: 0.7, fontSize: "11px", fontFamily: "var(--font-mono)" }}>{item.shortcut}</span>}
-                {item.items && <span style={{ opacity: 0.7, fontSize: "11px" }}>▶</span>}
-              </div>
-            );
-          })}
-        </div>,
-        document.body
-      )}
+      <AnimatePresence>
+        {menu && createPortal(
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: -4 }}
+            transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              position: "fixed",
+              top: Math.min(menu.y, window.innerHeight - (menu.items.length * 32 + 20)),
+              left: Math.min(menu.x, window.innerWidth - 220),
+              width: "210px",
+              backgroundColor: "var(--bg-glass-strong, rgba(14, 14, 18, 0.95))",
+              backdropFilter: "blur(20px) saturate(1.5)",
+              WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+              border: "1px solid var(--border-strong, #27272a)",
+              borderRadius: "8px",
+              boxShadow: "var(--shadow-lg), 0 20px 40px rgba(0, 0, 0, 0.6)",
+              zIndex: 999999,
+              padding: "5px",
+              fontFamily: "var(--font-ui)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          >
+            {menu.items.map((item, idx) => {
+              if (item.separator) {
+                return <div key={idx} style={{ height: "1px", backgroundColor: "var(--border-subtle, #27272a)", margin: "4px 0" }} />;
+              }
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    color: item.disabled ? "var(--text-faint, #52525b)" : "var(--text-main, #fafafa)",
+                    cursor: item.disabled ? "default" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                    opacity: item.disabled ? 0.5 : 1,
+                    transition: "all 0.1s ease"
+                  }}
+                  onMouseOver={(e) => {
+                    if (!item.disabled) {
+                      e.currentTarget.style.backgroundColor = "var(--bg-hover-strong, rgba(255,255,255,0.08))";
+                      e.currentTarget.style.color = "var(--accent, #38bdf8)";
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (!item.disabled) {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.color = "var(--text-main, #fafafa)";
+                    }
+                  }}
+                  onClick={() => {
+                    if (!item.disabled && item.onClick) {
+                      item.onClick();
+                      hideContextMenu();
+                    }
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {item.icon && <span style={{ display: "flex", alignItems: "center", color: "inherit" }}>{item.icon}</span>}
+                    <span>{item.label}</span>
+                  </div>
+                  {item.shortcut && (
+                    <span style={{
+                      opacity: 0.6,
+                      fontSize: "10px",
+                      fontFamily: "var(--font-mono)",
+                      backgroundColor: "rgba(255,255,255,0.06)",
+                      padding: "1px 5px",
+                      borderRadius: "3px",
+                      border: "1px solid rgba(255,255,255,0.1)"
+                    }}>
+                      {item.shortcut}
+                    </span>
+                  )}
+                  {item.items && <span style={{ opacity: 0.6, fontSize: "10px" }}>▶</span>}
+                </div>
+              );
+            })}
+          </motion.div>,
+          document.body
+        )}
+      </AnimatePresence>
     </ContextMenuContext.Provider>
   );
 }
