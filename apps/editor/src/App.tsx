@@ -1150,13 +1150,13 @@ function AppInner() {
               <button
                 className="hover-scale"
                 style={{
-                  background: activeSidebarView === "preview" ? "rgba(56, 189, 248, 0.2)" : "none",
-                  border: activeSidebarView === "preview" ? "1px solid rgba(56, 189, 248, 0.4)" : "none",
-                  color: activeSidebarView === "preview" ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
+                  background: activeSidebar === "preview" ? "rgba(56, 189, 248, 0.2)" : "none",
+                  border: activeSidebar === "preview" ? "1px solid rgba(56, 189, 248, 0.4)" : "none",
+                  color: activeSidebar === "preview" ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
                   cursor: "pointer", padding: "4px 8px", borderRadius: "4px", display: "flex", alignItems: "center", gap: "5px",
                   fontSize: "11px", fontWeight: 600, fontFamily: "var(--font-mono)"
                 }}
-                onClick={() => setActiveSidebarView(activeSidebarView === "preview" ? "explorer" : "preview")}
+                onClick={() => setActiveSidebar(activeSidebar === "preview" ? "explorer" : "preview")}
                 title="Toggle Live Web App Preview"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -1278,8 +1278,8 @@ function AppInner() {
               />
             )}
 
-            {activeSidebarView === "preview" ? (
-              <WebPreviewPanel onClose={() => setActiveSidebarView("explorer")} />
+            {activeSidebar === "preview" ? (
+              <WebPreviewPanel onClose={() => setActiveSidebar("explorer")} />
             ) : showMergeConflict ? (
               <MergeConflictEditor filePath={activeTab?.filePath || "src/index.ts"} onComplete={()=>setShowMergeConflict(false)}/>
             ) : activeDiff ? (

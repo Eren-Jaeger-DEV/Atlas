@@ -11,7 +11,7 @@
   "main": "./electron-dist/main.js",
   "scripts": {
     "dev": "tsc -p tsconfig.electron.json && npx cross-env NODE_ENV=development concurrently \"vite\" \"electron .\"",
-    "build": "vite build && tsc -p tsconfig.electron.json",
+    "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" vite build && tsc -p tsconfig.electron.json",
     "electron": "electron .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
