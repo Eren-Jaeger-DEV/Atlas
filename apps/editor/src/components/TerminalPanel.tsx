@@ -106,9 +106,17 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
         containerRef.current?.appendChild(div);
 
         term.open(div);
-        fitAddon.fit();
-
         termMapRef.current.set(tab.id, { term, fit: fitAddon });
+
+        // Schedule delayed fitting after DOM layout paint
+        setTimeout(() => {
+          try {
+            fitAddon.fit();
+            if (term.cols && term.rows && api?.terminalResize) {
+              api.terminalResize(tab.id, term.cols, term.rows);
+            }
+          } catch {}
+        }, 50);
 
         if (api) {
           const unsub = api.onTerminalData((payload: { termId: string; data: string }) => {
@@ -120,16 +128,21 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
 
           api.terminalCreate(tab.id, repoPath).then(() => {
             term.onData((data: string) => api.terminalInput(tab.id, data));
-            if (term.cols && term.rows && api.terminalResize) {
-              api.terminalResize(tab.id, term.cols, term.rows);
-            }
-            api.terminalGetHistory(tab.id).then((hist: string) => {
-              if (hist) {
-                term.write(hist);
-              } else {
-                api.terminalInput(tab.id, "\r");
-              }
-            });
+            setTimeout(() => {
+              try {
+                fitAddon.fit();
+                if (term.cols && term.rows && api.terminalResize) {
+                  api.terminalResize(tab.id, term.cols, term.rows);
+                }
+              } catch {}
+              api.terminalGetHistory(tab.id).then((hist: string) => {
+                if (hist) {
+                  term.write(hist);
+                } else {
+                  api.terminalInput(tab.id, "\r");
+                }
+              });
+            }, 100);
           });
 
           // Copy text automatically when selected
