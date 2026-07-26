@@ -1324,16 +1324,62 @@ function AppInner() {
                 style={{ ...s.dock, borderTop: settings.terminalPosition === "right" ? "none" : "1px solid var(--border-subtle)", borderLeft: settings.terminalPosition === "right" ? "1px solid var(--border-subtle)" : "none" }}
               >
                 <div style={s.dockTabs}>
-                  {(["terminal","problems","output","ai"] as BottomTab[]).map(t=>(
-                    <button 
-                      key={t} 
-                      style={{...s.dockTab,...(bottomTab===t?s.dockOn:{})}} 
-                      onClick={()=>setBottomTab(t)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
+                  {(["problems", "output", "debug", "terminal", "ports"] as const).map(t => {
+                    const isActive = bottomTab === (t as any);
+                    const label = t === "problems" ? "Problems" : t === "output" ? "Output" : t === "debug" ? "Debug Console" : t === "terminal" ? "Terminal" : "Ports";
+                    return (
+                      <button
+                        key={t}
+                        style={{
+                          ...s.dockTab,
+                          color: isActive ? "#fafafa" : "var(--text-muted, #a1a1aa)",
+                          borderBottom: isActive ? "2px solid #f97316" : "2px solid transparent",
+                          fontWeight: isActive ? 600 : 400,
+                          textTransform: "none",
+                        }}
+                        onClick={() => setBottomTab(t as any)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          showContextMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            items: [
+                              { label: "Hide Panel", onClick: () => setShowBottomPanel(false) },
+                              { 
+                                label: settings.terminalPosition === "right" ? "Move Panel to Bottom" : "Move Panel Right", 
+                                onClick: () => {
+                                  setSettings(prev => ({ ...prev, terminalPosition: prev.terminalPosition === "right" ? "bottom" : "right" }));
+                                }
+                              }
+                            ]
+                          });
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+
+                  {/* Right Actions matching Screenshot 1 */}
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px", paddingRight: "8px" }}>
+                    <button
+                      className="hover-scale"
+                      style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "2px 4px", fontSize: "14px", display: "flex", alignItems: "center" }}
+                      title="New Terminal"
+                      onClick={() => setBottomTab("terminal")}
+                    >
+                      +
+                    </button>
+                    <button
+                      className="hover-scale"
+                      style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "2px 4px", fontSize: "12px", display: "flex", alignItems: "center" }}
+                      title="More Actions"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
                         showContextMenu({
-                          x: e.clientX,
-                          y: e.clientY,
+                          x: rect.right - 180,
+                          y: rect.bottom + 4,
                           items: [
                             { label: "Hide Panel", onClick: () => setShowBottomPanel(false) },
                             { 
@@ -1346,10 +1392,25 @@ function AppInner() {
                         });
                       }}
                     >
-                      {t==="terminal"?"TERMINAL":t==="problems"?"PROBLEMS":t==="output"?"OUTPUT":"AI STREAM"}
+                      ...
                     </button>
-                  ))}
-                  <button style={{...s.dockTab,marginLeft:"auto",fontSize:"10px", borderBottom:"none", opacity: 0.7}} onClick={()=>setShowBottomPanel(false)}>✕</button>
+                    <button
+                      className="hover-scale"
+                      style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "2px 4px", fontSize: "12px", display: "flex", alignItems: "center" }}
+                      title="Toggle Maximize Panel"
+                      onClick={() => setBottomPanelHeight(h => h > 400 ? 220 : 500)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                    </button>
+                    <button
+                      className="hover-scale"
+                      style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "2px 4px", fontSize: "12px", display: "flex", alignItems: "center" }}
+                      title="Close Panel"
+                      onClick={() => setShowBottomPanel(false)}
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 <div style={{flex:1, overflow:"hidden"}}>
                   {bottomTab==="terminal" && <TerminalPanel repoPath={repoPath}/>}

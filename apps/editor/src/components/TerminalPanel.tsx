@@ -153,53 +153,47 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <div style={styles.tabGroup}>
-          {tabs.map(t => (
-            <div
-              key={t.id}
-              className="editor-tab anim-slide-right"
-              style={{ ...styles.tab, ...(t.id === activeTabId ? styles.tabOn : {}) }}
-              onClick={() => setActiveTabId(t.id)}
-            >
-              <span>{t.name}</span>
-              {tabs.length > 1 && (
-                <span
-                  className="tab-close-btn"
-                  style={styles.tabX}
-                  onClick={e => handleCloseTab(t.id, e)}
-                  title="Close Terminal"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
-                  </svg>
-                </span>
-              )}
-            </div>
-          ))}
-          <button className="hover-scale sidebar-action-btn" style={styles.addBtn} title="New Terminal Tab" onClick={handleAddTab}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </button>
-        </div>
+      {/* Terminal Viewport */}
+      <div ref={containerRef} style={styles.canvasContainer} />
 
-        <div style={styles.rightGroup}>
-          <select
-            className="hover-scale"
-            style={styles.select}
-            value={shellType}
-            onChange={e => setShellType(e.target.value)}
-          >
-            <option value="powershell">PowerShell</option>
-            <option value="cmd">Command Prompt</option>
-            <option value="bash">Git Bash</option>
-          </select>
-          <span style={styles.subtext}>{repoPath ? repoPath.split(/[/\\]/).pop() : "No workspace"}</span>
+      {/* Right-hand Sessions Sidebar matching Antigravity Screenshot 1 */}
+      <div style={styles.sessionsSidebar}>
+        <div style={styles.sessionsList}>
+          {tabs.map(t => {
+            const isActive = t.id === activeTabId;
+            return (
+              <div
+                key={t.id}
+                style={{
+                  ...styles.sessionItem,
+                  ...(isActive ? styles.sessionItemActive : {})
+                }}
+                onClick={() => setActiveTabId(t.id)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isActive ? "#f97316" : "#a1a1aa"} strokeWidth="2.5">
+                    <polyline points="4 17 10 11 4 5" />
+                    <line x1="12" y1="19" x2="20" y2="19" />
+                  </svg>
+                  <span style={{ fontSize: "11px", fontWeight: isActive ? 600 : 400, color: isActive ? "#fafafa" : "#a1a1aa", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                    {t.shell === "powershell" ? "powershell" : t.shell === "cmd" ? "cmd" : "bash"}
+                  </span>
+                </div>
+                {tabs.length > 1 && (
+                  <span
+                    className="hover-scale"
+                    style={styles.sessionX}
+                    onClick={e => handleCloseTab(t.id, e)}
+                    title="Kill Terminal"
+                  >
+                    ✕
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
-
-      <div ref={containerRef} style={styles.canvasContainer} />
     </div>
   );
 }
@@ -207,92 +201,59 @@ export function TerminalPanel({ repoPath }: TerminalPanelProps) {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "row",
     height: "100%",
-    backgroundColor: "transparent",
+    width: "100%",
+    backgroundColor: "var(--bg-base, #09090b)",
     color: "var(--text-main)",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "0 8px 0 0",
-    backgroundColor: "transparent",
-    borderBottom: "1px solid var(--border-subtle)",
-    fontSize: "11px",
-    height: "28px",
-    flexShrink: 0,
-  },
-  tabGroup: {
-    display: "flex",
-    alignItems: "center",
-    height: "100%",
-  },
-  tab: {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    padding: "0 10px",
-    height: "100%",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    fontSize: "11px",
-    fontWeight: 500,
-    borderBottom: "2px solid transparent",
-    borderRight: "1px solid var(--border-subtle)",
-    transition: "color 0.15s, background-color 0.15s",
-  },
-  tabOn: {
-    color: "var(--text-main)",
-    borderBottom: "2px solid var(--accent)",
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
-  },
-  tabX: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "2px",
-    borderRadius: "3px",
-    color: "var(--text-faint)",
-    transition: "color 0.15s, background-color 0.15s",
-  },
-  addBtn: {
-    background: "none",
-    border: "none",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    padding: "4px 8px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rightGroup: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-  },
-  select: {
-    backgroundColor: "rgba(0, 0, 0, 0.2)",
-    border: "1px solid var(--border-subtle)",
-    color: "var(--text-main)",
-    fontSize: "11px",
-    borderRadius: "4px",
-    padding: "2px 6px",
-    outline: "none",
-    cursor: "pointer",
-    transition: "border-color 0.15s",
-  },
-  subtext: {
-    color: "var(--text-faint)",
-    fontSize: "10px",
-    fontWeight: 500,
-    letterSpacing: "0.5px",
-    textTransform: "uppercase",
+    overflow: "hidden",
   },
   canvasContainer: {
     flex: 1,
-    padding: "8px 10px 4px 10px",
+    height: "100%",
+    padding: "4px 8px",
     overflow: "hidden",
     position: "relative",
+    backgroundColor: "#000000",
+  },
+  sessionsSidebar: {
+    width: "135px",
+    height: "100%",
+    backgroundColor: "var(--bg-panel, #09090b)",
+    borderLeft: "1px solid var(--border-subtle, #27272a)",
+    display: "flex",
+    flexDirection: "column",
+    padding: "4px",
+    flexShrink: 0,
+    overflowY: "auto",
+  },
+  sessionsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px",
+  },
+  sessionItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "4px 8px",
+    borderRadius: "3px",
+    cursor: "pointer",
+    fontSize: "11px",
+    color: "var(--text-muted, #a1a1aa)",
+    border: "1px solid transparent",
+    transition: "all 0.1s ease",
+  },
+  sessionItemActive: {
+    color: "#fafafa",
+    backgroundColor: "rgba(249, 115, 22, 0.08)",
+    border: "1px solid #f97316",
+  },
+  sessionX: {
+    fontSize: "10px",
+    color: "#71717a",
+    padding: "2px",
+    borderRadius: "2px",
+    cursor: "pointer",
   },
 };
