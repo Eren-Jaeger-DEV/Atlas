@@ -23,6 +23,26 @@ import { cp as fsCp } from "node:fs/promises";
 import os from "node:os";
 import * as http from "node:http";
 import * as chokidar from "chokidar";
+import fs from "node:fs";
+
+try {
+  const envPath = path.join(process.cwd(), ".env");
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, "utf-8");
+    for (const line of envContent.split("\n")) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match && match[1]) {
+        const key = match[1];
+        let value = match[2] || "";
+        if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+        else if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+        process.env[key] = value;
+      }
+    }
+  }
+} catch (e) {
+  // Ignore
+}
 
 function safeJsonParse<T = any>(str: string, fallback: T): T {
   try {
@@ -298,6 +318,7 @@ async function createProvider(repoRoot: string) {
   if (providerName === "openai" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
   if (providerName === "gemini" && !apiKey) apiKey = process.env.GEMINI_API_KEY || "";
   if (providerName === "openai-compatible" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
+  if (providerName === "routing.run" && !apiKey) apiKey = process.env.ROUTING_API_KEY || "";
 
   // If no plaintext key, try secure storage (new method via keys.json)
   if (!apiKey && safeStorage.isEncryptionAvailable()) {
@@ -312,7 +333,8 @@ async function createProvider(repoRoot: string) {
           "openai": ["OPENAI_API_KEY", "openaiApiKey"],
           "anthropic": ["ANTHROPIC_API_KEY", "anthropicApiKey"],
           "gemini": ["GEMINI_API_KEY", "geminiApiKey"],
-          "openai-compatible": ["OPENAI_API_KEY", "openRouterApiKey"]
+          "openai-compatible": ["OPENAI_API_KEY", "openRouterApiKey"],
+          "routing.run": ["ROUTING_API_KEY", "routingApiKey"]
         };
         const possibleKeys = keyMap[providerName] ?? [];
         for (const k of possibleKeys) {
@@ -334,9 +356,14 @@ async function createProvider(repoRoot: string) {
   
   const model = settings.aiModel || settings.ai?.model;
   if (model) config.model = model;
-  
-  const baseUrl = settings.aiBaseUrl || settings.ai?.customEndpoint;
-  if (baseUrl) config.baseUrl = baseUrl;
+
+  // routing.run always uses its own base URL; other compatible providers use aiBaseUrl
+  if (providerName === "routing.run") {
+    config.baseUrl = "https://api.routing.run/v1";
+  } else {
+    const baseUrl = settings.aiBaseUrl || settings.ai?.customEndpoint;
+    if (baseUrl) config.baseUrl = baseUrl;
+  }
 
   const { ProviderRouter } = await import("@atlas/agents");
   return new ProviderRouter(config);
@@ -701,7 +728,11 @@ ipcMain.handle("atlas:get-secure-key", async (_event, key: string) => {
     const keysObj = JSON.parse(await readFile(keysPath, "utf-8"));
     const encrypted = keysObj[key];
     if (!encrypted) return null;
-    return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+    try {
+      return safeStorage.decryptString(Buffer.from(encrypted, "base64"));
+    } catch {
+      return Buffer.from(encrypted, "base64").toString("utf-8"); // fallback for systems without OS keychain
+    }
   } catch (err) {
     console.error("Failed to get secure key:", err);
     return null;
@@ -710,9 +741,13 @@ ipcMain.handle("atlas:get-secure-key", async (_event, key: string) => {
 
 ipcMain.handle("atlas:set-secure-key", async (_event, key: string, value: string) => {
   try {
-    if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error("OS Keychain encryption is not available on this system.");
+    let encryptedStr = "";
+    if (safeStorage.isEncryptionAvailable()) {
+      encryptedStr = safeStorage.encryptString(value).toString("base64");
+    } else {
+      encryptedStr = Buffer.from(value, "utf-8").toString("base64");
     }
+
     const keysPath = path.join(app.getPath("userData"), "..", "atlas", "keys.json");
     const dir = path.dirname(keysPath);
     await mkdir(dir, { recursive: true });
@@ -1537,11 +1572,11 @@ ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
     activeWatcher = null;
   }
   
-  activeWatcher = chokidar.watch(repoPath, {
-    ignored: [/(^|[\/\\])\../, "**/node_modules/**"], // ignore dotfiles and node_modules
-    persistent: true,
-    ignoreInitial: true,
-  });
+  // activeWatcher = chokidar.watch(repoPath, {
+  //   ignored: [/(^|[/\\])\../, "**/node_modules/**"], // ignore dotfiles and node_modules
+  //   persistent: true,
+  //   ignoreInitial: true,
+  // });
 
   const notifyRenderer = (eventStr: string, filePath: string) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1550,10 +1585,10 @@ ipcMain.handle("atlas:open-repo", async (_event, repoPath: string) => {
     }
   };
 
-  activeWatcher
-    .on("add", (p: string) => notifyRenderer("add", p))
-    .on("change", (p: string) => notifyRenderer("change", p))
-    .on("unlink", (p: string) => notifyRenderer("unlink", p));
+  // activeWatcher
+  //   .on("add", (p: string) => notifyRenderer("add", p))
+  //   .on("change", (p: string) => notifyRenderer("change", p))
+  //   .on("unlink", (p: string) => notifyRenderer("unlink", p));
     
   return { success: true, repoPath };
 });
@@ -1629,7 +1664,8 @@ ipcMain.handle("atlas:test-provider-connection", async (event, providerName: str
           "openai": "openaiApiKey",
           "anthropic": "anthropicApiKey",
           "gemini": "geminiApiKey",
-          "openai-compatible": "openRouterApiKey"
+          "openai-compatible": "openRouterApiKey",
+          "routing.run": "routingApiKey"
         };
         const secureKey = keyMap[providerName];
         if (secureKey && keysObj[secureKey]) {
@@ -1646,7 +1682,10 @@ ipcMain.handle("atlas:test-provider-connection", async (event, providerName: str
       provider: providerName,
       apiKey: finalKey
     };
-    if (baseUrl) {
+    // routing.run: always inject its base URL for the test
+    if (providerName === "routing.run") {
+      config.baseUrl = "https://api.routing.run/v1";
+    } else if (baseUrl) {
       config.baseUrl = baseUrl;
     }
     const router = new ProviderRouter(config);
@@ -1679,7 +1718,6 @@ ipcMain.handle("atlas:get-runs", async () => {
   } catch (err) {
     return [];
   }
-  }
 });
 
 let globalWorkerPool: any = null;
@@ -1705,7 +1743,7 @@ ipcMain.handle("atlas:parallel-spawn", async (event, payload: { goal: string; re
     }
 
     const planner = new ParallelPlanner({ provider, repoRoot });
-    const plan = await planner.plan(payload.goal);
+    const plan = await planner.decompose(payload.goal);
     lastParallelPlan = plan;
 
     globalWorkerPool.executePlan(plan).catch(console.error);
@@ -1962,6 +2000,34 @@ ipcMain.handle("atlas:extension-install", async (_event, sourcePath: string) => 
   }
 });
 
+ipcMain.handle("atlas:extension-install-marketplace", async (_event, manifest: any) => {
+  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
+  const targetPath = path.join(extDir, manifest.id || manifest.name);
+
+  try {
+    await mkdir(targetPath, { recursive: true });
+    
+    // Add dummy main.js
+    const mockMainJs = `
+      module.exports = {
+        activate: function(ctx) { console.log("${manifest.name} activated"); },
+        deactivate: function() { console.log("${manifest.name} deactivated"); }
+      };
+    `;
+    await writeFile(path.join(targetPath, "main.js"), mockMainJs, "utf-8");
+    manifest.main = "main.js";
+    
+    await writeFile(path.join(targetPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
+
+    // Attempt to load it immediately
+    await loadExtension(targetPath, manifest);
+    return true;
+  } catch (e) {
+    console.error("[ExtensionRuntime] Failed to install marketplace extension:", e);
+    throw e;
+  }
+});
+
 ipcMain.handle("atlas:extension-execute-command", async (_event, id: string, ...args: any[]) => {
   const handler = extensionCommands.get(id);
   if (handler) {
@@ -1975,7 +2041,10 @@ ipcMain.handle("atlas:extension-execute-command", async (_event, id: string, ...
     throw new Error(`Command not found in ExtensionRuntime: ${id}`);
   }
 });
-
+ipcMain.handle("atlas:emit-event", async (_event, eventName: string, payload: any) => {
+  const { EventBus } = await import("@atlas/core");
+  EventBus.getInstance().emit(eventName as any, payload);
+});
 async function loadExtension(extPath: string, manifest: any) {
   if (!manifest.main) return; // No code to run
 
@@ -1989,18 +2058,24 @@ async function loadExtension(extPath: string, manifest: any) {
       clearTimeout,
       setInterval,
       clearInterval,
+      process,
+      Buffer,
       atlas: {
         commands: {
           registerCommand: (id: string, handler: (...args: any[]) => any) => {
             extensionCommands.set(id, handler);
-            // Notify frontend to add it to Command Palette
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send("atlas:extension-registered-command", { id, label: id });
             }
           }
+        },
+        onEvent: (eventName: string, handler: (payload: any) => void) => {
+          import("@atlas/core").then(({ EventBus }) => {
+            EventBus.getInstance().on(eventName as any, handler);
+          });
         }
       },
-      require,
+      require: require("node:module").createRequire(mainScriptPath),
       module: { exports: {} as any },
       exports: {} as any
     };

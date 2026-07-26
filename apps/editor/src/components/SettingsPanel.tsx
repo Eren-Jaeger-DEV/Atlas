@@ -12,7 +12,7 @@ export interface EditorSettings {
   lineNumbers: boolean;
   autoSave: "off" | "afterDelay" | "onFocusChange";
   terminalShell: "cmd" | "powershell" | "bash";
-  aiProvider: "openai" | "anthropic" | "gemini" | "openai-compatible";
+  aiProvider: "openai" | "anthropic" | "gemini" | "openai-compatible" | "routing.run";
   aiModel: string;
   aiBaseUrl: string;
   gitBlameEnabled: boolean;
@@ -122,7 +122,8 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
     openRouterApiKey: "",
     openaiApiKey: "",
     anthropicApiKey: "",
-    geminiApiKey: ""
+    geminiApiKey: "",
+    routingApiKey: ""
   });
   const [testStatus, setTestStatus] = useState<Record<string, "idle" | "testing" | "success" | "error">>({});
 
@@ -138,11 +139,13 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
       const o = await api.getSecureKey("openaiApiKey");
       const a = await api.getSecureKey("anthropicApiKey");
       const g = await api.getSecureKey("geminiApiKey");
+      const rt = await api.getSecureKey("routingApiKey");
       setSecureKeys({
         openRouterApiKey: r || "",
         openaiApiKey: o || "",
         anthropicApiKey: a || "",
-        geminiApiKey: g || ""
+        geminiApiKey: g || "",
+        routingApiKey: rt || ""
       });
     };
     loadKeys();
@@ -166,7 +169,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
       return;
     }
     
-    const baseUrl = providerName === "openai-compatible" ? localSettings.aiBaseUrl : undefined;
+    const baseUrl = (providerName === "openai-compatible") ? localSettings.aiBaseUrl : undefined;
     const res = await api.testProviderConnection(providerName, key, baseUrl);
     setTestStatus(prev => ({ ...prev, [stateKey]: res.success ? "success" : "error" }));
   };
@@ -468,6 +471,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
                   value={localSettings.aiProvider || "openai"} 
                   onChange={(v) => handleChange("aiProvider", v)}
                   options={[
+                    {label: "routing.run (30+ Models)", value: "routing.run"},
                     {label: "Google Gemini", value: "gemini"},
                     {label: "OpenAI", value: "openai"},
                     {label: "Anthropic", value: "anthropic"},
@@ -488,6 +492,46 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
                   />
                 } 
               />
+              {localSettings.aiProvider === "routing.run" && (
+                <SettingRow
+                  title="Model"
+                  description="Choose from the routing.run model catalog. All models are routed with automatic failover."
+                  control={
+                    <select
+                      value={localSettings.aiModel || "claude-sonnet-4-6"}
+                      onChange={(e) => handleChange("aiModel", e.target.value)}
+                      style={{
+                        backgroundColor: "rgba(0,0,0,0.2)",
+                        border: "1px solid var(--border-medium)",
+                        color: "var(--text-main)",
+                        borderRadius: "6px",
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                        outline: "none",
+                        fontFamily: "var(--font-ui)",
+                        cursor: "pointer",
+                        minWidth: "200px"
+                      }}
+                    >
+                      <option value="claude-opus-4-8">claude-opus-4-8</option>
+                      <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+                      <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+                      <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                      <option value="gpt-5.6-luna">gpt-5.6-luna</option>
+                      <option value="gpt-5.6-sol">gpt-5.6-sol</option>
+                      <option value="gpt-5.6-terra">gpt-5.6-terra</option>
+                      <option value="kimi-k2.6">kimi-k2.6</option>
+                      <option value="kimi-k2.6-nitro">kimi-k2.6-nitro</option>
+                      <option value="kimi-k2.7-code">kimi-k2.7-code</option>
+                      <option value="kimi-k2.7-code-nitro">kimi-k2.7-code-nitro</option>
+                      <option value="nemotron-3-ultra">nemotron-3-ultra</option>
+                      <option value="glm-5.2">glm-5.2</option>
+                      <option value="glm-5.2-nitro">glm-5.2-nitro</option>
+                      <option value="qwen3.5-9b">qwen3.5-9b</option>
+                    </select>
+                  }
+                />
+              )}
               {localSettings.aiProvider === "openai-compatible" && (
                 <SettingRow 
                   title="Base URL (Custom Endpoint)" 
@@ -508,6 +552,19 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
             <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main, #fafafa)", margin: "32px 0 16px 0" }}>API Keys & Security</h3>
             
             <SettingGroup>
+              <SettingRow
+                title="routing.run API Key"
+                description="Used for routing.run — access 15+ models (Claude, GPT, Kimi, DeepSeek, Gemini) through one key."
+                control={
+                  <ApiKeyInput
+                    value={secureKeys.routingApiKey}
+                    onChange={(v: string) => handleSecureKeyChange("routingApiKey", v)}
+                    onTest={() => handleTestConnection("routing.run", "routingApiKey")}
+                    status={testStatus.routingApiKey}
+                    placeholder="rk_..."
+                  />
+                }
+              />
               <SettingRow 
                 title="OpenAI API Key" 
                 description="Used for OpenAI endpoints."
