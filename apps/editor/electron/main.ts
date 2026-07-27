@@ -748,8 +748,9 @@ ipcMain.handle("atlas:open-settings-window", () => {
     title: "Settings - Atlas Studio"
   });
 
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
   if (isDev) {
-    settingsWindow.loadURL("http://localhost:5173/?window=settings");
+    settingsWindow.loadURL(`${devServerUrl}/?window=settings`);
   } else {
     settingsWindow.loadURL("app://bundle/index.html?window=settings");
   }
