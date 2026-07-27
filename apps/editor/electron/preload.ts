@@ -251,6 +251,15 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     return () => ipcRenderer.off("atlas:extension-registered-command", listener);
   },
 
+  getExtensionMeta: (dirName: string): Promise<{
+    readme: string | null;
+    sizeStr: string;
+    repository: string | null;
+    license: string | null;
+    lastUpdated: string | null;
+    keywords: string[];
+  }> => ipcRenderer.invoke("atlas:extension-meta", dirName),
+
   // SBOM generation
   generateSbom: (): Promise<Record<string, unknown>> =>
     ipcRenderer.invoke("atlas:generate-sbom"),

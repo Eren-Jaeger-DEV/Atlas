@@ -77,6 +77,14 @@ export interface AtlasAPI {
   installMarketplaceExtension: (manifest: any) => Promise<boolean>;
   executeExtensionCommand: (id: string, ...args: any[]) => Promise<any>;
   onExtensionRegisteredCommand: (handler: (payload: { id: string, label: string }) => void) => () => void;
+  getExtensionMeta: (dirName: string) => Promise<{
+    readme: string | null;
+    sizeStr: string;
+    repository: string | null;
+    license: string | null;
+    lastUpdated: string | null;
+    keywords: string[];
+  }>;
   generateSbom: () => Promise<Record<string, unknown>>;
   getTasks: (repoPath: string) => Promise<Array<{ id: string; name: string; command: string; source: string }>>;
 

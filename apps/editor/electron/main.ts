@@ -115,9 +115,20 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 // ---------------------------------------------------------------------------
-// Extension Runtime State
+// Extension Runtime State & Safe IPC Helper
 // ---------------------------------------------------------------------------
 const extensionCommands = new Map<string, (...args: any[]) => any>();
+
+function safeSend(sender: Electron.WebContents | null | undefined, channel: string, ...args: any[]): void {
+  try {
+    if (sender && !sender.isDestroyed()) {
+      sender.send(channel, ...args);
+    }
+  } catch (err) {
+    // Ignore destroyed webContents errors during window close
+  }
+}
+
 // Window creation
 // ---------------------------------------------------------------------------
 
@@ -577,7 +588,7 @@ ipcMain.handle("atlas:agent-inline-action", async (_event, action: string, text:
         return new Promise<boolean>((resolve) => {
           const reqId = crypto.randomUUID();
           permissionRequests.set(reqId, resolve);
-          _event.sender.send("atlas:request-permission", { reqId, permission, data });
+          safeSend(_event.sender, "atlas:request-permission", { reqId, permission, data });
         });
       },
       onEvent: (ev) => {
@@ -1046,7 +1057,7 @@ const handleStartLsp = async (event: any, repoPath: string, language: string = "
     }
 
     activeLanguageServer.stdout?.on("data", (data: Buffer) => {
-      event.sender.send("atlas:lsp-server-to-client", data.toString("utf-8"));
+      safeSend(event.sender, "atlas:lsp-server-to-client", data.toString("utf-8"));
     });
 
     activeLanguageServer.stderr?.on("data", (data: Buffer) => {
@@ -1118,7 +1129,7 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
 
               try {
                 const msg = JSON.parse(body);
-                event.sender.send("atlas:dap-server-to-client", JSON.stringify(msg));
+                safeSend(event.sender, "atlas:dap-server-to-client", JSON.stringify(msg));
                 if (msg.type === "response" && msg.request_seq) {
                   if (dapPendingRequests.has(msg.request_seq)) {
                     dapPendingRequests.get(msg.request_seq)!(msg);
@@ -1143,7 +1154,7 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
         });
 
         dapSocket.on("close", () => {
-          event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
+          safeSend(event.sender, "atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
         });
       };
 
@@ -1174,11 +1185,11 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
               const m = JSON.parse(msg.toString());
               if (m.method === "Debugger.paused") {
                 latestCallFrames = m.params.callFrames || [];
-                event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+                safeSend(event.sender, "atlas:dap-server-to-client", JSON.stringify({
                   type: "event", event: "stopped", body: { reason: "pause", threadId: 1, allThreadsStopped: true }
                 }));
               } else if (m.method === "Debugger.resumed") {
-                event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+                safeSend(event.sender, "atlas:dap-server-to-client", JSON.stringify({
                   type: "event", event: "continued", body: { threadId: 1, allThreadsContinued: true }
                 }));
               }
@@ -1192,7 +1203,7 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
           });
 
           dapWs.on("close", () => {
-            event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
+            safeSend(event.sender, "atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
           });
         }
       });
@@ -1202,7 +1213,7 @@ ipcMain.handle("atlas:dap-start", async (event, filePath: string, language: stri
       dapProcess = null;
       if (dapWs) { dapWs.close(); dapWs = null; }
       if (dapSocket) { dapSocket.destroy(); dapSocket = null; }
-      event.sender.send("atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
+      safeSend(event.sender, "atlas:dap-server-to-client", JSON.stringify({ type: "event", event: "terminated" }));
     });
   });
 });
@@ -1223,7 +1234,7 @@ ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
     if (!dapWs) return;
 
     const sendDapResponse = (body: any) => {
-      event.sender.send("atlas:dap-server-to-client", JSON.stringify({
+      safeSend(event.sender, "atlas:dap-server-to-client", JSON.stringify({
         type: "response", request_seq: id, success: true, command: msg.command, body
       }));
     };
@@ -1446,7 +1457,7 @@ ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: stri
       hist.push(data);
       if (hist.length > 500) hist.shift(); // Keep last 500 chunks
     }
-    event.sender.send("atlas:terminal-data", { termId, data });
+    safeSend(event.sender, "atlas:terminal-data", { termId, data });
   });
 
   proc.onExit(() => {
@@ -1735,20 +1746,20 @@ ipcMain.handle("atlas:run", async (event, input: string | any[], context?: any) 
       repoRoot,
       planningMode: context?.planningMode,
       onEvent: (ev) => {
-        event.sender.send("atlas:event", ev);
+        safeSend(event.sender, "atlas:event", ev);
       },
       checkPermission: async (permission, data) => {
         return new Promise<boolean>((resolve) => {
           const reqId = crypto.randomUUID();
           permissionRequests.set(reqId, resolve);
-          event.sender.send("atlas:request-permission", { reqId, permission, data });
+          safeSend(event.sender, "atlas:request-permission", { reqId, permission, data });
         });
       },
       waitForPlanApproval: async (plan) => {
         return new Promise<boolean>((resolve) => {
           const reqId = crypto.randomUUID();
           planApprovalRequests.set(reqId, resolve);
-          event.sender.send("atlas:request-plan-approval", { reqId, plan });
+          safeSend(event.sender, "atlas:request-plan-approval", { reqId, plan });
         });
       }
     });
@@ -1854,7 +1865,7 @@ ipcMain.handle("atlas:parallel-spawn", async (event, payload: { goal: string; re
       globalWorkerPool = new WorkerPool({
         orchestratorConfig: { provider, repoRoot, memory },
         onEvent: (ev: any) => {
-          event.sender.send("atlas:parallel-event", ev);
+          safeSend(event.sender, "atlas:parallel-event", ev);
         }
       });
     }
@@ -2094,6 +2105,74 @@ ipcMain.handle("atlas:list-extensions", async () => {
   } catch {
     return []; // Extensions directory doesn't exist yet — no extensions installed
   }
+});
+
+// Get real metadata for a single extension: README content, dir size, and package.json fields
+ipcMain.handle("atlas:extension-meta", async (_event, dirName: string) => {
+  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
+  const extPath = path.join(extDir, dirName);
+
+  // Real README content
+  let readme: string | null = null;
+  for (const candidate of ["README.md", "readme.md", "Readme.md"]) {
+    try {
+      readme = await readFile(path.join(extPath, candidate), "utf-8");
+      break;
+    } catch { /* try next */ }
+  }
+
+  // Real directory size (recursive sum of file sizes)
+  async function getDirSize(dirPath: string): Promise<number> {
+    let total = 0;
+    try {
+      const entries = await readdir(dirPath, { withFileTypes: true });
+      for (const e of entries) {
+        const full = path.join(dirPath, e.name);
+        if (e.isDirectory()) {
+          total += await getDirSize(full);
+        } else {
+          try {
+            const s = await stat(full);
+            total += s.size;
+          } catch { /* skip */ }
+        }
+      }
+    } catch { /* skip */ }
+    return total;
+  }
+  const sizeBytes = await getDirSize(extPath);
+  const sizeKB = (sizeBytes / 1024).toFixed(2);
+  const sizeStr = sizeBytes >= 1024 * 1024
+    ? `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
+    : `${sizeKB} KB`;
+
+  // Real package.json fields (repository, license, etc.)
+  let pkgJson: Record<string, any> = {};
+  try {
+    pkgJson = JSON.parse(await readFile(path.join(extPath, "package.json"), "utf-8"));
+  } catch { /* no package.json */ }
+
+  // Real manifest.json fields
+  let manifestJson: Record<string, any> = {};
+  try {
+    manifestJson = JSON.parse(await readFile(path.join(extPath, "manifest.json"), "utf-8"));
+  } catch { /* no manifest */ }
+
+  // Real file modification time as "last updated"
+  let lastUpdated: string | null = null;
+  try {
+    const mStat = await stat(path.join(extPath, "manifest.json"));
+    lastUpdated = mStat.mtime.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  } catch { /* skip */ }
+
+  return {
+    readme,
+    sizeStr,
+    repository: pkgJson.repository?.url ?? manifestJson.repository ?? null,
+    license: pkgJson.license ?? manifestJson.license ?? null,
+    lastUpdated,
+    keywords: pkgJson.keywords ?? [],
+  };
 });
 
 ipcMain.handle("atlas:extension-install", async (_event, sourcePath: string) => {

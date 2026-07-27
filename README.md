@@ -87,6 +87,7 @@ We are systematically building features to match and exceed standard editor capa
   - [x] **Agent Skill Auto-Distillation (`WorkflowSkillCreator`):** Packaging completed multi-agent workflows into reusable `.agents/skills/<name>/SKILL.md` custom skills.
   - [x] **Full Top Window Menu Parity (File, Edit, Selection, View, Go, Run, Terminal, Help):** 100% real, dynamic, un-mocked logic across all 8 top window menus with Monaco actions, DAP stepping, xterm task runner, process explorer, and walkthrough guide.
   - [x] **Full IDE Features & Parity:** Real Monaco LSP protocol wire-up (Hover, Go-to-Def F12, References Shift+F12, Rename F2, Code Actions Ctrl+., Format Shift+Alt+F), full right-click context menus (Editor & FileExplorer with inline rename, new file/folder, copy path, open terminal), and interactive StatusBar pickers (Language, Indentation, EOL, Go-to-Line).
+  - [x] **Atlascord Extension (Discord Rich Presence):** First-party Atlas IDE extension providing fully customizable Discord Rich Presence integration. Features a 3-state status bar indicator (`connected` / `reconnecting` / `disconnected`) with left-click toggle and right-click `Manage Extension` context menu. The extension detail workspace view loads 100% real data — README content from disk, actual filesystem directory size, real `package.json` / `manifest.json` fields — with zero hardcoded or mock fallbacks. Repository: [Atlascord](https://github.com/Eren-Jaeger-DEV/Atlascord).
 
 ---
 

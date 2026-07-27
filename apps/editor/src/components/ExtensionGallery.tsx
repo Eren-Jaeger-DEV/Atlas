@@ -11,6 +11,11 @@ interface ExtensionManifest {
   publisher?: string;
   description?: string;
   permissions?: string[];
+  readme?: string;
+}
+
+interface ExtensionGalleryProps {
+  onOpenExtensionDetail?: (extData: any) => void;
 }
 
 const Container = styled.div`
@@ -136,6 +141,12 @@ const Card = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  &:hover {
+    border-color: var(--accent, #38bdf8);
+    transform: translateY(-1px);
+  }
 `;
 
 const CardHeader = styled.div`
@@ -230,7 +241,7 @@ const Tab = styled.button<{ $active: boolean }>`
   }
 `;
 
-function ExtensionGalleryContent() {
+function ExtensionGalleryContent({ onOpenExtensionDetail }: ExtensionGalleryProps) {
   const api = useAtlasAPI();
   const [extensions, setExtensions] = useState<ExtensionManifest[]>([]);
   const [search, setSearch] = useState("");
@@ -278,32 +289,7 @@ function ExtensionGalleryContent() {
     }
   };
 
-  const handleInstallMarketplace = async (manifest: ExtensionManifest) => {
-    setInstallError(null);
-    try {
-      if (!api?.installMarketplaceExtension) {
-        throw new Error("Marketplace API not available.");
-      }
-      setLoading(true);
-      await api.installMarketplaceExtension(manifest);
-      loadExtensions();
-      setActiveTab("installed");
-    } catch (e: unknown) {
-      console.error("Marketplace install failed:", e);
-      setInstallError(e instanceof Error ? e.message : "Failed to install from marketplace.");
-      setLoading(false);
-    }
-  };
-
-  const mockMarketplace: ExtensionManifest[] = [
-    { id: "atlas.language.rust", name: "Rust", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Rust (rust-analyzer)", permissions: ["workspace.read"] },
-    { id: "atlas.language.go", name: "Go", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Go (gopls)", permissions: ["workspace.read"] },
-    { id: "atlas.language.python", name: "Python", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Python (pylsp)", permissions: ["workspace.read"] },
-    { id: "atlas.language.java", name: "Java", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for Java (eclipse.jdt.ls)", permissions: ["workspace.read"] },
-    { id: "atlas.language.csharp", name: "C#", version: "1.0.0", publisher: "Atlas Studio", description: "Rich language support for C# (omnisharp)", permissions: ["workspace.read"] }
-  ];
-
-  const displayList = activeTab === "installed" ? extensions : mockMarketplace;
+  const displayList = activeTab === "installed" ? extensions : [];
 
   const filtered = displayList.filter(ext => {
     const q = search.toLowerCase();
@@ -333,6 +319,7 @@ function ExtensionGalleryContent() {
       <TabBar>
         <Tab $active={activeTab === "installed"} onClick={() => setActiveTab("installed")}>Installed</Tab>
         <Tab $active={activeTab === "marketplace"} onClick={() => setActiveTab("marketplace")}>Available</Tab>
+
       </TabBar>
 
       {installError && (
@@ -356,50 +343,44 @@ function ExtensionGalleryContent() {
       </SearchBox>
 
       <List>
-        {!loading && extensions.length === 0 && (
+        {activeTab === "marketplace" && (
           <EmptyState>
-            <EmptyTitle>No Extensions Installed</EmptyTitle>
+            <EmptyTitle>No Marketplace Connected</EmptyTitle>
             <EmptyDesc>
-              Install extensions by placing a folder containing a{" "}
-              <Code>manifest.json</Code> into the Atlas
-              extensions directory. Marketplace integration is coming in a
-              future release.
+              The Atlas Marketplace backend is not yet configured. Install extensions manually
+              by placing a folder with a <Code>manifest.json</Code> into the extensions directory,
+              or use the install button above to select a local extension folder.
             </EmptyDesc>
             <EmptyPath>
-              Extensions dir:{" "}
-              <Code>%APPDATA%\atlas\extensions\</Code>
+              Extensions dir: <Code>~/.config/@atlas/atlas/extensions/</Code>
             </EmptyPath>
           </EmptyState>
         )}
 
-        {filtered.map((ext, idx) => (
-          <Card key={ext.id ?? ext.dirName ?? idx}>
+        {activeTab === "installed" && !loading && extensions.length === 0 && (
+          <EmptyState>
+            <EmptyTitle>No Extensions Installed</EmptyTitle>
+            <EmptyDesc>
+              Install extensions by placing a folder containing a{" "}
+              <Code>manifest.json</Code> into the Atlas extensions directory.
+            </EmptyDesc>
+            <EmptyPath>
+              Extensions dir: <Code>~/.config/@atlas/atlas/extensions/</Code>
+            </EmptyPath>
+          </EmptyState>
+        )}
+
+        {activeTab === "installed" && filtered.map((ext, idx) => (
+          <Card key={ext.id ?? ext.dirName ?? idx} onClick={() => onOpenExtensionDetail?.(ext)}>
             <CardHeader>
               <div>
-                <ExtName>{ext.name ?? ext.dirName ?? "Unknown Extension"}</ExtName>
+                <ExtName>{ext.name ?? ext.dirName ?? ext.id}</ExtName>
                 <ExtMeta>
-                  v{ext.version ?? "?.?.?"} by{" "}
-                  <Publisher>{ext.publisher ?? "Unknown"}</Publisher>
+                  {ext.version && <>v{ext.version} </>}
+                  {ext.publisher && <>by <Publisher>{ext.publisher}</Publisher></>}
                 </ExtMeta>
               </div>
-              {activeTab === "installed" ? (
-                <InstalledBadge>[INSTALLED]</InstalledBadge>
-              ) : (
-                <button 
-                  onClick={() => handleInstallMarketplace(ext)}
-                  style={{
-                    background: "var(--accent, #38bdf8)", 
-                    color: "#000", 
-                    border: "none", 
-                    borderRadius: "4px", 
-                    padding: "4px 8px", 
-                    fontSize: "10px", 
-                    fontWeight: "bold", 
-                    cursor: "pointer"
-                  }}>
-                  INSTALL
-                </button>
-              )}
+              <InstalledBadge>[INSTALLED]</InstalledBadge>
             </CardHeader>
 
             {ext.description && (
@@ -420,11 +401,10 @@ function ExtensionGalleryContent() {
   );
 }
 
-// Wrap the main content in an ErrorBoundary to prevent catastrophic crashes
-export function ExtensionGallery() {
+export function ExtensionGallery({ onOpenExtensionDetail }: ExtensionGalleryProps) {
   return (
     <GlobalErrorBoundary>
-      <ExtensionGalleryContent />
+      <ExtensionGalleryContent onOpenExtensionDetail={onOpenExtensionDetail} />
     </GlobalErrorBoundary>
   );
 }
