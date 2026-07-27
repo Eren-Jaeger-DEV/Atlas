@@ -502,19 +502,41 @@ function AppInner() {
     
     const handleMouseMove = (e: MouseEvent) => {
       if (draggingRef.current === "sidebar") {
+        let calcWidth = 0;
         if (settings.sidebarPosition === "right") {
-          setSidebarWidth(Math.max(100, Math.min(window.innerWidth - e.clientX - 40, 800)));
+          calcWidth = window.innerWidth - e.clientX - 40;
         } else {
-          setSidebarWidth(Math.max(100, Math.min(e.clientX - 40, 800)));
+          calcWidth = e.clientX - 40;
+        }
+
+        if (calcWidth < 130) {
+          setActiveSidebar(null as any);
+          setSidebarWidth(240);
+        } else {
+          setSidebarWidth(Math.min(Math.max(calcWidth, 200), 800));
         }
       } else if (draggingRef.current === "bottom") {
+        let calcHeight = 0;
         if (settings.terminalPosition === "right") {
-          setBottomPanelHeight(Math.max(100, Math.min(window.innerWidth - e.clientX, 800)));
+          calcHeight = window.innerWidth - e.clientX;
         } else {
-          setBottomPanelHeight(Math.max(100, Math.min(window.innerHeight - e.clientY - 22, 800)));
+          calcHeight = window.innerHeight - e.clientY - 22;
+        }
+
+        if (calcHeight < 70) {
+          setShowBottomPanel(false);
+          setBottomPanelHeight(220);
+        } else {
+          setBottomPanelHeight(Math.min(Math.max(calcHeight, 140), 800));
         }
       } else if (draggingRef.current === "right-sidebar") {
-        setRightSidebarWidth(Math.max(200, Math.min(window.innerWidth - e.clientX, 800)));
+        const calcWidth = window.innerWidth - e.clientX;
+        if (calcWidth < 180) {
+          setShowRightAiSidebar(false);
+          setRightSidebarWidth(320);
+        } else {
+          setRightSidebarWidth(Math.min(Math.max(calcWidth, 300), 800));
+        }
       }
     };
     
@@ -1239,13 +1261,19 @@ function AppInner() {
             label: "Primary Side Bar",
             shortcut: "Ctrl+B",
             checked: showPrimarySidebar,
-            action: () => setShowPrimarySidebar(prev => !prev)
+            action: () => {
+              if (sidebarWidth < 200) setSidebarWidth(240);
+              setShowPrimarySidebar(prev => !prev);
+            }
           },
           {
             label: "Secondary Side Bar",
             shortcut: "Ctrl+L",
             checked: showRightAiSidebar,
-            action: () => setShowRightAiSidebar(prev => !prev)
+            action: () => {
+              if (rightSidebarWidth < 300) setRightSidebarWidth(320);
+              setShowRightAiSidebar(prev => !prev);
+            }
           },
           {
             label: "Status Bar",
@@ -2097,7 +2125,14 @@ function AppInner() {
                   <button 
                     className="sidebar-action-btn"
                     style={{...s.actBtn, position: "relative", color: activeSidebar === id ? "var(--text-main)" : "#64748b"}} 
-                    onClick={()=>setActiveSidebar(activeSidebar===id ? null as any : id)}
+                    onClick={() => {
+                      const next = activeSidebar === id ? null : id;
+                      if (next !== null) {
+                        if (sidebarWidth < 200) setSidebarWidth(240);
+                        setShowPrimarySidebar(true);
+                      }
+                      setActiveSidebar(next as any);
+                    }}
                   >
                     {activeSidebar === id && <div className="active-indicator" style={{ [settings.sidebarPosition === "right" ? "right" : "left"]: 0, left: settings.sidebarPosition === "right" ? "auto" : 0 }} />}
                     <span style={{ opacity: activeSidebar===id ? 1 : 0.6 }}>{icon}</span>
@@ -2164,7 +2199,7 @@ function AppInner() {
           )}
         </AnimatePresence>
 
-        <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} onDoubleClick={() => setSidebarWidth(220)} title="Drag to resize sidebar, double-click to reset width" />
+        <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} onDoubleClick={() => { setShowPrimarySidebar(true); setSidebarWidth(240); }} title="Drag to resize sidebar, double-click to reset, drag past edge to collapse" />
 
         <div style={{...s.center, flexDirection: settings.terminalPosition === "right" ? "row" : "column"}} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
@@ -2584,8 +2619,8 @@ function AppInner() {
           </AnimatePresence>
         </div>
 
-        {showRightAiSidebar && !zenMode && <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "right-sidebar"; document.body.style.cursor = "col-resize"; }} />}
-        {showRightAiSidebar && !zenMode && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} activeContent={activeTab?.content} openTabs={tabs.map(t => ({ filePath: t.filePath, content: t.content }))} cursorLine={activeCursorPos?.line} cursorSymbol={cursorSymbol} onClose={() => setShowRightAiSidebar(false)} onOpenSettings={handleOpenSettings} />}
+        {showRightAiSidebar && !zenMode && <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "right-sidebar"; document.body.style.cursor = "col-resize"; }} onDoubleClick={() => setRightSidebarWidth(320)} title="Drag to resize AI panel, double-click to reset, drag past edge to close" />}
+        {showRightAiSidebar && !zenMode && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} activeContent={activeTab?.content} openTabs={tabs.map(t => ({ filePath: t.filePath, content: t.content }))} cursorLine={activeCursorPos?.line} cursorSymbol={cursorSymbol} onClose={() => { setShowRightAiSidebar(false); setRightSidebarWidth(320); }} onOpenSettings={handleOpenSettings} />}
       </div>
 
       {showAboutModal && <AboutAtlasModal onClose={()=>setShowAboutModal(false)} />}
