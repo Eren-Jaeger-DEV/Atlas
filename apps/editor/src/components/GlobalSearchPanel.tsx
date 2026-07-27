@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const api = () => window.atlasAPI;
 
@@ -18,6 +18,15 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
   const [replaceText, setReplaceText] = useState("");
   const [replaceLoading, setReplaceLoading] = useState(false);
   const [replaceSuccessMsg, setReplaceSuccessMsg] = useState<string | null>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handler = () => {
+      setTimeout(() => replaceInputRef.current?.focus(), 100);
+    };
+    window.addEventListener("atlas:focus-global-replace", handler);
+    return () => window.removeEventListener("atlas:focus-global-replace", handler);
+  }, []);
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -109,6 +118,7 @@ export function GlobalSearchPanel({ workspaceRoot, onFileSelect }: GlobalSearchP
 
         <div style={styles.inputGroup}>
           <input 
+            ref={replaceInputRef}
             type="text" 
             placeholder="Replace with..." 
             value={replaceText} 

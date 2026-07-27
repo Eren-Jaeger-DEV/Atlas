@@ -934,12 +934,157 @@ function AppInner() {
       }
     ],
     Edit: [
-      { label:"Undo",       shortcut:"Ctrl+Z",       action:()=>document.execCommand("undo") },
-      { label:"Redo",       shortcut:"Ctrl+Y",       action:()=>document.execCommand("redo") },
-      { label:"separator", separator:true },
-      { label:"Cut",        shortcut:"Ctrl+X",       action:()=>document.execCommand("cut") },
-      { label:"Copy",       shortcut:"Ctrl+C",       action:()=>document.execCommand("copy") },
-      { label:"Paste",      shortcut:"Ctrl+V",       action:()=>document.execCommand("paste") },
+      {
+        label: "Undo",
+        shortcut: "Ctrl+Z",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.trigger("menu", "undo", null);
+          } else {
+            document.execCommand("undo");
+          }
+        }
+      },
+      {
+        label: "Redo",
+        shortcut: "Ctrl+Y",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.trigger("menu", "redo", null);
+          } else {
+            document.execCommand("redo");
+          }
+        }
+      },
+      { label: "edit_sep1", separator: true },
+      {
+        label: "Cut",
+        shortcut: "Ctrl+X",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.clipboardCutAction")?.run() || document.execCommand("cut");
+          } else {
+            document.execCommand("cut");
+          }
+        }
+      },
+      {
+        label: "Copy",
+        shortcut: "Ctrl+C",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.clipboardCopyAction")?.run() || document.execCommand("copy");
+          } else {
+            document.execCommand("copy");
+          }
+        }
+      },
+      {
+        label: "Paste",
+        shortcut: "Ctrl+V",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.clipboardPasteAction")?.run() || document.execCommand("paste");
+          } else {
+            document.execCommand("paste");
+          }
+        }
+      },
+      { label: "edit_sep2", separator: true },
+      {
+        label: "Find",
+        shortcut: "Ctrl+F",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("actions.find")?.run();
+          }
+        }
+      },
+      {
+        label: "Replace",
+        shortcut: "Ctrl+H",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.startFindReplaceAction")?.run();
+          }
+        }
+      },
+      { label: "edit_sep3", separator: true },
+      {
+        label: "Find in Files",
+        shortcut: "Ctrl+Shift+F",
+        action: () => {
+          setActiveSidebar("search");
+        }
+      },
+      {
+        label: "Replace in Files",
+        shortcut: "Ctrl+Shift+H",
+        action: () => {
+          setActiveSidebar("search");
+          window.dispatchEvent(new CustomEvent("atlas:focus-global-replace"));
+        }
+      },
+      { label: "edit_sep4", separator: true },
+      {
+        label: "Toggle Line Comment",
+        shortcut: "Ctrl+/",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.commentLine")?.run();
+          }
+        }
+      },
+      {
+        label: "Toggle Block Comment",
+        shortcut: "Shift+Alt+A",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.blockComment")?.run();
+          }
+        }
+      },
+      {
+        label: "Emmet: Expand Abbreviation",
+        shortcut: "Tab",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.emmet.action.expandAbbreviation")?.run() ||
+            activeEditorRef.current.trigger("menu", "editor.emmet.action.expandAbbreviation", null);
+          }
+        }
+      },
+      { label: "edit_sep5", separator: true },
+      {
+        label: "Format Document",
+        shortcut: "Shift+Alt+F",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.formatDocument")?.run();
+          }
+        }
+      },
+      {
+        label: "Format Selection",
+        shortcut: "Ctrl+K Ctrl+F",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.formatSelection")?.run();
+          }
+        }
+      }
     ],
     View: [
       { label:"Command Palette",     shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
