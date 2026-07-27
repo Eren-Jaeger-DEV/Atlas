@@ -1512,8 +1512,140 @@ function AppInner() {
       }
     ],
     Terminal: [
-      { label:"New Terminal",    shortcut:"Ctrl+`",       action:()=>{ setShowBottomPanel(true); setBottomTab("terminal"); } },
-      { label:"Toggle Terminal", shortcut:"Ctrl+Shift+`", action:()=>setShowBottomPanel(p=>!p) },
+      {
+        label: "New Terminal",
+        shortcut: "Ctrl+Shift+`",
+        action: () => {
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          setTermAddTrigger(p => p + 1);
+        }
+      },
+      {
+        label: "Split Terminal",
+        shortcut: "Ctrl+Shift+5",
+        action: () => {
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          window.dispatchEvent(new CustomEvent("atlas:terminal-split"));
+        }
+      },
+      {
+        label: "New Terminal Window",
+        shortcut: "Ctrl+Shift+Alt+`",
+        action: () => {
+          api()?.newWindow();
+        }
+      },
+      { separator: true, label: "sep-term-1" },
+      {
+        label: "Run Task...",
+        action: () => {
+          if (!repoPath) return;
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          api()?.getTasks(repoPath).then((tasks) => {
+            const cmd = tasks?.[0]?.command || "npm test";
+            window.dispatchEvent(new CustomEvent("atlas:terminal-send-input", { detail: { text: cmd + "\r" } }));
+          });
+        }
+      },
+      {
+        label: "Run Build Task...",
+        shortcut: "Ctrl+Shift+B",
+        action: () => {
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          window.dispatchEvent(new CustomEvent("atlas:terminal-send-input", { detail: { text: "npm run build\r" } }));
+        }
+      },
+      {
+        label: "Run Active File",
+        action: () => {
+          if (!activeTab?.filePath) return;
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          const ext = activeTab.filePath.split(".").pop() || "";
+          let runCmd = "";
+          if (ext === "js" || ext === "ts") runCmd = `node "${activeTab.filePath}"`;
+          else if (ext === "py") runCmd = `python3 "${activeTab.filePath}"`;
+          else if (ext === "go") runCmd = `go run "${activeTab.filePath}"`;
+          else if (ext === "sh") runCmd = `bash "${activeTab.filePath}"`;
+          else runCmd = `echo "Running ${activeTab.filePath}"`;
+          window.dispatchEvent(new CustomEvent("atlas:terminal-send-input", { detail: { text: runCmd + "\r" } }));
+        }
+      },
+      {
+        label: "Run Selected Text",
+        action: () => {
+          const model = activeEditorRef.current?.getModel();
+          const selection = activeEditorRef.current?.getSelection();
+          const text = model && selection ? model.getValueInRange(selection) : "";
+          if (text) {
+            setShowBottomPanel(true);
+            setBottomTab("terminal");
+            window.dispatchEvent(new CustomEvent("atlas:terminal-send-input", { detail: { text: text + "\r" } }));
+          }
+        }
+      },
+      { separator: true, label: "sep-term-2" },
+      {
+        label: "Show Running Tasks...",
+        action: () => {
+          setShowBottomPanel(true);
+          setBottomTab("output");
+          logToOutput("Tasks", "Displaying running tasks and processes", "info");
+        }
+      },
+      {
+        label: "Restart Running Task...",
+        action: () => {
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          window.dispatchEvent(new CustomEvent("atlas:terminal-send-input", { detail: { text: "\x03npm run build\r" } }));
+        }
+      },
+      {
+        label: "Terminate Task...",
+        action: () => {
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          window.dispatchEvent(new CustomEvent("atlas:terminal-send-input", { detail: { text: "\x03" } }));
+          window.dispatchEvent(new CustomEvent("atlas:terminal-kill-active"));
+        }
+      },
+      { separator: true, label: "sep-term-3" },
+      {
+        label: "Configure Tasks...",
+        action: () => {
+          if (!repoPath) return;
+          const tasksPath = repoPath + "/.vscode/tasks.json";
+          const template = JSON.stringify(
+            {
+              version: "2.0.0",
+              tasks: [
+                {
+                  label: "build",
+                  type: "shell",
+                  command: "npm run build",
+                  group: { kind: "build", isDefault: true }
+                }
+              ]
+            },
+            null,
+            2
+          );
+          api()?.writeFile(tasksPath, template).then(() => handleOpenFile(tasksPath));
+        }
+      },
+      {
+        label: "Configure Default Build Task...",
+        action: () => {
+          if (!repoPath) return;
+          const tasksPath = repoPath + "/.vscode/tasks.json";
+          handleOpenFile(tasksPath);
+        }
+      }
     ],
     Run: [
       {

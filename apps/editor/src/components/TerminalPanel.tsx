@@ -51,6 +51,34 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
     }
   }, [addTrigger]);
 
+  useEffect(() => {
+    const handleSplit = () => handleAddTab();
+    const handleSendInput = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.text && activeTabId) {
+        window.atlasAPI?.terminalInput(activeTabId, detail.text);
+      }
+    };
+    const handleKillActive = () => {
+      if (activeTabId) {
+        const item = termMapRef.current.get(activeTabId);
+        if (item) item.term.dispose();
+        termMapRef.current.delete(activeTabId);
+        setTabs(p => p.filter(t => t.id !== activeTabId));
+      }
+    };
+
+    window.addEventListener("atlas:terminal-split", handleSplit);
+    window.addEventListener("atlas:terminal-send-input", handleSendInput);
+    window.addEventListener("atlas:terminal-kill-active", handleKillActive);
+
+    return () => {
+      window.removeEventListener("atlas:terminal-split", handleSplit);
+      window.removeEventListener("atlas:terminal-send-input", handleSendInput);
+      window.removeEventListener("atlas:terminal-kill-active", handleKillActive);
+    };
+  }, [activeTabId, tabs]);
+
   const handleCloseTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (tabs.length <= 1) return;
