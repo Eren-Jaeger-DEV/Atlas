@@ -21,7 +21,7 @@ interface QuickInputState {
 
 interface QuickInputContextValue {
   showQuickPick: (items: QuickPickItem[], options?: { placeholder?: string }) => Promise<QuickPickItem | undefined>;
-  showInputBox: (options?: { prompt?: string, placeholder?: string, password?: boolean }) => Promise<string | undefined>;
+  showInputBox: (options?: { prompt?: string, placeholder?: string, value?: string, password?: boolean }) => Promise<string | undefined>;
 }
 
 const QuickInputContext = createContext<QuickInputContextValue | null>(null);
@@ -53,9 +53,9 @@ export function QuickInputProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const showInputBox = (options?: { prompt?: string, placeholder?: string, password?: boolean }) => {
+  const showInputBox = (options?: { prompt?: string, placeholder?: string, value?: string, password?: boolean }) => {
     return new Promise<string | undefined>((resolve) => {
-      setInputValue("");
+      setInputValue(options?.value ?? "");
       setState({
         type: "inputbox",
         prompt: options?.prompt,

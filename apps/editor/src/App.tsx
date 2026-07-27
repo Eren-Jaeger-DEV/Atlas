@@ -45,7 +45,7 @@ import { CommandService, BrowserStorageProvider } from "@atlas/core";
 import { DialogProvider } from "./components/DialogProvider.js";
 import { ContextMenuProvider } from "./components/ContextMenuProvider.js";
 import { NotificationProvider } from "./components/NotificationProvider.js";
-import { QuickInputProvider } from "./components/QuickInputProvider.js";
+import { QuickInputProvider, useQuickInput } from "./components/QuickInputProvider.js";
 const storageProvider = new BrowserStorageProvider();
 function getSync(key: string) {
   const res = storageProvider.getItem(key);
@@ -92,6 +92,7 @@ const api = () => window.atlasAPI;
 function AppInner() {
   const { showNotification } = useNotification();
   const { showContextMenu } = useContextMenu();
+  const { showInputBox } = useQuickInput();
   const [repoPath, setRepoPath]             = useState<string | undefined>(() => {
     const last = getSync("atlas_last_repo");
     if (last) return last;
@@ -420,10 +421,11 @@ function AppInner() {
     storageProvider.setItem("atlas_last_repo", path);
   }, []);
 
-  const handleSelectRepo = useCallback(async (customPath?: string) => {
+  const handleSelectRepo = useCallback(async (customPath?: string | any) => {
+    const targetPath = (typeof customPath === "string") ? customPath : undefined;
     const a = api(); if (!a?.selectDirectory) return;
-    const sel = customPath || (await a.selectDirectory());
-    if (sel) {
+    const sel = targetPath || (await a.selectDirectory());
+    if (sel && typeof sel === "string") {
       setRepoPath(sel);
       setWorkspaceRoots([sel]);
       storageProvider.setItem("atlas_workspace_roots", JSON.stringify([sel]));
@@ -450,7 +452,8 @@ function AppInner() {
     }
   }, [repoPath, saveRecentProject]);
 
-  const handleOpenRecent = (path: string) => {
+  const handleOpenRecent = (path: string | any) => {
+    if (typeof path !== "string") return;
     setRepoPath(path);
     setWorkspaceRoots([path]);
     storageProvider.setItem("atlas_workspace_roots", JSON.stringify([path]));
@@ -677,8 +680,8 @@ function AppInner() {
       {
         label: "New File...",
         shortcut: "Ctrl+Alt+Super+N",
-        action: () => {
-          const fileName = prompt("Enter new file path (relative to workspace):", "src/newFile.ts");
+        action: async () => {
+          const fileName = await showInputBox({ prompt: "Enter new file path (relative to workspace):", value: "src/newFile.ts", placeholder: "src/newFile.ts" });
           if (fileName) {
             handleOpenFile(fileName);
           }
@@ -2045,7 +2048,7 @@ function AppInner() {
     if(currentSymbol) setCursorSymbol(currentSymbol);
   }, []);
 
-  const wname = repoPath ? repoPath.split(/[/\\]/).pop() : "Atlas Studio";
+  const wname = (typeof repoPath === "string" && repoPath) ? repoPath.split(/[/\\]/).pop() : "Atlas Studio";
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
 
   return (

@@ -94,7 +94,7 @@ export function MenuBar({
     logo: { width: "16px", height: "16px", marginRight: "6px" },
     menuWrapper: { position: "relative" } as React.CSSProperties,
     menuItem: {
-      background: "none",
+      backgroundColor: "transparent",
       border: "none",
       color: "var(--text-muted, #a1a1aa)",
       padding: "4px 8px",
@@ -130,7 +130,7 @@ export function MenuBar({
       borderRadius: "4px",
       fontSize: "12px",
       color: "var(--text-main, #fafafa)",
-      background: "none",
+      backgroundColor: "transparent",
       border: "none",
       cursor: "pointer"
     },
@@ -160,7 +160,7 @@ export function MenuBar({
     centerTxt: { maxWidth: "260px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as React.CSSProperties,
     tbRight: { display: "flex", alignItems: "center", gap: "4px" },
     iconBtn: {
-      background: "none",
+      backgroundColor: "transparent",
       border: "none",
       color: "var(--text-muted, #a1a1aa)",
       cursor: "pointer",
@@ -172,7 +172,7 @@ export function MenuBar({
     iconOn: { color: "var(--accent, #38bdf8)" },
     winSep: { width: "1px", height: "14px", backgroundColor: "var(--border-subtle, #27272a)", margin: "0 4px" },
     wc: {
-      background: "none",
+      backgroundColor: "transparent",
       border: "none",
       color: "var(--text-muted, #a1a1aa)",
       cursor: "pointer",

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { ParallelDAGViewer } from "./ParallelDAGViewer.js";
 import { ConflictResolverModal } from "./ConflictResolverModal.js";
+import { useQuickInput } from "./QuickInputProvider.js";
 
 export type ParallelWorkerStatus =
   | "pending"
@@ -148,6 +149,7 @@ function WorkerCard({ worker, onCancel }: { worker: WorkerState; onCancel: (id: 
 }
 
 export function ParallelAgentsDashboard({ repoPath }: ParallelAgentsDashboardProps) {
+  const { showInputBox } = useQuickInput();
   const [workers, setWorkers] = useState<WorkerState[]>([]);
   const [goalInput, setGoalInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -317,7 +319,7 @@ export function ParallelAgentsDashboard({ repoPath }: ParallelAgentsDashboardPro
               style={{ fontSize: 10, background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 4, color: "#22c55e", padding: "2px 8px", cursor: "pointer" }}
               onClick={async () => {
                 const api = (window as any).atlasAPI;
-                const name = prompt("Enter custom skill name (e.g. refactor-and-test):");
+                const name = await showInputBox({ prompt: "Enter custom skill name (e.g. refactor-and-test):", placeholder: "refactor-and-test" });
                 if (name && api?.packageSkill) {
                   await api.packageSkill({ name, repoPath });
                   setSkillSuccessMsg(`Skill saved to .agents/skills/${name}/SKILL.md`);

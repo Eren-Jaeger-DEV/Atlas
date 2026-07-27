@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronRight, ChevronDown, FolderPlus, FilePlus, RefreshCw, FolderSearch } from "lucide-react";
 import { FileIcon } from "./FileIcons.js";
+import { useQuickInput } from "./QuickInputProvider.js";
 
 export interface FileItem {
   name: string;
@@ -25,6 +26,7 @@ interface FileExplorerProps {
 }
 
 export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFolder, onOpenInTerminal }: FileExplorerProps) {
+  const { showInputBox } = useQuickInput();
   const [tree, setTree] = useState<FileItem[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
@@ -112,7 +114,7 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
   };
 
   const handleCreateFile = async (targetDir?: string) => {
-    const filename = prompt("Enter file name (e.g. index.ts):");
+    const filename = await showInputBox({ prompt: "Enter file name (e.g. index.ts):", placeholder: "index.ts" });
     if (!filename || !workspaceRoots || workspaceRoots.length === 0) return;
 
     let dir = targetDir || workspaceRoots[0];
@@ -137,7 +139,7 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
   };
 
   const handleCreateFolder = async (parentDir?: string) => {
-    const folderName = prompt("Enter folder name:");
+    const folderName = await showInputBox({ prompt: "Enter folder name:", placeholder: "new-folder" });
     if (!folderName || !workspaceRoots || workspaceRoots.length === 0) return;
 
     let dir = parentDir || workspaceRoots[0];
@@ -150,7 +152,7 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
   };
 
   const handleRename = async (item: FileItem) => {
-    const newName = prompt("Rename to:", item.name);
+    const newName = await showInputBox({ prompt: `Rename '${item.name}' to:`, value: item.name, placeholder: item.name });
     if (!newName || newName === item.name) return;
     const parentDir = item.path.split(/[/\\]/).slice(0, -1).join("/");
     const newPath = `${parentDir}/${newName}`.replace(/\/+/g, "/");
