@@ -1371,6 +1371,145 @@ function AppInner() {
         }
       }
     ],
+    Go: [
+      {
+        label: "Back",
+        shortcut: "Ctrl+Alt+-",
+        action: () => activeEditorRef.current?.trigger?.("menu", "editor.action.navigateBack", null)
+      },
+      {
+        label: "Forward",
+        shortcut: "Ctrl+Shift+-",
+        action: () => activeEditorRef.current?.trigger?.("menu", "editor.action.navigateForward", null)
+      },
+      {
+        label: "Last Edit Location",
+        shortcut: "Ctrl+K Ctrl+Q",
+        action: () => activeEditorRef.current?.trigger?.("menu", "editor.action.navigateToLastEditLocation", null)
+      },
+      { separator: true, label: "sep-go-1" },
+      {
+        label: "Switch Editor",
+        submenu: [
+          {
+            label: "Next Editor",
+            shortcut: "Ctrl+PageDown",
+            action: () => setActiveTabIndex(prev => (prev + 1) % (tabs.length || 1))
+          },
+          {
+            label: "Previous Editor",
+            shortcut: "Ctrl+PageUp",
+            action: () => setActiveTabIndex(prev => (prev - 1 + (tabs.length || 1)) % (tabs.length || 1))
+          },
+          {
+            label: "Next Used Editor",
+            action: () => setActiveTabIndex(prev => (prev + 1) % (tabs.length || 1))
+          },
+          {
+            label: "Previous Used Editor",
+            action: () => setActiveTabIndex(prev => (prev - 1 + (tabs.length || 1)) % (tabs.length || 1))
+          }
+        ]
+      },
+      {
+        label: "Switch Group",
+        submenu: [
+          {
+            label: "Group 1",
+            shortcut: "Ctrl+1",
+            action: () => activeEditorRef.current?.focus?.()
+          },
+          {
+            label: "Group 2",
+            shortcut: "Ctrl+2",
+            action: () => splitEditorRef.current?.focus?.()
+          },
+          {
+            label: "Next Group",
+            action: () => (isSplit ? splitEditorRef.current?.focus?.() : activeEditorRef.current?.focus?.())
+          },
+          {
+            label: "Previous Group",
+            action: () => activeEditorRef.current?.focus?.()
+          }
+        ]
+      },
+      { separator: true, label: "sep-go-2" },
+      {
+        label: "Go to File...",
+        shortcut: "Ctrl+P",
+        action: () => setShowCommandPalette(true)
+      },
+      {
+        label: "Go to Symbol in Workspace...",
+        shortcut: "Ctrl+T",
+        action: () => {
+          setShowCommandPalette(true);
+        }
+      },
+      { separator: true, label: "sep-go-3" },
+      {
+        label: "Go to Symbol in Editor...",
+        shortcut: "Ctrl+Shift+O",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.quickOutline")?.run()
+      },
+      {
+        label: "Go to Definition",
+        shortcut: "F12",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.revealDefinition")?.run()
+      },
+      {
+        label: "Go to Declaration",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.revealDeclaration")?.run()
+      },
+      {
+        label: "Go to Type Definition",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.goToTypeDefinition")?.run()
+      },
+      {
+        label: "Go to Implementations",
+        shortcut: "Ctrl+F12",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.goToImplementation")?.run()
+      },
+      {
+        label: "Go to References",
+        shortcut: "Shift+F12",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.referenceSearch.trigger")?.run()
+      },
+      { separator: true, label: "sep-go-4" },
+      {
+        label: "Go to Line/Column...",
+        shortcut: "Ctrl+G",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.gotoLine")?.run()
+      },
+      {
+        label: "Go to Bracket",
+        shortcut: "Ctrl+Shift+\\",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.jumpToBracket")?.run()
+      },
+      { separator: true, label: "sep-go-5" },
+      {
+        label: "Next Problem",
+        shortcut: "F8",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.marker.next")?.run()
+      },
+      {
+        label: "Previous Problem",
+        shortcut: "Shift+F8",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.marker.prev")?.run()
+      },
+      { separator: true, label: "sep-go-6" },
+      {
+        label: "Next Change",
+        shortcut: "Alt+F3",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.dirtydiff.next")?.run()
+      },
+      {
+        label: "Previous Change",
+        shortcut: "Shift+Alt+F3",
+        action: () => activeEditorRef.current?.getAction?.("editor.action.dirtydiff.previous")?.run()
+      }
+    ],
     Terminal: [
       { label:"New Terminal",    shortcut:"Ctrl+`",       action:()=>{ setShowBottomPanel(true); setBottomTab("terminal"); } },
       { label:"Toggle Terminal", shortcut:"Ctrl+Shift+`", action:()=>setShowBottomPanel(p=>!p) },
