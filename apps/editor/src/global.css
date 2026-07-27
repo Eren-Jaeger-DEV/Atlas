@@ -7,19 +7,19 @@
 
 /* ---------- Design Tokens ---------- */
 :root {
-  /* Nordic Core Backgrounds */
-  --bg-base:          #09090b; /* Deep pitch */
-  --bg-panel:         #121214; /* Slightly elevated */
-  --bg-header:        #18181b; /* Top titlebar */
-  --bg-activity:      #09090b; /* Left sidebar */
-  --bg-statusbar:     #09090b; /* Bottom bar */
-  --bg-active:        #27272a;
+  /* Pure Black Core Backgrounds (Antigravity IDE) */
+  --bg-base:          #000000; /* Pure OLED Black */
+  --bg-panel:         #050505; /* Deepest pitch surface */
+  --bg-header:        #030303; /* Pure black titlebar */
+  --bg-activity:      #000000; /* Pure black activity bar */
+  --bg-statusbar:     #000000; /* Pure black statusbar */
+  --bg-active:        rgba(255, 255, 255, 0.08);
   --bg-hover:         rgba(255, 255, 255, 0.06);
   --bg-hover-strong:  rgba(255, 255, 255, 0.12);
   
   /* Glassmorphism Surfaces */
-  --bg-glass:         rgba(18, 18, 20, 0.75);
-  --bg-glass-strong:  rgba(24, 24, 27, 0.85);
+  --bg-glass:         rgba(5, 5, 5, 0.85);
+  --bg-glass-strong:  rgba(8, 8, 8, 0.95);
 
   /* Borders & Dividers */
   --border-subtle:    rgba(255, 255, 255, 0.04);

@@ -38,10 +38,10 @@ export class ThemeManager {
     const colors = themeData.colors || {};
 
     // Map standard VS Code colors to our UI CSS variables
-    const bgBase = colors["editor.background"] || (isLight ? "#ffffff" : "#0d0d10");
-    const bgPanel = colors["sideBar.background"] || (isLight ? "#f3f4f6" : "#141417");
-    const bgHeader = colors["titleBar.activeBackground"] || (isLight ? "#e5e7eb" : "#18181b");
-    const border = colors["widget.border"] || colors["sideBar.border"] || (isLight ? "#d1d5db" : "#27272a");
+    const bgBase = colors["editor.background"] || (isLight ? "#ffffff" : "#000000");
+    const bgPanel = colors["sideBar.background"] || (isLight ? "#f3f4f6" : "#050505");
+    const bgHeader = colors["titleBar.activeBackground"] || (isLight ? "#e5e7eb" : "#030303");
+    const border = colors["widget.border"] || colors["sideBar.border"] || (isLight ? "#d1d5db" : "rgba(255,255,255,0.08)");
     const textMain = colors["editor.foreground"] || (isLight ? "#111827" : "#fafafa");
     const textMuted = colors["descriptionForeground"] || (isLight ? "#6b7280" : "#a1a1aa");
     const accent = colors["textLink.foreground"] || colors["button.background"] || "#38bdf8";
@@ -51,6 +51,8 @@ export class ThemeManager {
     root.style.setProperty("--bg-base", bgBase);
     root.style.setProperty("--bg-panel", bgPanel);
     root.style.setProperty("--bg-header", bgHeader);
+    root.style.setProperty("--bg-activity", bgBase);
+    root.style.setProperty("--bg-statusbar", bgBase);
     root.style.setProperty("--border-color", border);
     root.style.setProperty("--text-main", textMain);
     root.style.setProperty("--text-muted", textMuted);
@@ -141,14 +143,14 @@ export class ThemeManager {
     this.applyTheme({
       type: "dark",
       colors: {
-        "editor.background": "#0d0d10",
-        "sideBar.background": "#141417",
-        "titleBar.activeBackground": "#18181b",
-        "widget.border": "#27272a",
-        "editor.foreground": "#fafafa",
-        "descriptionForeground": "#a1a1aa",
-        "button.background": "#38bdf8",
-        "dropdown.background": "#09090b",
+        "editor.background": "#000000",
+        "sideBar.background": "#050505",
+        "titleBar.activeBackground": "#030303",
+        "widget.border": "rgba(255,255,255,0.08)",
+        "editor.foreground": "#f4f4f5",
+        "descriptionForeground": "#71717a",
+        "button.background": "#0ea5e9",
+        "dropdown.background": "#050505",
       }
     });
     this.currentTheme = "atlas-dark";
