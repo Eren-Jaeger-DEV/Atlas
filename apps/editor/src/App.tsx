@@ -93,7 +93,12 @@ function AppInner() {
   const { showNotification } = useNotification();
   const { showContextMenu } = useContextMenu();
   const { showInputBox } = useQuickInput();
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const isEmptyWindow = urlParams.get("empty") === "true";
+
   const [repoPath, setRepoPath]             = useState<string | undefined>(() => {
+    if (isEmptyWindow) return undefined;
     const last = getSync("atlas_last_repo");
     if (last) return last;
     try {
@@ -102,7 +107,7 @@ function AppInner() {
     } catch (err) {
       console.warn("[WARN] Failed to parse atlas_workspace_roots from localStorage:", err);
     }
-    return "/home/victor/My projects/Atlas";
+    return undefined;
   });
 
   useEffect(() => {
@@ -111,6 +116,7 @@ function AppInner() {
     }
   }, [repoPath]);
   const [workspaceRoots, setWorkspaceRoots] = useState<string[]>(() => {
+    if (isEmptyWindow) return [];
     try { 
       const stored = JSON.parse(getSync("atlas_workspace_roots") || "[]");
       if (Array.isArray(stored) && stored.length > 0) return stored;

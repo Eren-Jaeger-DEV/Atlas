@@ -121,13 +121,13 @@ const extensionCommands = new Map<string, (...args: any[]) => any>();
 // Window creation
 // ---------------------------------------------------------------------------
 
-function createWindow(): void {
+function createWindow(options?: { empty?: boolean; profile?: string | undefined }): void {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: "#0f0f13",
+    backgroundColor: "#000000",
     icon: path.join(__dirname, "../build/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -155,12 +155,17 @@ function createWindow(): void {
     }
   }, 300);
 
+  const queryParams = new URLSearchParams();
+  if (options?.empty) queryParams.set("empty", "true");
+  if (options?.profile) queryParams.set("profile", options.profile);
+  const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
+
   // Load URL
   const devUrl = process.env.VITE_DEV_SERVER_URL || "http://localhost:5173";
   if (isDev) {
-    mainWindow.loadURL(devUrl);
+    mainWindow.loadURL(`${devUrl}${queryString}`);
   } else {
-    mainWindow.loadURL("app://bundle/index.html");
+    mainWindow.loadURL(`app://bundle/index.html${queryString}`);
   }
 
   mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
@@ -457,8 +462,8 @@ ipcMain.handle("atlas:add-directory", async () => {
   return selectedPath;
 });
 
-ipcMain.handle("atlas:new-window", async () => {
-  createWindow();
+ipcMain.handle("atlas:new-window", async (_event, options?: { profile?: string }) => {
+  createWindow({ empty: true, profile: options?.profile });
   return { success: true };
 });
 
