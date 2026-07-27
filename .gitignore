@@ -1,4 +1,4 @@
-﻿# Atlas Studio
+# Atlas Studio
 
 # Dependencies
 node_modules/
@@ -61,6 +61,7 @@ dist-app/
 
 # Archives
 *.zip
+zi*
 
 # Scratch & helper scripts
 scripts/

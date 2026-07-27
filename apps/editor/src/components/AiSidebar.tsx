@@ -7,6 +7,7 @@ import { MermaidDiagramViewer } from "./MermaidDiagramViewer.js";
 
 import { ArtifactsViewer } from "./ArtifactsViewer";
 import { BackgroundTaskManager } from "./BackgroundTaskManager";
+import { WebPreviewPanel } from "./WebPreviewPanel.js";
 
 type ChatMessage = {
   role: "user" | "agent";
@@ -482,6 +483,31 @@ function AgentMessageBubble({ msg }: { msg: ChatMessage }) {
         <FormattedMessageText text={bodyText} />
       </div>
       {mermaidMatch && <MermaidDiagramViewer code={mermaidMatch[1]!} />}
+
+      {/* Response Action Icons matching Antigravity screenshot */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+        <button
+          style={{ background: "none", border: "none", color: "#71717a", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }}
+          title="Copy Response"
+          onClick={() => {
+            navigator.clipboard.writeText(bodyText);
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button
+          style={{ background: "none", border: "none", color: "#71717a", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }}
+          title="Good Response"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+        </button>
+        <button
+          style={{ background: "none", border: "none", color: "#71717a", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }}
+          title="Bad Response"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -579,7 +605,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
   const [prompt, setPrompt] = useState("");
   const [activeRuns, setActiveRuns] = useState<Set<string>>(new Set());
   const [messages, setMessages] = useState<ChatMessage[]>([]); 
-  const [activeView, setActiveView] = useState<"chat" | "history" | "dashboard" | "artifacts" | "tasks">("chat");
+  const [activeView, setActiveView] = useState<"chat" | "history" | "dashboard" | "artifacts" | "tasks" | "composer-diff" | "web-preview">("chat");
   const [composerOutput, setComposerOutput] = useState<any>(null);
   const [streamEvents, setStreamEvents] = useState<any[]>([]);
   const [streamingTokenText, setStreamingTokenText] = useState("");
@@ -932,97 +958,195 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
       )}
       <div style={{ ...styles.container, width: `${width}px` }}>
         <div style={styles.header}>
-        <span style={styles.headerTitle}>Agent</span>
-        <div style={styles.headerActions}>
-          <button style={styles.iconBtn} title="Remote Link: http://localhost:4000">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-          </button>
-          <button style={styles.iconBtn} onClick={() => setActiveView("chat")} title="New Chat">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          </button>
-          <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "artifacts" ? "chat" : "artifacts")} title="Artifacts (Plans & Walkthroughs)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          </button>
-          <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "tasks" ? "chat" : "tasks")} title="Background Processes">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          </button>
-          <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "dashboard" ? "chat" : "dashboard")} title="Synapse Flight Deck">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>
-          </button>
-          <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "history" ? "chat" : "history")} title="Past Chats">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </button>
-          <button style={styles.iconBtn} title="Options (MCP, Customization)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-          </button>
-          <button style={styles.iconBtn} onClick={onClose} title="Close Panel">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            Initializing Atlas Workspace
+          </span>
+          <div style={styles.headerActions}>
+            <button style={styles.iconBtn} onClick={handleNewChat} title="New Chat">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button style={styles.iconBtn} onClick={() => setActiveView(activeView === "history" ? "chat" : "history")} title="Past Chats & History">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </button>
+            <button style={styles.iconBtn} title="More Options">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </button>
+            <button style={styles.iconBtn} onClick={onClose} title="Close Panel">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div ref={chatStreamRef} style={styles.chatStream}>
-        {activeView === "dashboard" ? (
-          <SynapseDashboard events={streamEvents} />
-        ) : activeView === "artifacts" ? (
-          <ArtifactsViewer repoPath={repoPath} onClose={() => setActiveView("chat")} />
-        ) : activeView === "tasks" ? (
-          <BackgroundTaskManager />
-        ) : messages.length === 0 && activeView !== "history" ? (
-          <div style={styles.emptyState}>
-            <div style={styles.logoMark}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-main, #e4e4e7)" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+        <div ref={chatStreamRef} style={styles.chatStream}>
+          {activeView === "dashboard" ? (
+            <SynapseDashboard events={streamEvents} />
+          ) : activeView === "artifacts" ? (
+            <ArtifactsViewer repoPath={repoPath} onClose={() => setActiveView("chat")} />
+          ) : activeView === "tasks" ? (
+            <BackgroundTaskManager />
+          ) : activeView === "web-preview" ? (
+            <WebPreviewPanel onClose={() => setActiveView("chat")} />
+          ) : activeView === "composer-diff" ? (
+            <div style={{ padding: "12px", color: "#a1a1aa", fontSize: "12px" }}>
+              <div style={{ fontWeight: 600, color: "#ffffff", marginBottom: "8px" }}>Changes Overview &amp; File Diffs</div>
+              {openTabs && openTabs.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {openTabs.map((tab, idx) => (
+                    <div
+                      key={idx}
+                      style={{ padding: "8px", backgroundColor: "#13141f", border: "1px solid #27272a", borderRadius: "6px", cursor: "pointer" }}
+                      onClick={() => window.dispatchEvent(new CustomEvent("atlas:open-file", { detail: { filePath: tab.filePath } }))}
+                    >
+                      <span style={{ color: "#38bdf8", fontWeight: 600 }}>{tab.filePath.split("/").pop()}</span>
+                      <div style={{ fontSize: "11px", color: "#71717a", marginTop: "2px" }}>{tab.filePath}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div>No modified files in workspace active session.</div>
+              )}
             </div>
-            <h3 style={styles.emptyTitle}>Atlas</h3>
-          </div>
-        ) : activeView === "history" ? (
-          <div style={styles.historyPanel}>
-            <h4 style={styles.historyHdr}>Past Chats</h4>
-            <div style={{color: "#52525b", fontSize: "12px"}}>No past chats available yet.</div>
-          </div>
-        ) : (
-          messages.map((msg, i) => {
-            if (msg.role === "user") {
+          ) : messages.length === 0 && activeView !== "history" ? (
+            <div style={styles.emptyState}>
+              <div style={styles.logoMark}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-main, #e4e4e7)" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+              </div>
+              <h3 style={styles.emptyTitle}>Atlas</h3>
+            </div>
+          ) : activeView === "history" ? (
+            <div style={styles.historyPanel}>
+              <h4 style={styles.historyHdr}>Past Chats</h4>
+              <div style={{color: "#52525b", fontSize: "12px"}}>No past chats available yet.</div>
+            </div>
+          ) : (
+            messages.map((msg, i) => {
+              if (msg.role === "user") {
+                return (
+                  <div key={i} className="anim-slide-up" style={styles.userBubble}>
+                    <p style={styles.bubbleText}>{msg.text}</p>
+                  </div>
+                );
+              }
               return (
-                <div key={i} className="anim-slide-up" style={styles.userBubble}>
-                  <p style={styles.bubbleText}>{msg.text}</p>
+                <div key={i} className="anim-slide-up">
+                  <AgentMessageBubble msg={msg} />
                 </div>
               );
-            }
-            return (
-              <div key={i} className="anim-slide-up">
-                <AgentMessageBubble msg={msg} />
-              </div>
-            );
-          })
-        )}
-        {activeRuns.size > 0 && (
-          <div className="anim-slide-up">
-            {awaitingHuman && !planApprovalReq ? (
-              <p style={{ color: "#f87171", fontSize: "12px", margin: 0 }}>
-                [WARN] Awaiting Human: {awaitingHuman}
-              </p>
-            ) : planApprovalReq ? (
-              <div style={{ padding: "10px", border: "1px solid #38bdf8", borderRadius: "6px", backgroundColor: "rgba(56,189,248,0.05)" }}>
-                <p style={{ color: "#38bdf8", fontWeight: 600, marginBottom: "8px", fontSize: "12px" }}>Plan Approval Required</p>
-                <p style={{ color: "#a1a1aa", fontSize: "11px", marginBottom: "12px" }}>Review the proposed plan before continuing.</p>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    style={{ ...styles.sendBtn, width: "auto", padding: "4px 14px", borderRadius: "4px", fontSize: "11px", fontWeight: 600 }}
-                    onClick={() => { window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, true); setPlanApprovalReq(null); setAwaitingHuman(null); }}
-                  >Approve</button>
-                  <button
-                    style={{ background: "#27272a", color: "#e4e4e7", border: "none", width: "auto", padding: "4px 14px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
-                    onClick={() => { window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, false); setPlanApprovalReq(null); setAwaitingHuman(null); }}
-                  >Reject</button>
+            })
+          )}
+          {activeRuns.size > 0 && (
+            <div className="anim-slide-up">
+              {awaitingHuman && !planApprovalReq ? (
+                <p style={{ color: "#f87171", fontSize: "12px", margin: 0 }}>
+                  [WARN] Awaiting Human: {awaitingHuman}
+                </p>
+              ) : planApprovalReq ? (
+                <div style={{ padding: "10px", border: "1px solid #38bdf8", borderRadius: "6px", backgroundColor: "rgba(56,189,248,0.05)" }}>
+                  <p style={{ color: "#38bdf8", fontWeight: 600, marginBottom: "8px", fontSize: "12px" }}>Plan Approval Required</p>
+                  <p style={{ color: "#a1a1aa", fontSize: "11px", marginBottom: "12px" }}>Review the proposed plan before continuing.</p>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button
+                      style={{ ...styles.sendBtn, width: "auto", padding: "4px 14px", borderRadius: "4px", fontSize: "11px", fontWeight: 600 }}
+                      onClick={() => { window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, true); setPlanApprovalReq(null); setAwaitingHuman(null); }}
+                    >Approve</button>
+                    <button
+                      style={{ background: "#27272a", color: "#e4e4e7", border: "none", width: "auto", padding: "4px 14px", borderRadius: "4px", fontSize: "11px", cursor: "pointer" }}
+                      onClick={() => { window.atlasAPI.sendPlanDecision(planApprovalReq.reqId, false); setPlanApprovalReq(null); setAwaitingHuman(null); }}
+                    >Reject</button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <LiveRunBubble events={streamEvents} streamingText={streamingTokenText} elapsedMs={elapsedMs} />
-            )}
-          </div>
-        )}
-      </div>
+              ) : (
+                <LiveRunBubble events={streamEvents} streamingText={streamingTokenText} elapsedMs={elapsedMs} />
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 4 Tool Menus directly ABOVE the Chat Box matching Antigravity screenshot */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "14px",
+          padding: "8px 14px",
+          backgroundColor: "#000000",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+        }}>
+          {/* 1. Changes Overview */}
+          <button
+            style={{
+              background: "none",
+              border: "none",
+              color: activeView === "composer-diff" ? "#ffffff" : "#71717a",
+              cursor: "pointer",
+              padding: "2px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.15s ease"
+            }}
+            onClick={() => setActiveView(activeView === "composer-diff" ? "chat" : "composer-diff")}
+            title="Changes Overview (File Diffs)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </button>
+
+          {/* 2. Terminal Processes */}
+          <button
+            style={{
+              background: "none",
+              border: "none",
+              color: activeView === "tasks" ? "#ffffff" : "#71717a",
+              cursor: "pointer",
+              padding: "2px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.15s ease"
+            }}
+            onClick={() => setActiveView(activeView === "tasks" ? "chat" : "tasks")}
+            title="Terminal Processes & Background Tasks"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </button>
+
+          {/* 3. Artifacts */}
+          <button
+            style={{
+              background: "none",
+              border: "none",
+              color: activeView === "artifacts" ? "#ffffff" : "#71717a",
+              cursor: "pointer",
+              padding: "2px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.15s ease"
+            }}
+            onClick={() => setActiveView(activeView === "artifacts" ? "chat" : "artifacts")}
+            title="Artifacts (Plans & Reports)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          </button>
+
+          {/* 4. Browser */}
+          <button
+            style={{
+              background: "none",
+              border: "none",
+              color: activeView === "web-preview" ? "#ffffff" : "#71717a",
+              cursor: "pointer",
+              padding: "2px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.15s ease"
+            }}
+            onClick={() => setActiveView(activeView === "web-preview" ? "chat" : "web-preview")}
+            title="Browser Preview & Web Runner"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+          </button>
+        </div>
 
       <div style={styles.inputArea}>
         <div style={styles.inputBox} className="ai-input-box">
@@ -1251,12 +1375,13 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
   },
   userBubble: {
-    backgroundColor: "var(--bg-base, #09090b)",
+    backgroundColor: "#16161e",
     border: "1px solid #27272a",
-    borderRadius: "8px",
-    padding: "12px",
-    alignSelf: "flex-end",
-    maxWidth: "90%",
+    borderRadius: "16px",
+    padding: "8px 14px",
+    alignSelf: "flex-start",
+    maxWidth: "95%",
+    margin: "4px 0 8px 0",
   },
   agentBubble: {
     backgroundColor: "transparent",
@@ -1265,26 +1390,27 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "95%",
   },
   bubbleText: {
-    color: "var(--text-main, #e4e4e7)",
+    color: "#ffffff",
     lineHeight: 1.5,
     margin: 0,
     fontSize: "13px",
   },
   inputArea: {
-    padding: "12px",
+    padding: "8px 12px 12px 12px",
     display: "flex",
     flexDirection: "column",
     gap: "8px",
     backgroundColor: "#000000",
   },
   inputBox: {
-    backgroundColor: "var(--bg-base, #09090b)",
+    backgroundColor: "#121319",
     border: "1px solid #27272a",
-    borderRadius: "12px",
+    borderRadius: "16px",
     display: "flex",
     flexDirection: "column",
-    padding: "8px",
+    padding: "10px 12px",
     gap: "8px",
+    boxShadow: "0 4px 16px rgba(0, 0, 0, 0.4)",
   },
   inputTop: {
     display: "flex",
