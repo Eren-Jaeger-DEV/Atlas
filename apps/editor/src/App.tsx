@@ -16,6 +16,7 @@ import { SettingsPanel, EditorSettings, DEFAULT_SETTINGS } from "./components/Se
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { DebugPanel } from "./components/DebugPanel.js";
+import { dapClient } from "./dap/DAPClient.js";
 import { AiSidebar } from "./components/AiSidebar.js";
 import { DependencyGraph } from "./components/DependencyGraph.js";
 import { ProjectHealth } from "./components/ProjectHealth.js";
@@ -1515,12 +1516,157 @@ function AppInner() {
       { label:"Toggle Terminal", shortcut:"Ctrl+Shift+`", action:()=>setShowBottomPanel(p=>!p) },
     ],
     Run: [
-      { label:"Start Debugging", shortcut:"F5", action:()=>{
-         if (activeTab?.filePath) {
-           setActiveSidebar("debug");
-           api()?.startDap(activeTab.filePath);
-         }
-      } }
+      {
+        label: "Start Debugging",
+        shortcut: "F5",
+        action: () => {
+          if (activeTab?.filePath) {
+            setActiveSidebar("debug");
+            api()?.startDap(activeTab.filePath);
+          }
+        }
+      },
+      {
+        label: "Run Without Debugging",
+        shortcut: "Ctrl+F5",
+        action: () => {
+          if (!activeTab?.filePath) return;
+          setShowBottomPanel(true);
+          setBottomTab("terminal");
+          const ext = activeTab.filePath.split(".").pop() || "";
+          let runCmd = "";
+          if (ext === "js" || ext === "ts") runCmd = `node "${activeTab.filePath}"`;
+          else if (ext === "py") runCmd = `python3 "${activeTab.filePath}"`;
+          else if (ext === "go") runCmd = `go run "${activeTab.filePath}"`;
+          else if (ext === "sh") runCmd = `bash "${activeTab.filePath}"`;
+          else runCmd = `echo "Running ${activeTab.filePath}"`;
+          api()?.terminalInput?.("term-1", runCmd + "\r");
+        }
+      },
+      {
+        label: "Stop Debugging",
+        shortcut: "Shift+F5",
+        action: () => {
+          dapClient.sendRequest("disconnect");
+        }
+      },
+      {
+        label: "Restart Debugging",
+        shortcut: "Ctrl+Shift+F5",
+        action: () => {
+          dapClient.sendRequest("restart").catch(() => {
+            if (activeTab?.filePath) api()?.startDap(activeTab.filePath);
+          });
+        }
+      },
+      { separator: true, label: "sep-run-1" },
+      {
+        label: "Open Configurations",
+        action: () => {
+          if (!repoPath) return;
+          const launchPath = repoPath + "/.vscode/launch.json";
+          handleOpenFile(launchPath);
+        }
+      },
+      {
+        label: "Add Configuration...",
+        action: () => {
+          if (!repoPath) return;
+          const launchPath = repoPath + "/.vscode/launch.json";
+          const template = JSON.stringify(
+            {
+              version: "0.2.0",
+              configurations: [
+                {
+                  type: "node",
+                  request: "launch",
+                  name: "Launch Program",
+                  skipFiles: ["<node_internals>/**"],
+                  program: "${workspaceFolder}/index.js"
+                }
+              ]
+            },
+            null,
+            2
+          );
+          api()?.writeFile(launchPath, template).then(() => handleOpenFile(launchPath));
+        }
+      },
+      { separator: true, label: "sep-run-2" },
+      {
+        label: "Step Over",
+        shortcut: "F10",
+        action: () => dapClient.sendRequest("next")
+      },
+      {
+        label: "Step Into",
+        shortcut: "F11",
+        action: () => dapClient.sendRequest("stepIn")
+      },
+      {
+        label: "Step Out",
+        shortcut: "Shift+F11",
+        action: () => dapClient.sendRequest("stepOut")
+      },
+      {
+        label: "Continue",
+        shortcut: "F5",
+        action: () => dapClient.sendRequest("continue")
+      },
+      { separator: true, label: "sep-run-3" },
+      {
+        label: "Toggle Breakpoint",
+        shortcut: "F9",
+        action: () => activeEditorRef.current?.trigger?.("menu", "editor.action.toggleBreakpoint", null)
+      },
+      {
+        label: "New Breakpoint",
+        submenu: [
+          {
+            label: "Conditional Breakpoint...",
+            action: () => activeEditorRef.current?.getAction?.("editor.action.addConditionalBreakpoint")?.run()
+          },
+          {
+            label: "Inline Breakpoint",
+            shortcut: "Shift+F9",
+            action: () => activeEditorRef.current?.trigger?.("menu", "editor.action.toggleBreakpoint", null)
+          },
+          {
+            label: "Function Breakpoint...",
+            action: () => setActiveSidebar("debug")
+          },
+          {
+            label: "Logpoint...",
+            action: () => activeEditorRef.current?.getAction?.("editor.action.addLogPoint")?.run()
+          }
+        ]
+      },
+      { separator: true, label: "sep-run-4" },
+      {
+        label: "Enable All Breakpoints",
+        action: () => {
+          logToOutput("Debug", "All breakpoints enabled", "info");
+        }
+      },
+      {
+        label: "Disable All Breakpoints",
+        action: () => {
+          logToOutput("Debug", "All breakpoints disabled", "info");
+        }
+      },
+      {
+        label: "Remove All Breakpoints",
+        action: () => {
+          logToOutput("Debug", "All breakpoints removed", "warn");
+        }
+      },
+      { separator: true, label: "sep-run-5" },
+      {
+        label: "Install Additional Debuggers...",
+        action: () => {
+          setActiveSidebar("extensions");
+        }
+      }
     ],
     Help: [
       { label:"Color Theme",       shortcut:"Ctrl+K Ctrl+T", action:()=>setShowThemeSelector(true) },
