@@ -160,6 +160,9 @@ function AppInner() {
   const [bottomPanelHeight, setBottomPanelHeight]   = useState(220);
   const draggingRef = useRef<"sidebar" | "bottom" | "right-sidebar" | null>(null);
 
+  const [multiCursorCtrlCmd, setMultiCursorCtrlCmd]   = useState(false);
+  const [columnSelectionMode, setColumnSelectionMode] = useState(false);
+
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
   const [tabs, setTabs]               = useState<EditorTab[]>([]);
 
@@ -1083,6 +1086,180 @@ function AppInner() {
             activeEditorRef.current.focus();
             activeEditorRef.current.getAction("editor.action.formatSelection")?.run();
           }
+        }
+      }
+    ],
+    Selection: [
+      {
+        label: "Select All",
+        shortcut: "Ctrl+A",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.selectAll")?.run() || document.execCommand("selectAll");
+          } else {
+            document.execCommand("selectAll");
+          }
+        }
+      },
+      {
+        label: "Expand Selection",
+        shortcut: "Shift+Alt+RightArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.smartSelect.expand")?.run();
+          }
+        }
+      },
+      {
+        label: "Shrink Selection",
+        shortcut: "Shift+Alt+LeftArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.smartSelect.shrink")?.run();
+          }
+        }
+      },
+      { label: "sel_sep1", separator: true },
+      {
+        label: "Copy Line Up",
+        shortcut: "Ctrl+Shift+Alt+UpArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.copyLinesUpAction")?.run();
+          }
+        }
+      },
+      {
+        label: "Copy Line Down",
+        shortcut: "Ctrl+Shift+Alt+DownArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.copyLinesDownAction")?.run();
+          }
+        }
+      },
+      {
+        label: "Move Line Up",
+        shortcut: "Alt+UpArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.moveLinesUpAction")?.run() ||
+            activeEditorRef.current.getAction("editor.action.moveCarretUpAction")?.run();
+          }
+        }
+      },
+      {
+        label: "Move Line Down",
+        shortcut: "Alt+DownArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.moveLinesDownAction")?.run() ||
+            activeEditorRef.current.getAction("editor.action.moveCarretDownAction")?.run();
+          }
+        }
+      },
+      {
+        label: "Duplicate Selection",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.duplicateSelection")?.run();
+          }
+        }
+      },
+      { label: "sel_sep2", separator: true },
+      {
+        label: "Add Cursor Above",
+        shortcut: "Shift+Alt+UpArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.insertCursorAbove")?.run();
+          }
+        }
+      },
+      {
+        label: "Add Cursor Below",
+        shortcut: "Shift+Alt+DownArrow",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.insertCursorBelow")?.run();
+          }
+        }
+      },
+      {
+        label: "Add Cursors to Line Ends",
+        shortcut: "Shift+Alt+I",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.insertCursorAtEndOfEachLineSelected")?.run();
+          }
+        }
+      },
+      {
+        label: "Add Next Occurrence",
+        shortcut: "Ctrl+D",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.addSelectionToNextFindMatch")?.run();
+          }
+        }
+      },
+      {
+        label: "Add Previous Occurrence",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.addSelectionToPreviousFindMatch")?.run();
+          }
+        }
+      },
+      {
+        label: "Select All Occurrences",
+        shortcut: "Ctrl+F2",
+        action: () => {
+          if (activeEditorRef.current) {
+            activeEditorRef.current.focus();
+            activeEditorRef.current.getAction("editor.action.selectHighlights")?.run() ||
+            activeEditorRef.current.getAction("editor.action.changeAll")?.run();
+          }
+        }
+      },
+      { label: "sel_sep3", separator: true },
+      {
+        label: "Switch to Ctrl+Click for Multi-Cursor",
+        checked: multiCursorCtrlCmd,
+        action: () => {
+          setMultiCursorCtrlCmd(prev => {
+            const next = !prev;
+            if (activeEditorRef.current) {
+              activeEditorRef.current.updateOptions({ multiCursorModifier: next ? "ctrlCmd" : "alt" });
+            }
+            return next;
+          });
+        }
+      },
+      {
+        label: "Column Selection Mode",
+        checked: columnSelectionMode,
+        action: () => {
+          setColumnSelectionMode(prev => {
+            const next = !prev;
+            if (activeEditorRef.current) {
+              activeEditorRef.current.updateOptions({ columnSelection: next });
+            }
+            return next;
+          });
         }
       }
     ],
