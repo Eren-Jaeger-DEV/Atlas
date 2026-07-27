@@ -2683,6 +2683,7 @@ function AppInner() {
           tabSize={editorTabSize}
           useTabs={editorUseTabs}
           eol={editorEol}
+          hasActiveFile={!!activeTab}
           onChangeLanguage={(lang) => {
             if (!activeTab) return;
             setTabs(p => p.map((t, i) => i === activeTabIndex ? { ...t, language: lang } : t));

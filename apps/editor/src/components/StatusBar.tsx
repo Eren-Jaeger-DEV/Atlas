@@ -18,6 +18,7 @@ interface StatusBarProps {
   tabSize?: number;
   useTabs?: boolean;
   eol?: "LF" | "CRLF";
+  hasActiveFile?: boolean;
 }
 
 interface PickerProps {
@@ -175,7 +176,8 @@ export function StatusBar({
   onGoToLine,
   tabSize = 2,
   useTabs = false,
-  eol = "LF"
+  eol = "LF",
+  hasActiveFile = false
 }: StatusBarProps) {
   const [activePicker, setActivePicker] = useState<PickerKind>(null);
   const [pickerAnchor, setPickerAnchor] = useState({ x: 0, y: 0 });
@@ -270,74 +272,84 @@ export function StatusBar({
 
         {/* RIGHT */}
         <div style={s.rightGroup}>
-          {/* Active AI Model */}
-          <div
-            id="statusbar-model"
-            className="statusbar-item"
-            style={itemStyle()}
-            title="Active AI Model"
-            onClick={e => openPicker("model", e)}
-          >
-            <span style={{ color: "var(--accent, #38bdf8)", fontWeight: 700 }}>AI:</span>
-            <span>{activeModel}</span>
-          </div>
+          {/* Active AI Model - only when a file is open */}
+          {hasActiveFile && (
+            <div
+              id="statusbar-model"
+              className="statusbar-item"
+              style={itemStyle()}
+              title="Active AI Model"
+              onClick={e => openPicker("model", e)}
+            >
+              <span style={{ color: "var(--accent, #38bdf8)", fontWeight: 700 }}>AI:</span>
+              <span>{activeModel}</span>
+            </div>
+          )}
 
-          {cursorSymbol && (
+          {hasActiveFile && cursorSymbol && (
             <div style={itemStyle(false)}>
               <span style={{ opacity: 0.7 }}>{cursorSymbol}</span>
             </div>
           )}
 
-          {/* Cursor position */}
-          <div
-            id="statusbar-cursor"
-            className="statusbar-item"
-            style={itemStyle()}
-            title="Go to Line/Column (Ctrl+G)"
-            onClick={() => onGoToLine?.()}
-          >
-            Ln {cursorLine}, Col {cursorCol}
-          </div>
+          {/* Cursor position - only when a file is open */}
+          {hasActiveFile && (
+            <div
+              id="statusbar-cursor"
+              className="statusbar-item"
+              style={itemStyle()}
+              title="Go to Line/Column (Ctrl+G)"
+              onClick={() => onGoToLine?.()}
+            >
+              Ln {cursorLine}, Col {cursorCol}
+            </div>
+          )}
 
-          {/* Indentation picker */}
-          <div
-            id="statusbar-indent"
-            className="statusbar-item"
-            style={itemStyle()}
-            title="Change Indentation"
-            onClick={e => openPicker("indent", e)}
-          >
-            {indentLabel}
-          </div>
+          {/* Indentation picker - only when a file is open */}
+          {hasActiveFile && (
+            <div
+              id="statusbar-indent"
+              className="statusbar-item"
+              style={itemStyle()}
+              title="Change Indentation"
+              onClick={e => openPicker("indent", e)}
+            >
+              {indentLabel}
+            </div>
+          )}
 
-          {/* EOL picker */}
-          <div
-            id="statusbar-eol"
-            className="statusbar-item"
-            style={itemStyle()}
-            title="Select End of Line Sequence"
-            onClick={e => openPicker("eol", e)}
-          >
-            {eol}
-          </div>
+          {/* EOL picker - only when a file is open */}
+          {hasActiveFile && (
+            <div
+              id="statusbar-eol"
+              className="statusbar-item"
+              style={itemStyle()}
+              title="Select End of Line Sequence"
+              onClick={e => openPicker("eol", e)}
+            >
+              {eol}
+            </div>
+          )}
 
-          {/* Language picker */}
-          <div
-            id="statusbar-language"
-            className="statusbar-item"
-            style={itemStyle()}
-            title="Select Language Mode"
-            onClick={e => openPicker("language", e)}
-          >
-            <span style={{ fontSize: 12, fontFamily: "monospace", fontWeight: "bold" }}>{"{}"}</span>
-            <span>{displayLanguage}</span>
-            {lsStatus === "ready"    && <div className="pulsing-dot" style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#22c55e" }} title="Language Server Ready" />}
-            {lsStatus === "loading"  && <div className="pulsing-dot" style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#38bdf8" }} title="Language Server Loading..." />}
-            {lsStatus === "error"    && <div style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#ef4444" }} title="Language Server Error" />}
-          </div>
+          {/* Language picker - only when a file is open */}
+          {hasActiveFile && (
+            <div
+              id="statusbar-language"
+              className="statusbar-item"
+              style={itemStyle()}
+              title="Select Language Mode"
+              onClick={e => openPicker("language", e)}
+            >
+              <span style={{ fontSize: 12, fontFamily: "monospace", fontWeight: "bold" }}>{"{}"}</span>
+              <span>{displayLanguage}</span>
+              {lsStatus === "ready"    && <div className="pulsing-dot" style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#22c55e" }} title="Language Server Ready" />}
+              {lsStatus === "loading"  && <div className="pulsing-dot" style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#38bdf8" }} title="Language Server Loading..." />}
+              {lsStatus === "error"    && <div style={{ marginLeft: 6, width: 7, height: 7, borderRadius: "50%", backgroundColor: "#ef4444" }} title="Language Server Error" />}
+            </div>
+          )}
 
-          {/* Health */}
-          {healthScore !== undefined && healthScore !== null && (
+          {/* Health - only when a file is open */}
+          {hasActiveFile && healthScore !== undefined && healthScore !== null && (
             <div className="statusbar-item" style={itemStyle(false)} title="Project Health">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
               Health: {healthScore}%
