@@ -335,6 +335,13 @@ async function createProvider(repoRoot: string, modelOverride?: string) {
   const providerName = settings.aiProvider || settings.ai?.provider || "openai";
   let apiKey = settings.ai?.apiKeys?.[providerName] || "";
 
+  // Fallback: read top-level plaintext provider keys saved by settings window
+  if (!apiKey && providerName === "routing.run") apiKey = settings.openRouterApiKey || settings.routingApiKey || "";
+  if (!apiKey && providerName === "openai") apiKey = settings.openaiApiKey || "";
+  if (!apiKey && providerName === "anthropic") apiKey = settings.anthropicApiKey || "";
+  if (!apiKey && providerName === "gemini") apiKey = settings.geminiApiKey || "";
+  if (!apiKey && providerName === "openai-compatible") apiKey = settings.openRouterApiKey || settings.openaiApiKey || "";
+
   if (providerName === "anthropic" && !apiKey) apiKey = process.env.ANTHROPIC_API_KEY || "";
   if (providerName === "openai" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
   if (providerName === "gemini" && !apiKey) apiKey = process.env.GEMINI_API_KEY || "";
