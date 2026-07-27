@@ -2111,15 +2111,15 @@ function AppInner() {
           >
             <div style={s.actTop}>
               {([
-                {id:"explorer",  lbl:"Explorer",icon:<Files size={18}/>},
-                {id:"search",    lbl:"Search",  icon:<Search size={18}/>},
-                {id:"git",       lbl:"Git",     icon:<GitBranch size={18}/>},
-                {id:"debug",     lbl:"Debug",   icon:<Bug size={18}/>},
-                {id:"history",   lbl:"History", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
-                {id:"timeline",  lbl:"Timeline",icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
-                {id:"extensions",lbl:"Market",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
-                {id:"ai",        lbl:"Agent",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
-                {id:"parallel",  lbl:"Parallel Agents", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="5" y1="3" x2="5" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/><line x1="5" y1="7" x2="12" y2="7"/><line x1="12" y1="13" x2="19" y2="13"/><circle cx="5" cy="7" r="1.5" fill="currentColor"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/><circle cx="19" cy="17" r="1.5" fill="currentColor"/></svg>},
+                {id:"explorer",  lbl:"Explorer",icon:<Files size={15}/>},
+                {id:"search",    lbl:"Search",  icon:<Search size={15}/>},
+                {id:"git",       lbl:"Git",     icon:<GitBranch size={15}/>},
+                {id:"debug",     lbl:"Debug",   icon:<Bug size={15}/>},
+                {id:"history",   lbl:"History", icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
+                {id:"timeline",  lbl:"Timeline",icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
+                {id:"extensions",lbl:"Market",  icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
+                {id:"ai",        lbl:"Agent",   icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
+                {id:"parallel",  lbl:"Parallel Agents", icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="5" y1="3" x2="5" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/><line x1="5" y1="7" x2="12" y2="7"/><line x1="12" y1="13" x2="19" y2="13"/><circle cx="5" cy="7" r="1.5" fill="currentColor"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/><circle cx="19" cy="17" r="1.5" fill="currentColor"/></svg>},
               ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
                 <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
                   <button 
@@ -2144,7 +2144,7 @@ function AppInner() {
               <Tooltip content="Settings" position={settings.sidebarPosition === "right" ? "left" : "right"}>
                 <button className="sidebar-action-btn" style={s.actBtn} onClick={handleOpenSettings}>
                   <span style={{ opacity: 0.6 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
                   </span>
                 </button>
               </Tooltip>
@@ -2764,10 +2764,10 @@ const s: Record<string,React.CSSProperties> = {
   body:{ display:"flex",flex:1,overflow:"hidden", backgroundColor:"var(--bg-base)" },
 
   /* ---- Activity Bar ---- */
-  actBar:{ width:"52px",backgroundColor:"var(--bg-activity)",borderRight:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"12px",paddingBottom:"12px",flexShrink:0,zIndex:2 },
-  actTop:{ display:"flex",flexDirection:"column",gap:"8px",alignItems:"center" },
-  actBot:{ display:"flex",flexDirection:"column",alignItems:"center",gap:"8px" },
-  actBtn:{ width:"48px",height:"48px",border:"none",background:"transparent",color:"var(--text-faint)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s var(--ease-out)",position:"relative" as const, borderRadius:"var(--radius-md)", margin:"0 2px" },
+  actBar:{ width:"34px",backgroundColor:"var(--bg-activity)",borderRight:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"8px",paddingBottom:"8px",flexShrink:0,zIndex:2 },
+  actTop:{ display:"flex",flexDirection:"column",gap:"2px",alignItems:"center" },
+  actBot:{ display:"flex",flexDirection:"column",alignItems:"center",gap:"2px" },
+  actBtn:{ width:"30px",height:"30px",border:"none",background:"transparent",color:"var(--text-faint)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s",position:"relative" as const, borderRadius:"5px", margin:"0" },
   actOn:{ color:"var(--text-main)", backgroundColor:"var(--bg-hover)" },
   actLbl:{ display:"none" },
 

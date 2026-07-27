@@ -278,11 +278,11 @@ button:disabled {
   position: absolute;
   left: 0;
   width: 2px;
-  height: 60%;
+  height: 50%;
   background: var(--accent);
   border-radius: 0 2px 2px 0;
-  box-shadow: 0 0 6px var(--accent-glow);
-  animation: scaleInFade 0.18s var(--ease-out) forwards;
+  box-shadow: 0 0 5px var(--accent-glow);
+  animation: scaleInFade 0.15s var(--ease-out) forwards;
 }
 
 /* ---------- Editor Tabs ---------- */
