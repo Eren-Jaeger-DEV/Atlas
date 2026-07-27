@@ -462,6 +462,14 @@ ipcMain.handle("atlas:new-window", async () => {
   return { success: true };
 });
 
+ipcMain.handle("atlas:toggle-devtools", async () => {
+  if (mainWindow) {
+    mainWindow.webContents.toggleDevTools();
+    return { success: true };
+  }
+  return { success: false };
+});
+
 ipcMain.handle("atlas:open-file-dialog", async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {

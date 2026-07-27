@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   newWindow: (options?: { profile?: string }): Promise<any> =>
     ipcRenderer.invoke("atlas:new-window", options),
 
+  toggleDevTools: (): Promise<any> =>
+    ipcRenderer.invoke("atlas:toggle-devtools"),
+
   openFileDialog: (): Promise<string | null> =>
     ipcRenderer.invoke("atlas:open-file-dialog"),
 

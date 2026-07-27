@@ -14,6 +14,7 @@ export interface AtlasAPI {
   addDirectory: () => Promise<string | null>;
   addRepo: (repoPath: string) => Promise<any>;
   newWindow: (options?: { profile?: string }) => Promise<any>;
+  toggleDevTools: () => Promise<any>;
   openFileDialog: () => Promise<string | null>;
   saveFileAsDialog: (defaultPath?: string) => Promise<string | null>;
   saveWorkspaceAsDialog: (defaultPath?: string) => Promise<string | null>;

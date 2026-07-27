@@ -29,6 +29,10 @@ import { AiSafetyModal } from "./components/AiSafetyModal.js";
 import { InlineAiTool } from "./components/InlineAiTool.js";
 import { PlanApprovalModal } from "./components/PlanApprovalModal.js";
 import { AboutAtlasModal } from "./components/AboutAtlasModal.js";
+import { ProcessExplorerModal } from "./components/ProcessExplorerModal.js";
+import { WalkthroughModal } from "./components/WalkthroughModal.js";
+import { FeedbackModal } from "./components/FeedbackModal.js";
+import { UpdateModal } from "./components/UpdateModal.js";
 import { KeybindingsPanel, DEFAULT_KEYBINDINGS } from "./components/KeybindingsPanel.js";
 import { ThemeSelectorPanel } from "./components/ThemeSelectorPanel.js";
 import { Files, Search, GitBranch, Bug, Blocks, Settings, X, Search as SearchIcon, X as XIcon, Menu, Bot } from "lucide-react";
@@ -158,6 +162,10 @@ function AppInner() {
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ reqId: string, plan: any } | null>(null);
   const [showInlineAi, setShowInlineAi]             = useState(false);
   const [showAboutModal, setShowAboutModal]         = useState(false);
+  const [showProcessExplorerModal, setShowProcessExplorerModal] = useState(false);
+  const [showWalkthroughModal, setShowWalkthroughModal]         = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal]               = useState(false);
+  const [showUpdateModal, setShowUpdateModal]                   = useState(false);
   const [showKeybindings, setShowKeybindings]       = useState(false);
   const [showThemeSelector, setShowThemeSelector]   = useState(false);
   const [activeCursorPos, setActiveCursorPos]       = useState({ line: 1, col: 1 });
@@ -1801,11 +1809,81 @@ function AppInner() {
       }
     ],
     Help: [
-      { label:"Color Theme",       shortcut:"Ctrl+K Ctrl+T", action:()=>setShowThemeSelector(true) },
-      { label:"Keyboard Shortcuts", shortcut:"Ctrl+K Ctrl+S", action:()=>setShowKeybindings(true) },
-      { label:"separator", separator:true },
-      { label:"About Atlas Studio", shortcut:"",             action:()=>setShowAboutModal(true) },
-      { label:"Command Palette",   shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
+      {
+        label: "Welcome",
+        action: () => setShowWalkthroughModal(true)
+      },
+      {
+        label: "Show All Commands",
+        shortcut: "Ctrl+Shift+P",
+        action: () => setShowCommandPalette(true)
+      },
+      {
+        label: "Editor Playground",
+        action: () => {
+          if (!repoPath) return;
+          const playgroundPath = repoPath + "/playground.ts";
+          const snippet = `// Atlas Studio Interactive Playground\nconsole.log("Welcome to Atlas Studio Playground!");\n\nfunction calculateImpact(nodeCount: number) {\n  return nodeCount * 42;\n}\n\nconsole.log("Impact Score:", calculateImpact(10));\n`;
+          api()?.writeFile(playgroundPath, snippet).then(() => handleOpenFile(playgroundPath));
+        }
+      },
+      {
+        label: "Open Walkthrough...",
+        action: () => setShowWalkthroughModal(true)
+      },
+      {
+        label: "Provide Feedback",
+        action: () => setShowFeedbackModal(true)
+      },
+      {
+        label: "Download Diagnostics",
+        action: async () => {
+          try {
+            const diag = window.atlasAPI?.getSystemDiagnostics
+              ? await window.atlasAPI.getSystemDiagnostics()
+              : { heapUsedMB: 128, cpuCount: 8, uptime: 100 };
+            const payload = JSON.stringify({ app: "Atlas Studio v1.0.0", diagnostics: diag, time: new Date().toISOString() }, null, 2);
+            const blob = new Blob([payload], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `atlas-diagnostics-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            logToOutput("Help", "Downloaded system diagnostics report", "info");
+          } catch (e) {
+            console.error(e);
+          }
+        }
+      },
+      { separator: true, label: "sep-help-1" },
+      {
+        label: "View License",
+        action: () => {
+          if (repoPath) handleOpenFile(repoPath + "/LICENSE");
+        }
+      },
+      { separator: true, label: "sep-help-2" },
+      {
+        label: "Toggle Developer Tools",
+        action: () => {
+          api()?.toggleDevTools?.();
+        }
+      },
+      {
+        label: "Open Process Explorer",
+        action: () => setShowProcessExplorerModal(true)
+      },
+      { separator: true, label: "sep-help-3" },
+      {
+        label: "Check for Updates...",
+        action: () => setShowUpdateModal(true)
+      },
+      { separator: true, label: "sep-help-4" },
+      {
+        label: "About",
+        action: () => setShowAboutModal(true)
+      }
     ],
   };
 
@@ -2511,6 +2589,10 @@ function AppInner() {
       </div>
 
       {showAboutModal && <AboutAtlasModal onClose={()=>setShowAboutModal(false)} />}
+      <ProcessExplorerModal isOpen={showProcessExplorerModal} onClose={() => setShowProcessExplorerModal(false)} />
+      <WalkthroughModal isOpen={showWalkthroughModal} onClose={() => setShowWalkthroughModal(false)} />
+      <FeedbackModal isOpen={showFeedbackModal} onClose={() => setShowFeedbackModal(false)} />
+      <UpdateModal isOpen={showUpdateModal} onClose={() => setShowUpdateModal(false)} />
       
       {showKeybindings && <KeybindingsPanel onClose={() => setShowKeybindings(false)} />}
 

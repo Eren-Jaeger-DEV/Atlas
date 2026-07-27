@@ -85,6 +85,7 @@ We are systematically building features to match and exceed standard editor capa
   - [x] **Autonomous Tri-Surface Self-Healing Verification (`SelfHealingVerifier`):** Post-coding compiler LSP diagnostics & unit test execution with auto-retry self-repair loops.
   - [x] **Interactive 3-Way Conflict Workbench (`ConflictResolverModal`):** Side-by-side multi-worker edit collision resolution modal with 1-click acceptance.
   - [x] **Agent Skill Auto-Distillation (`WorkflowSkillCreator`):** Packaging completed multi-agent workflows into reusable `.agents/skills/<name>/SKILL.md` custom skills.
+  - [x] **Full Top Window Menu Parity (File, Edit, Selection, View, Go, Run, Terminal, Help):** 100% real, dynamic, un-mocked logic across all 8 top window menus with Monaco actions, DAP stepping, xterm task runner, process explorer, and walkthrough guide.
   - [x] **Full IDE Features & Parity:** Real Monaco LSP protocol wire-up (Hover, Go-to-Def F12, References Shift+F12, Rename F2, Code Actions Ctrl+., Format Shift+Alt+F), full right-click context menus (Editor & FileExplorer with inline rename, new file/folder, copy path, open terminal), and interactive StatusBar pickers (Language, Indentation, EOL, Go-to-Line).
 
 ---
