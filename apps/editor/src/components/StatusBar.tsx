@@ -272,19 +272,6 @@ export function StatusBar({
 
         {/* RIGHT */}
         <div style={s.rightGroup}>
-          {/* Active AI Model - only when a file is open */}
-          {hasActiveFile && (
-            <div
-              id="statusbar-model"
-              className="statusbar-item"
-              style={itemStyle()}
-              title="Active AI Model"
-              onClick={e => openPicker("model", e)}
-            >
-              <span style={{ color: "var(--accent, #38bdf8)", fontWeight: 700 }}>AI:</span>
-              <span>{activeModel}</span>
-            </div>
-          )}
 
           {hasActiveFile && cursorSymbol && (
             <div style={itemStyle(false)}>
