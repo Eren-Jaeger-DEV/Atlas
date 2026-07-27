@@ -149,6 +149,11 @@ function AppInner() {
 
   const [multiCursorCtrlCmd, setMultiCursorCtrlCmd]   = useState(false);
   const [columnSelectionMode, setColumnSelectionMode] = useState(false);
+  const [wordWrap, setWordWrap]                     = useState(true);
+  const [showPrimarySidebar, setShowPrimarySidebar] = useState(true);
+  const [showStatusBar, setShowStatusBar]           = useState(true);
+  const [zenMode, setZenMode]                       = useState(false);
+  const [zoomLevel, setZoomLevel]                   = useState(0);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ reqId: string, plan: any } | null>(null);
   const [showInlineAi, setShowInlineAi]             = useState(false);
   const [showAboutModal, setShowAboutModal]         = useState(false);
@@ -1188,18 +1193,183 @@ function AppInner() {
       }
     ],
     View: [
-      { label:"Command Palette",     shortcut:"Ctrl+Shift+P", action:()=>setShowCommandPalette(true) },
-      { label:"Inline AI Assistant", shortcut:"Ctrl+I",       action:()=>setShowInlineAi(p=>!p) },
-      { label:"Split Editor",        shortcut:"Ctrl+\\",      action:()=>setIsSplit(p=>!p) },
-      { label:"separator", separator:true },
-      { label:"Explorer",            shortcut:"Ctrl+Shift+E", action:()=>setActiveSidebar("explorer") },
-      { label:"Search",              shortcut:"Ctrl+Shift+F", action:()=>setActiveSidebar("search") },
-      { label:"Source Control",      shortcut:"Ctrl+Shift+G", action:()=>setActiveSidebar("git") },
-      { label:"Git History",         shortcut:"",             action:()=>setActiveSidebar("history") },
-      { label:"3-Way Merge Resolver",shortcut:"",             action:()=>setShowMergeConflict(p=>!p) },
-      { label:"Extensions Gallery",  shortcut:"Ctrl+Shift+X", action:()=>setActiveSidebar("extensions") },
-      { label:"Toggle AI Sidebar",   shortcut:"Ctrl+L",       action:()=>setShowRightAiSidebar(p=>!p) },
-      { label:"Toggle Panel",        shortcut:"Ctrl+`",       action:()=>setShowBottomPanel(p=>!p) },
+      { label: "Command Palette...", shortcut: "Ctrl+Shift+P", action: () => setShowCommandPalette(true) },
+      { label: "Open View...", action: () => setShowCommandPalette(true) },
+      { separator: true, label: "sep1" },
+      {
+        label: "Appearance",
+        submenu: [
+          {
+            label: "Full Screen",
+            shortcut: "F11",
+            action: () => {
+              if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => api()?.windowMaximize());
+              } else {
+                document.exitFullscreen().catch(() => {});
+              }
+            }
+          },
+          {
+            label: "Zen Mode",
+            shortcut: "Ctrl+K Z",
+            checked: zenMode,
+            action: () => setZenMode(prev => !prev)
+          },
+          {
+            label: "Centered Layout",
+            action: () => {
+              if (activeEditorRef.current) {
+                activeEditorRef.current.updateOptions({ padding: { top: 20, bottom: 20 } });
+              }
+            }
+          },
+          { separator: true, label: "sep-app-1" },
+          { label: "Menu Bar", checked: true, action: () => {} },
+          {
+            label: "Primary Side Bar",
+            shortcut: "Ctrl+B",
+            checked: showPrimarySidebar,
+            action: () => setShowPrimarySidebar(prev => !prev)
+          },
+          {
+            label: "Secondary Side Bar",
+            shortcut: "Ctrl+L",
+            checked: showRightAiSidebar,
+            action: () => setShowRightAiSidebar(prev => !prev)
+          },
+          {
+            label: "Status Bar",
+            checked: showStatusBar,
+            action: () => setShowStatusBar(prev => !prev)
+          },
+          {
+            label: "Panel",
+            shortcut: "Ctrl+J",
+            checked: showBottomPanel,
+            action: () => setShowBottomPanel(prev => !prev)
+          },
+          { separator: true, label: "sep-app-2" },
+          {
+            label: settings.sidebarPosition === "right" ? "Move Primary Side Bar Left" : "Move Primary Side Bar Right",
+            action: () => handleUpdateSettings({ ...settings, sidebarPosition: settings.sidebarPosition === "right" ? "left" : "right" })
+          },
+          {
+            label: "Align Panel Bottom",
+            action: () => handleUpdateSettings({ ...settings, terminalPosition: "bottom" })
+          },
+          {
+            label: "Align Panel Right",
+            action: () => handleUpdateSettings({ ...settings, terminalPosition: "right" })
+          },
+          { separator: true, label: "sep-app-3" },
+          {
+            label: "Zoom In",
+            shortcut: "Ctrl+=",
+            action: () => {
+              setZoomLevel(prev => {
+                const next = Math.min(prev + 1, 5);
+                const newSize = settings.fontSize + next * 2;
+                activeEditorRef.current?.updateOptions?.({ fontSize: newSize });
+                return next;
+              });
+            }
+          },
+          {
+            label: "Zoom Out",
+            shortcut: "Ctrl+-",
+            action: () => {
+              setZoomLevel(prev => {
+                const next = Math.max(prev - 1, -3);
+                const newSize = settings.fontSize + next * 2;
+                activeEditorRef.current?.updateOptions?.({ fontSize: newSize });
+                return next;
+              });
+            }
+          },
+          {
+            label: "Reset Zoom",
+            shortcut: "Ctrl+Numpad0",
+            action: () => {
+              setZoomLevel(0);
+              activeEditorRef.current?.updateOptions?.({ fontSize: settings.fontSize });
+            }
+          }
+        ]
+      },
+      {
+        label: "Editor Layout",
+        submenu: [
+          { label: "Single", action: () => setIsSplit(false) },
+          { label: "Two Columns", action: () => setIsSplit(true) },
+          { label: "Three Columns", action: () => setIsSplit(true) },
+          { label: "Two Rows", action: () => setIsSplit(true) },
+          { label: "Grid (2x2)", action: () => setIsSplit(true) },
+          { label: "Two Rows Split", action: () => setIsSplit(true) }
+        ]
+      },
+      { separator: true, label: "sep2" },
+      {
+        label: "Explorer",
+        shortcut: "Ctrl+Shift+E",
+        action: () => { setShowPrimarySidebar(true); setActiveSidebar("explorer"); }
+      },
+      {
+        label: "Search",
+        shortcut: "Ctrl+Shift+F",
+        action: () => { setShowPrimarySidebar(true); setActiveSidebar("search"); }
+      },
+      {
+        label: "Source Control",
+        shortcut: "Ctrl+Shift+G",
+        action: () => { setShowPrimarySidebar(true); setActiveSidebar("git"); }
+      },
+      {
+        label: "Run",
+        shortcut: "Ctrl+Shift+D",
+        action: () => { setShowPrimarySidebar(true); setActiveSidebar("debug"); }
+      },
+      {
+        label: "Extensions",
+        shortcut: "Ctrl+Shift+X",
+        action: () => { setShowPrimarySidebar(true); setActiveSidebar("extensions"); }
+      },
+      { separator: true, label: "sep3" },
+      {
+        label: "Problems",
+        shortcut: "Ctrl+Shift+M",
+        action: () => { setShowBottomPanel(true); setBottomTab("problems"); }
+      },
+      {
+        label: "Output",
+        shortcut: "Ctrl+K Ctrl+H",
+        action: () => { setShowBottomPanel(true); setBottomTab("output"); }
+      },
+      {
+        label: "Debug Console",
+        shortcut: "Ctrl+Shift+Y",
+        action: () => { setShowBottomPanel(true); setBottomTab("terminal"); }
+      },
+      {
+        label: "Terminal",
+        shortcut: "Ctrl+`",
+        action: () => { setShowBottomPanel(true); setBottomTab("terminal"); }
+      },
+      { separator: true, label: "sep4" },
+      {
+        label: "Word Wrap",
+        shortcut: "Alt+Z",
+        checked: wordWrap,
+        action: () => {
+          setWordWrap(prev => {
+            const next = !prev;
+            if (activeEditorRef.current) {
+              activeEditorRef.current.updateOptions({ wordWrap: next ? "on" : "off" });
+            }
+            return next;
+          });
+        }
+      }
     ],
     Terminal: [
       { label:"New Terminal",    shortcut:"Ctrl+`",       action:()=>{ setShowBottomPanel(true); setBottomTab("terminal"); } },
@@ -1379,75 +1549,81 @@ function AppInner() {
       />
 
       <div style={{...s.body, flexDirection: settings.sidebarPosition === "right" ? "row-reverse" : "row"}}>
-        <nav 
-          style={{ ...s.actBar, borderRight: settings.sidebarPosition === "right" ? "1px solid #27272a" : "none" }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            const toggleSidebar = (id: SidebarView) => {
-              if (activeSidebar === id) setActiveSidebar(null as any);
-              else setActiveSidebar(id);
-            };
-            showContextMenu({
-              x: e.clientX,
-              y: e.clientY,
-              items: [
-                { label: "Explorer", onClick: () => toggleSidebar("explorer") },
-                { label: "Code Search", onClick: () => toggleSidebar("search") },
-                { label: "Source Control", onClick: () => toggleSidebar("git") },
-                { label: "Run and Debug", onClick: () => toggleSidebar("debug") },
-                { label: "Extensions", onClick: () => toggleSidebar("extensions") },
-                { separator: true },
-                { 
-                  label: settings.sidebarPosition === "right" ? "Move Primary Side Bar Left" : "Move Primary Side Bar Right", 
-                  onClick: () => {
-                    setSettings(prev => ({ ...prev, sidebarPosition: prev.sidebarPosition === "right" ? "left" : "right" }));
-                  } 
-                },
-                { 
-                  label: "Hide Primary Side Bar", 
-                  onClick: () => setActiveSidebar(null as any) 
-                }
-              ]
-            });
-          }}
-        >
-          <div style={s.actTop}>
-            {([
-              {id:"explorer",  lbl:"Explorer",icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>},
-              {id:"search",    lbl:"Search",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>},
-              {id:"git",       lbl:"Git",     icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>},
-              {id:"debug",     lbl:"Debug",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>},
-              {id:"history",   lbl:"History", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
-              {id:"timeline",  lbl:"Timeline",icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
-              {id:"extensions",lbl:"Market",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
-              {id:"ai",        lbl:"Agent",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
-              {id:"parallel",  lbl:"Parallel Agents", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="5" y1="3" x2="5" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/><line x1="5" y1="7" x2="12" y2="7"/><line x1="12" y1="13" x2="19" y2="13"/><circle cx="5" cy="7" r="1.5" fill="currentColor"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/><circle cx="19" cy="17" r="1.5" fill="currentColor"/></svg>},
-            ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
-              <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
-                <button 
-                  className="sidebar-action-btn"
-                  style={{...s.actBtn, position: "relative", color: activeSidebar === id ? "var(--text-main)" : "#64748b"}} 
-                  onClick={()=>setActiveSidebar(activeSidebar===id ? null as any : id)}
-                >
-                  {activeSidebar === id && <div className="active-indicator" style={{ [settings.sidebarPosition === "right" ? "right" : "left"]: 0, left: settings.sidebarPosition === "right" ? "auto" : 0 }} />}
-                  <span style={{ opacity: activeSidebar===id ? 1 : 0.6 }}>{icon}</span>
+        {showPrimarySidebar && !zenMode && (
+          <nav 
+            style={{ 
+              ...s.actBar, 
+              borderRight: settings.sidebarPosition === "right" ? "none" : "1px solid var(--border-subtle)", 
+              borderLeft: settings.sidebarPosition === "right" ? "1px solid var(--border-subtle)" : "none" 
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              const toggleSidebar = (id: SidebarView) => {
+                if (activeSidebar === id) setActiveSidebar(null as any);
+                else setActiveSidebar(id);
+              };
+              showContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                items: [
+                  { label: "Explorer", onClick: () => toggleSidebar("explorer") },
+                  { label: "Code Search", onClick: () => toggleSidebar("search") },
+                  { label: "Source Control", onClick: () => toggleSidebar("git") },
+                  { label: "Run and Debug", onClick: () => toggleSidebar("debug") },
+                  { label: "Extensions", onClick: () => toggleSidebar("extensions") },
+                  { separator: true },
+                  { 
+                    label: settings.sidebarPosition === "right" ? "Move Primary Side Bar Left" : "Move Primary Side Bar Right", 
+                    onClick: () => {
+                      setSettings(prev => ({ ...prev, sidebarPosition: prev.sidebarPosition === "right" ? "left" : "right" }));
+                    } 
+                  },
+                  { 
+                    label: "Hide Primary Side Bar", 
+                    onClick: () => setActiveSidebar(null as any) 
+                  }
+                ]
+              });
+            }}
+          >
+            <div style={s.actTop}>
+              {([
+                {id:"explorer",  lbl:"Explorer",icon:<Files size={18}/>},
+                {id:"search",    lbl:"Search",  icon:<Search size={18}/>},
+                {id:"git",       lbl:"Git",     icon:<GitBranch size={18}/>},
+                {id:"debug",     lbl:"Debug",   icon:<Bug size={18}/>},
+                {id:"history",   lbl:"History", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
+                {id:"timeline",  lbl:"Timeline",icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
+                {id:"extensions",lbl:"Market",  icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
+                {id:"ai",        lbl:"Agent",   icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
+                {id:"parallel",  lbl:"Parallel Agents", icon:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="5" y1="3" x2="5" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/><line x1="5" y1="7" x2="12" y2="7"/><line x1="12" y1="13" x2="19" y2="13"/><circle cx="5" cy="7" r="1.5" fill="currentColor"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/><circle cx="19" cy="17" r="1.5" fill="currentColor"/></svg>},
+              ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
+                <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
+                  <button 
+                    className="sidebar-action-btn"
+                    style={{...s.actBtn, position: "relative", color: activeSidebar === id ? "var(--text-main)" : "#64748b"}} 
+                    onClick={()=>setActiveSidebar(activeSidebar===id ? null as any : id)}
+                  >
+                    {activeSidebar === id && <div className="active-indicator" style={{ [settings.sidebarPosition === "right" ? "right" : "left"]: 0, left: settings.sidebarPosition === "right" ? "auto" : 0 }} />}
+                    <span style={{ opacity: activeSidebar===id ? 1 : 0.6 }}>{icon}</span>
+                  </button>
+                </Tooltip>
+              ))}
+            </div>
+            <div style={s.actBot}>
+              <Tooltip content="Settings" position={settings.sidebarPosition === "right" ? "left" : "right"}>
+                <button className="sidebar-action-btn" style={s.actBtn} onClick={handleOpenSettings}>
+                  <span style={{ opacity: 0.6 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+                  </span>
                 </button>
               </Tooltip>
-            ))}
-          </div>
-          <div style={s.actBot}>
-            <Tooltip content="Settings" position={settings.sidebarPosition === "right" ? "left" : "right"}>
-              <button className="sidebar-action-btn" style={s.actBtn} onClick={handleOpenSettings}>
-                <span style={{ opacity: 0.6 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
-                </span>
-              </button>
-            </Tooltip>
-          </div>
-        </nav>
+            </div>
+          </nav>
+        )}
 
         <AnimatePresence initial={false}>
-          {activeSidebar && (
+          {showPrimarySidebar && !zenMode && activeSidebar && (
             <motion.aside 
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: sidebarWidth, opacity: 1 }}
@@ -1802,10 +1978,10 @@ function AppInner() {
           </div>
           </div>
 
-          {showBottomPanel && <div className={settings.terminalPosition === "right" ? "resizer-x" : "resizer-y"} style={settings.terminalPosition === "right" ? s.resizerX : s.resizerY} onMouseDown={e => { e.preventDefault(); draggingRef.current = "bottom"; document.body.style.cursor = settings.terminalPosition === "right" ? "col-resize" : "row-resize"; }} />}
+          {showBottomPanel && !zenMode && <div className={settings.terminalPosition === "right" ? "resizer-x" : "resizer-y"} style={settings.terminalPosition === "right" ? s.resizerX : s.resizerY} onMouseDown={e => { e.preventDefault(); draggingRef.current = "bottom"; document.body.style.cursor = settings.terminalPosition === "right" ? "col-resize" : "row-resize"; }} />}
 
           <AnimatePresence initial={false}>
-            {showBottomPanel && (
+            {showBottomPanel && !zenMode && (
               <motion.div 
                 initial={settings.terminalPosition === "right" ? { width: 0, opacity: 0 } : { height: 0, opacity: 0 }}
                 animate={settings.terminalPosition === "right" ? { width: bottomPanelHeight, opacity: 1 } : { height: bottomPanelHeight, opacity: 1 }}
@@ -1913,8 +2089,8 @@ function AppInner() {
           </AnimatePresence>
         </div>
 
-        {showRightAiSidebar && <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "right-sidebar"; document.body.style.cursor = "col-resize"; }} />}
-        {showRightAiSidebar && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} activeContent={activeTab?.content} openTabs={tabs.map(t => ({ filePath: t.filePath, content: t.content }))} cursorLine={activeCursorPos?.line} cursorSymbol={cursorSymbol} onClose={() => setShowRightAiSidebar(false)} onOpenSettings={handleOpenSettings} />}
+        {showRightAiSidebar && !zenMode && <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "right-sidebar"; document.body.style.cursor = "col-resize"; }} />}
+        {showRightAiSidebar && !zenMode && <AiSidebar width={rightSidebarWidth} repoPath={repoPath} activeFilePath={activeTab?.filePath} activeContent={activeTab?.content} openTabs={tabs.map(t => ({ filePath: t.filePath, content: t.content }))} cursorLine={activeCursorPos?.line} cursorSymbol={cursorSymbol} onClose={() => setShowRightAiSidebar(false)} onOpenSettings={handleOpenSettings} />}
       </div>
 
       {showAboutModal && <AboutAtlasModal onClose={()=>setShowAboutModal(false)} />}
@@ -1961,34 +2137,36 @@ function AppInner() {
         />
       )}
 
-      <StatusBar
-        repoPath={repoPath}
-        activeLanguage={activeTab?.language}
-        cursorSymbol={cursorSymbol}
-        cursorLine={activeCursorPos.line}
-        cursorCol={activeCursorPos.col}
-        lsStatus={lsStatus}
-        healthScore={healthScore}
-        tabSize={editorTabSize}
-        useTabs={editorUseTabs}
-        eol={editorEol}
-        onChangeLanguage={(lang) => {
-          if (!activeTab) return;
-          setTabs(p => p.map((t, i) => i === activeTabIndex ? { ...t, language: lang } : t));
-        }}
-        onChangeIndentation={(size, useTab) => {
-          setEditorTabSize(size);
-          setEditorUseTabs(useTab);
-          handleUpdateSettings({ ...settings, tabSize: size });
-          activeEditorRef.current?.updateOptions({ tabSize: size, insertSpaces: !useTab });
-        }}
-        onChangeEol={(eol) => {
-          setEditorEol(eol);
-          const model = activeEditorRef.current?.getModel?.();
-          if (model) model.setEOL(eol === "CRLF" ? 0 : 1);
-        }}
-        onGoToLine={() => { activeEditorRef.current?.getAction?.("editor.action.gotoLine")?.run(); }}
-      />
+      {showStatusBar && !zenMode && (
+        <StatusBar
+          repoPath={repoPath}
+          activeLanguage={activeTab?.language}
+          cursorSymbol={cursorSymbol}
+          cursorLine={activeCursorPos.line}
+          cursorCol={activeCursorPos.col}
+          lsStatus={lsStatus}
+          healthScore={healthScore}
+          tabSize={editorTabSize}
+          useTabs={editorUseTabs}
+          eol={editorEol}
+          onChangeLanguage={(lang) => {
+            if (!activeTab) return;
+            setTabs(p => p.map((t, i) => i === activeTabIndex ? { ...t, language: lang } : t));
+          }}
+          onChangeIndentation={(size, useTab) => {
+            setEditorTabSize(size);
+            setEditorUseTabs(useTab);
+            handleUpdateSettings({ ...settings, tabSize: size });
+            activeEditorRef.current?.updateOptions({ tabSize: size, insertSpaces: !useTab });
+          }}
+          onChangeEol={(eol) => {
+            setEditorEol(eol);
+            const model = activeEditorRef.current?.getModel?.();
+            if (model) model.setEOL(eol === "CRLF" ? 0 : 1);
+          }}
+          onGoToLine={() => { activeEditorRef.current?.getAction?.("editor.action.gotoLine")?.run(); }}
+        />
+      )}
       <CommandPaletteQuickPicker
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
