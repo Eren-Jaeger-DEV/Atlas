@@ -2212,173 +2212,175 @@ function AppInner() {
 
         <div style={{...s.center, flexDirection: settings.terminalPosition === "right" ? "row" : "column"}} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-          <div style={s.tabBar}>
-            <div style={{ display: "flex", flex: 1, overflowX: "auto", height: "100%", alignItems: "center" }}>
-              {tabs.map((tab,i)=>(
-                <div
-                  key={tab.filePath}
-                  className="editor-tab anim-slide-right"
-                  style={{...s.tab,...(i===activeTabIndex&&!activeDiff?s.tabOn:{})}} 
-                  onClick={()=>{setActiveDiff(null);setActiveTabIndex(i);}}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
+          {tabs.length > 0 && (
+            <div style={s.tabBar}>
+              <div style={{ display: "flex", flex: 1, overflowX: "auto", height: "100%", alignItems: "center" }}>
+                {tabs.map((tab,i)=>(
+                  <div
+                    key={tab.filePath}
+                    className="editor-tab anim-slide-right"
+                    style={{...s.tab,...(i===activeTabIndex&&!activeDiff?s.tabOn:{})}} 
+                    onClick={()=>{setActiveDiff(null);setActiveTabIndex(i);}}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      showContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        items: [
+                          { label: "Close", onClick: () => handleCloseTab(i, e) },
+                          { label: "Close Others", onClick: () => {
+                              setTabs([tab]);
+                              setActiveTabIndex(0);
+                          }},
+                          { label: "Close All", onClick: () => {
+                              setTabs([]);
+                              setActiveTabIndex(0);
+                          }},
+                          { separator: true },
+                          { label: "Copy Path", onClick: () => {
+                              navigator.clipboard.writeText(tab.filePath);
+                              showNotification({ message: "Path copied to clipboard", type: "success" });
+                          }}
+                        ]
+                      });
+                    }}
+                  >
+                    <span style={s.tabName}>{tab.filePath.split(/[/\\]/).pop()}</span>
+                    {tab.isDirty && <span style={s.tabDot} title="Unsaved changes">&#x25CF;</span>}
+                    <span
+                      className="tab-close-btn"
+                      style={s.tabX}
+                      title="Close"
+                      onClick={e=>{ e.stopPropagation(); handleCloseTab(i,e); }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
+                      </svg>
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Top Right Tab Controls matching Screenshot 2 & 3 */}
+              <div style={{ display: "flex", alignItems: "center", height: "100%", paddingRight: "8px", gap: "2px", flexShrink: 0, position: "relative" }}>
+                {/* Split Editor Button */}
+                <button
+                  className="hover-scale"
+                  style={{
+                    background: "none", border: "none", color: isSplit ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
+                    cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                  }}
+                  onClick={() => setIsSplit(!isSplit)}
+                  title="Split Editor Right"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
+                </button>
+
+                {/* Live Web Preview Button */}
+                <button
+                  className="hover-scale"
+                  style={{
+                    background: activeSidebar === "preview" ? "rgba(56, 189, 248, 0.2)" : "none",
+                    border: activeSidebar === "preview" ? "1px solid rgba(56, 189, 248, 0.4)" : "none",
+                    color: activeSidebar === "preview" ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
+                    cursor: "pointer", padding: "4px 8px", borderRadius: "4px", display: "flex", alignItems: "center", gap: "5px",
+                    fontSize: "11px", fontWeight: 600, fontFamily: "var(--font-mono)"
+                  }}
+                  onClick={() => setActiveSidebar(activeSidebar === "preview" ? "explorer" : "preview")}
+                  title="Toggle Live Web App Preview"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  <span>Preview</span>
+                </button>
+
+                {/* Navigate Back <- */}
+                <button
+                  className="hover-scale"
+                  style={{
+                    background: "none", border: "none", color: activeTabIndex > 0 ? "var(--text-muted, #a1a1aa)" : "var(--border-strong, #3f3f46)",
+                    cursor: activeTabIndex > 0 ? "pointer" : "default", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                  }}
+                  onClick={() => { if (activeTabIndex > 0) setActiveTabIndex(activeTabIndex - 1); }}
+                  disabled={activeTabIndex <= 0}
+                  title="Navigate to Previous Tab"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+
+                {/* Navigate Forward -> */}
+                <button
+                  className="hover-scale"
+                  style={{
+                    background: "none", border: "none", color: activeTabIndex < tabs.length - 1 ? "var(--text-muted, #a1a1aa)" : "var(--border-strong, #3f3f46)",
+                    cursor: activeTabIndex < tabs.length - 1 ? "pointer" : "default", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                  }}
+                  onClick={() => { if (activeTabIndex < tabs.length - 1) setActiveTabIndex(activeTabIndex + 1); }}
+                  disabled={activeTabIndex >= tabs.length - 1}
+                  title="Navigate to Next Tab"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+
+                {/* 3-Dot More Actions Button */}
+                <button
+                  className="hover-scale"
+                  style={{
+                    background: "none",
+                    border: "none", color: "var(--text-muted, #a1a1aa)", cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
                     showContextMenu({
-                      x: e.clientX,
-                      y: e.clientY,
+                      x: Math.max(10, rect.right - 210),
+                      y: rect.bottom + 4,
                       items: [
-                        { label: "Close", onClick: () => handleCloseTab(i, e) },
-                        { label: "Close Others", onClick: () => {
-                            setTabs([tab]);
-                            setActiveTabIndex(0);
-                        }},
-                        { label: "Close All", onClick: () => {
+                        {
+                          label: "Show Opened Editors",
+                          onClick: () => setShowCommandPalette(true),
+                        },
+                        { separator: true },
+                        {
+                          label: "Close All",
+                          shortcut: "Ctrl+K W",
+                          onClick: () => {
                             setTabs([]);
                             setActiveTabIndex(0);
-                        }},
+                          },
+                        },
+                        {
+                          label: "Close Saved",
+                          shortcut: "Ctrl+K U",
+                          onClick: () => {
+                            setTabs(prev => prev.filter(t => t.isDirty));
+                            setActiveTabIndex(0);
+                          },
+                        },
                         { separator: true },
-                        { label: "Copy Path", onClick: () => {
-                            navigator.clipboard.writeText(tab.filePath);
-                            showNotification({ message: "Path copied to clipboard", type: "success" });
-                        }}
+                        {
+                          label: `${previewMode ? "✓  " : "    "}Enable Preview Editors`,
+                          onClick: () => setPreviewMode(prev => !prev),
+                        },
+                        { separator: true },
+                        {
+                          label: `${groupLocked ? "✓  " : "    "}Lock Group`,
+                          onClick: () => setGroupLocked(prev => !prev),
+                        },
+                        { separator: true },
+                        {
+                          label: "Configure Editors",
+                          onClick: () => api()?.openSettingsWindow?.(),
+                        },
                       ]
                     });
                   }}
+                  title="More Editor Actions..."
                 >
-                  <span style={s.tabName}>{tab.filePath.split(/[/\\]/).pop()}</span>
-                  {tab.isDirty && <span style={s.tabDot} title="Unsaved changes">&#x25CF;</span>}
-                  <span
-                    className="tab-close-btn"
-                    style={s.tabX}
-                    title="Close"
-                    onClick={e=>{ e.stopPropagation(); handleCloseTab(i,e); }}
-                  >
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <line x1="3" y1="3" x2="13" y2="13"/><line x1="13" y1="3" x2="3" y2="13"/>
-                    </svg>
-                  </span>
-                </div>
-              ))}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                </button>
+              </div>
             </div>
-
-            {/* Top Right Tab Controls matching Screenshot 2 & 3 */}
-            <div style={{ display: "flex", alignItems: "center", height: "100%", paddingRight: "8px", gap: "2px", flexShrink: 0, position: "relative" }}>
-              {/* Split Editor Button */}
-              <button
-                className="hover-scale"
-                style={{
-                  background: "none", border: "none", color: isSplit ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
-                  cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
-                }}
-                onClick={() => setIsSplit(!isSplit)}
-                title="Split Editor Right"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></svg>
-              </button>
-
-              {/* Live Web Preview Button */}
-              <button
-                className="hover-scale"
-                style={{
-                  background: activeSidebar === "preview" ? "rgba(56, 189, 248, 0.2)" : "none",
-                  border: activeSidebar === "preview" ? "1px solid rgba(56, 189, 248, 0.4)" : "none",
-                  color: activeSidebar === "preview" ? "#38bdf8" : "var(--text-muted, #a1a1aa)",
-                  cursor: "pointer", padding: "4px 8px", borderRadius: "4px", display: "flex", alignItems: "center", gap: "5px",
-                  fontSize: "11px", fontWeight: 600, fontFamily: "var(--font-mono)"
-                }}
-                onClick={() => setActiveSidebar(activeSidebar === "preview" ? "explorer" : "preview")}
-                title="Toggle Live Web App Preview"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                <span>Preview</span>
-              </button>
-
-              {/* Navigate Back <- */}
-              <button
-                className="hover-scale"
-                style={{
-                  background: "none", border: "none", color: activeTabIndex > 0 ? "var(--text-muted, #a1a1aa)" : "var(--border-strong, #3f3f46)",
-                  cursor: activeTabIndex > 0 ? "pointer" : "default", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
-                }}
-                onClick={() => { if (activeTabIndex > 0) setActiveTabIndex(activeTabIndex - 1); }}
-                disabled={activeTabIndex <= 0}
-                title="Navigate to Previous Tab"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-              </button>
-
-              {/* Navigate Forward -> */}
-              <button
-                className="hover-scale"
-                style={{
-                  background: "none", border: "none", color: activeTabIndex < tabs.length - 1 ? "var(--text-muted, #a1a1aa)" : "var(--border-strong, #3f3f46)",
-                  cursor: activeTabIndex < tabs.length - 1 ? "pointer" : "default", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
-                }}
-                onClick={() => { if (activeTabIndex < tabs.length - 1) setActiveTabIndex(activeTabIndex + 1); }}
-                disabled={activeTabIndex >= tabs.length - 1}
-                title="Navigate to Next Tab"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-
-              {/* 3-Dot More Actions Button */}
-              <button
-                className="hover-scale"
-                style={{
-                  background: "none",
-                  border: "none", color: "var(--text-muted, #a1a1aa)", cursor: "pointer", padding: "4px 6px", borderRadius: "4px", display: "flex", alignItems: "center"
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  showContextMenu({
-                    x: Math.max(10, rect.right - 210),
-                    y: rect.bottom + 4,
-                    items: [
-                      {
-                        label: "Show Opened Editors",
-                        onClick: () => setShowCommandPalette(true),
-                      },
-                      { separator: true },
-                      {
-                        label: "Close All",
-                        shortcut: "Ctrl+K W",
-                        onClick: () => {
-                          setTabs([]);
-                          setActiveTabIndex(0);
-                        },
-                      },
-                      {
-                        label: "Close Saved",
-                        shortcut: "Ctrl+K U",
-                        onClick: () => {
-                          setTabs(prev => prev.filter(t => t.isDirty));
-                          setActiveTabIndex(0);
-                        },
-                      },
-                      { separator: true },
-                      {
-                        label: `${previewMode ? "✓  " : "    "}Enable Preview Editors`,
-                        onClick: () => setPreviewMode(prev => !prev),
-                      },
-                      { separator: true },
-                      {
-                        label: `${groupLocked ? "✓  " : "    "}Lock Group`,
-                        onClick: () => setGroupLocked(prev => !prev),
-                      },
-                      { separator: true },
-                      {
-                        label: "Configure Editors",
-                        onClick: () => api()?.openSettingsWindow?.(),
-                      },
-                    ]
-                  });
-                }}
-                title="More Editor Actions..."
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-              </button>
-            </div>
-          </div>
+          )}
 
           {activeTab && (
             <Breadcrumb
