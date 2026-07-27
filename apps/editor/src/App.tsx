@@ -2111,15 +2111,15 @@ function AppInner() {
           >
             <div style={s.actTop}>
               {([
-                {id:"explorer",  lbl:"Explorer",icon:<Files size={15}/>},
-                {id:"search",    lbl:"Search",  icon:<Search size={15}/>},
-                {id:"git",       lbl:"Git",     icon:<GitBranch size={15}/>},
-                {id:"debug",     lbl:"Debug",   icon:<Bug size={15}/>},
-                {id:"history",   lbl:"History", icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
-                {id:"timeline",  lbl:"Timeline",icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
-                {id:"extensions",lbl:"Market",  icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
-                {id:"ai",        lbl:"Agent",   icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
-                {id:"parallel",  lbl:"Parallel Agents", icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="5" y1="3" x2="5" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/><line x1="5" y1="7" x2="12" y2="7"/><line x1="12" y1="13" x2="19" y2="13"/><circle cx="5" cy="7" r="1.5" fill="currentColor"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/><circle cx="19" cy="17" r="1.5" fill="currentColor"/></svg>},
+                {id:"explorer",  lbl:"Explorer",icon:<Files size={13}/>},
+                {id:"search",    lbl:"Search",  icon:<Search size={13}/>},
+                {id:"git",       lbl:"Git",     icon:<GitBranch size={13}/>},
+                {id:"debug",     lbl:"Debug",   icon:<Bug size={13}/>},
+                {id:"history",   lbl:"History", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
+                {id:"timeline",  lbl:"Timeline",icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
+                {id:"extensions",lbl:"Market",  icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
+                {id:"ai",        lbl:"Agent",   icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
+                {id:"parallel",  lbl:"Parallel Agents", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="5" y1="3" x2="5" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/><line x1="5" y1="7" x2="12" y2="7"/><line x1="12" y1="13" x2="19" y2="13"/><circle cx="5" cy="7" r="1.5" fill="currentColor"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/><circle cx="19" cy="17" r="1.5" fill="currentColor"/></svg>},
               ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
                 <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
                   <button 
@@ -2144,7 +2144,7 @@ function AppInner() {
               <Tooltip content="Settings" position={settings.sidebarPosition === "right" ? "left" : "right"}>
                 <button className="sidebar-action-btn" style={s.actBtn} onClick={handleOpenSettings}>
                   <span style={{ opacity: 0.6 }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
                   </span>
                 </button>
               </Tooltip>
@@ -2464,25 +2464,25 @@ function AppInner() {
               </div>
             ) : (
               <div style={s.welcome}>
-                <img src={logoImg} alt="Atlas" style={s.welcomeLogoBg}/>
-                <div style={s.welcomeCard}>
+                <div style={s.welcomeContent}>
+                  <img src={logoImg} alt="Atlas" style={s.welcomeLogo}/>
                   <h2 style={s.welcomeH2}>Atlas Studio</h2>
                   <p style={s.welcomeP}>The Developer-First Independent IDE Platform</p>
-                  
+
                   <div style={s.welcomeRow}>
-                    <button 
-                      style={s.wBtnLink} 
-                      onClick={() => handleSelectRepo()} 
-                      onMouseOver={(e)=>e.currentTarget.style.textDecoration="underline"}
-                      onMouseOut={(e)=>e.currentTarget.style.textDecoration="none"}
+                    <button
+                      style={s.wBtnLink}
+                      onClick={() => handleSelectRepo()}
+                      onMouseOver={(e)=>e.currentTarget.style.color="#ffffff"}
+                      onMouseOut={(e)=>e.currentTarget.style.color="var(--accent)"}
                     >
                       Open Workspace Folder...
                     </button>
-                    <button 
-                      style={s.wBtnLink} 
+                    <button
+                      style={s.wBtnLink}
                       onClick={handleOpenSettings}
-                      onMouseOver={(e)=>e.currentTarget.style.textDecoration="underline"}
-                      onMouseOut={(e)=>e.currentTarget.style.textDecoration="none"}
+                      onMouseOver={(e)=>e.currentTarget.style.color="#ffffff"}
+                      onMouseOut={(e)=>e.currentTarget.style.color="var(--accent)"}
                     >
                       Settings...
                     </button>
@@ -2493,7 +2493,7 @@ function AppInner() {
                       <p style={s.recentHdr}>RECENT WORKSPACES</p>
                       {recentProjects.map(path => (
                         <button key={path} style={s.recentItem} onClick={() => handleOpenRecent(path)}
-                          onMouseOver={(e)=>e.currentTarget.style.opacity="0.8"}
+                          onMouseOver={(e)=>e.currentTarget.style.opacity="0.7"}
                           onMouseOut={(e)=>e.currentTarget.style.opacity="1"}
                         >
                           <span style={s.recentName}>{path.split(/[/\\]/).pop()}</span>
@@ -2764,10 +2764,10 @@ const s: Record<string,React.CSSProperties> = {
   body:{ display:"flex",flex:1,overflow:"hidden", backgroundColor:"var(--bg-base)" },
 
   /* ---- Activity Bar ---- */
-  actBar:{ width:"34px",backgroundColor:"var(--bg-activity)",borderRight:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"8px",paddingBottom:"8px",flexShrink:0,zIndex:2 },
-  actTop:{ display:"flex",flexDirection:"column",gap:"2px",alignItems:"center" },
-  actBot:{ display:"flex",flexDirection:"column",alignItems:"center",gap:"2px" },
-  actBtn:{ width:"30px",height:"30px",border:"none",background:"transparent",color:"var(--text-faint)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s",position:"relative" as const, borderRadius:"5px", margin:"0" },
+  actBar:{ width:"28px",backgroundColor:"var(--bg-activity)",borderRight:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",justifyContent:"space-between",paddingTop:"8px",paddingBottom:"8px",flexShrink:0,zIndex:2 },
+  actTop:{ display:"flex",flexDirection:"column",gap:"1px",alignItems:"center" },
+  actBot:{ display:"flex",flexDirection:"column",alignItems:"center",gap:"1px" },
+  actBtn:{ width:"26px",height:"26px",border:"none",background:"transparent",color:"var(--text-faint)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s",position:"relative" as const, borderRadius:"4px", margin:"0" },
   actOn:{ color:"var(--text-main)", backgroundColor:"var(--bg-hover)" },
   actLbl:{ display:"none" },
 
@@ -2791,17 +2791,19 @@ const s: Record<string,React.CSSProperties> = {
 
   /* ---- Welcome Screen ---- */
   welcome:{ display:"flex",alignItems:"center",justifyContent:"center",height:"100%",backgroundColor:"var(--bg-base)",position:"relative" as const },
-  welcomeLogoBg:{ position:"absolute" as const,width:"420px",height:"420px",objectFit:"contain",opacity:0.02,pointerEvents:"none" as const,top:"50%",left:"50%",transform:"translate(-50%, -50%)",filter:"blur(0px)" },
-  welcomeCard:{ display:"flex",flexDirection:"column",alignItems:"flex-start",padding:"32px",maxWidth:"480px",width:"100%",zIndex:1, backgroundColor:"var(--bg-panel)", borderRadius:"var(--radius-lg)", border:"1px solid var(--border-medium)", boxShadow:"var(--shadow-lg)" },
-  welcomeH2:{ margin:"0 0 8px",fontSize:"28px",fontWeight:400,color:"var(--text-main)",letterSpacing:"-0.5px" },
-  welcomeP:{ margin:"0 0 32px",fontSize:"14px",color:"var(--text-muted)",lineHeight:"1.6" },
-  welcomeRow:{ display:"flex",flexDirection:"column" as const,gap:"8px",width:"100%",alignItems:"flex-start" },
-  wBtnLink:{ background:"transparent",border:"none",color:"var(--accent)",padding:"0",fontSize:"14px",cursor:"pointer",textDecoration:"none",transition:"all 0.15s",opacity:0.9, fontWeight:500 },
-  recentBox:{ marginTop:"40px",width:"100%",display:"flex",flexDirection:"column",gap:"4px" },
-  recentHdr:{ fontSize:"11px",fontWeight:700,color:"var(--text-faint)",margin:"0 0 12px",letterSpacing:"1px",textTransform:"uppercase" as const },
-  recentItem:{ display:"flex",flexDirection:"column" as const,alignItems:"flex-start",backgroundColor:"transparent",padding:"10px 14px",cursor:"pointer",textAlign:"left" as const,transition:"all 0.15s ease",borderRadius:"var(--radius-md)",width:"100%", border:"1px solid transparent" },
-  recentName:{ fontSize:"14px",color:"var(--text-main)",marginBottom:"4px",fontWeight:600 },
-  recentPath:{ fontSize:"12px",color:"var(--text-faint)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,width:"100%" },
+  welcomeContent:{ display:"flex",flexDirection:"column" as const,alignItems:"center",textAlign:"center" as const,zIndex:1,gap:"0px" },
+  welcomeLogo:{ width:"48px",height:"48px",objectFit:"contain",opacity:0.12,marginBottom:"16px",filter:"grayscale(1)" },
+  welcomeLogoBg:{ display:"none" },
+  welcomeCard:{ display:"none" },
+  welcomeH2:{ margin:"0 0 6px",fontSize:"20px",fontWeight:500,color:"rgba(255,255,255,0.55)",letterSpacing:"-0.3px" },
+  welcomeP:{ margin:"0 0 28px",fontSize:"12px",color:"rgba(255,255,255,0.2)",lineHeight:"1.5" },
+  welcomeRow:{ display:"flex",flexDirection:"column" as const,gap:"6px",alignItems:"center" },
+  wBtnLink:{ background:"transparent",border:"none",color:"var(--accent)",padding:"0",fontSize:"13px",cursor:"pointer",textDecoration:"none",transition:"color 0.15s",opacity:0.85,fontWeight:400 },
+  recentBox:{ marginTop:"32px",display:"flex",flexDirection:"column" as const,gap:"2px",minWidth:"260px",textAlign:"left" as const },
+  recentHdr:{ fontSize:"10px",fontWeight:700,color:"rgba(255,255,255,0.18)",margin:"0 0 8px",letterSpacing:"1.2px",textTransform:"uppercase" as const },
+  recentItem:{ display:"flex",flexDirection:"column" as const,alignItems:"flex-start",backgroundColor:"transparent",padding:"6px 8px",cursor:"pointer",textAlign:"left" as const,transition:"opacity 0.15s ease",borderRadius:"4px",width:"100%",border:"none" },
+  recentName:{ fontSize:"13px",color:"rgba(255,255,255,0.65)",marginBottom:"2px",fontWeight:500 },
+  recentPath:{ fontSize:"11px",color:"rgba(255,255,255,0.25)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" as const,width:"100%" },
 
   /* ---- Bottom Dock ---- */
   dock:{ backgroundColor:"var(--bg-panel)",borderTop:"1px solid var(--border-subtle)",display:"flex",flexDirection:"column",flexShrink:0, boxShadow:"var(--shadow-sm)" },
