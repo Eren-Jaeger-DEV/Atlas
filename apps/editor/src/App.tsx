@@ -48,20 +48,12 @@ function getSync(key: string) {
 }
 
 import { WebPreviewPanel } from "./components/WebPreviewPanel.js";
+import { MenuBar, MenuItem } from "./components/MenuBar.js";
+import { useWorkspaceTabs, EditorTab } from "./hooks/useWorkspaceTabs.js";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 
-interface EditorTab { 
-  filePath: string;
-  isDirty?: boolean;
-  content: string;
-  language: string;
-  targetLine?: number;
-  targetColumn?: number;
-  isBinary?: boolean;
-}
 type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
-
-interface MenuItem { label: string; shortcut?: string; action?: () => void; separator?: boolean; disabled?: boolean; checked?: boolean; submenu?: MenuItem[]; }
 
 function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
   return (
@@ -141,11 +133,22 @@ function AppInner() {
   const [showMergeConflict, setShowMergeConflict]   = useState(false);
   const [showAiSafety, setShowAiSafety]             = useState(false);
   const [aiSafetyData, setAiSafetyData]             = useState<any>(null);
-   const [autoSaveEnabled, setAutoSaveEnabled]       = useState<boolean>(() => localStorage.getItem("atlas_auto_save") === "true");
-  const [submenuOpen, setSubmenuOpen]               = useState<number | null>(null);
-  const untitledCounterRef                           = useRef(1);
+  const {
+    tabs,
+    setTabs,
+    activeTabIndex,
+    setActiveTabIndex,
+    activeTab,
+    autoSaveEnabled,
+    setAutoSaveEnabled,
+    untitledCounterRef,
+    handleSave,
+    handleCloseTab,
+    handleOpenFile
+  } = useWorkspaceTabs();
 
-  // Plan Approval state
+  const [multiCursorCtrlCmd, setMultiCursorCtrlCmd]   = useState(false);
+  const [columnSelectionMode, setColumnSelectionMode] = useState(false);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ reqId: string, plan: any } | null>(null);
   const [showInlineAi, setShowInlineAi]             = useState(false);
   const [showAboutModal, setShowAboutModal]         = useState(false);
@@ -159,28 +162,33 @@ function AppInner() {
   const [rightSidebarWidth, setRightSidebarWidth]   = useState(320);
   const [bottomPanelHeight, setBottomPanelHeight]   = useState(220);
   const draggingRef = useRef<"sidebar" | "bottom" | "right-sidebar" | null>(null);
-
-  const [multiCursorCtrlCmd, setMultiCursorCtrlCmd]   = useState(false);
-  const [columnSelectionMode, setColumnSelectionMode] = useState(false);
-
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
-  const [tabs, setTabs]               = useState<EditorTab[]>([]);
 
-  useEffect(() => {
-    localStorage.setItem("atlas_auto_save", String(autoSaveEnabled));
-    if (!autoSaveEnabled) return;
-    const timer = setInterval(() => {
-      tabs.forEach(tab => {
-        if (tab.isDirty && tab.filePath && !tab.filePath.startsWith("Untitled")) {
-          api()?.writeFile(tab.filePath, tab.content).then(() => {
-            setTabs(prev => prev.map(t => t.filePath === tab.filePath ? { ...t, isDirty: false } : t));
-          }).catch(() => {});
-        }
-      });
-    }, 1500);
-    return () => clearInterval(timer);
-  }, [autoSaveEnabled, tabs]);
-  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  useKeyboardShortcuts({
+    onSave: handleSave,
+    onOpenFolder: () => handleSelectRepo(),
+    onCommandPalette: () => setShowCommandPalette(true),
+    onInlineAi: () => setShowInlineAi((p) => !p),
+    onSplitEditor: () => setIsSplit((p) => !p),
+    onExplorer: () => setActiveSidebar("explorer"),
+    onSearch: () => setActiveSidebar("search"),
+    onGit: () => setActiveSidebar("git"),
+    onExtensions: () => setActiveSidebar("extensions"),
+    onToggleTerminal: () => setShowBottomPanel((p) => !p),
+    onToggleAiSidebar: () => setShowRightAiSidebar((p) => !p),
+    onDebug: () => {
+      if (tabs[activeTabIndex]?.filePath) {
+        setActiveSidebar("debug");
+        api()?.startDap(tabs[activeTabIndex].filePath);
+      }
+    },
+    onEscape: () => {
+      setShowCommandPalette(false);
+      setShowInlineAi(false);
+      setShowAboutModal(false);
+      setShowKeybindings(false);
+    }
+  });
   const [activeDiff, setActiveDiff]   = useState<{ filePath: string; diffText: string } | null>(null);
   const [cursorSymbol, setCursorSymbol] = useState<string | undefined>();
   const [activeSymbols, setActiveSymbols] = useState<DocumentSymbol[]>([]);
@@ -192,7 +200,6 @@ function AppInner() {
   const [groupLocked, setGroupLocked] = useState(false);
   const [openMenu, setOpenMenu]       = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const activeTab = tabs[activeTabIndex];
   const splitTab = tabs[splitTabIndex];
 
   useEffect(() => {
@@ -436,91 +443,8 @@ function AppInner() {
     saveRecentProject(path);
   };
 
-  const handleSave = useCallback(async () => {
-    if (!activeTab || !api()?.writeFile) return;
-    
-    let contentToSave = activeTab.content;
-    
-    // Format on save
-    if (settings.formatOnSave) {
-      const editor = activeEditorRef.current;
-      if (editor) {
-        try {
-          await editor.getAction('editor.action.formatDocument')?.run();
-          contentToSave = editor.getValue();
-        } catch (err) {
-          logToOutput("System", `Format on save failed: ${err}`, "warn");
-          console.error("Format on save failed:", err);
-        }
-      }
-    }
-    
-    await api().writeFile(activeTab.filePath, contentToSave);
-    const shortName = activeTab.filePath.split(/[/\\]/).pop() ?? activeTab.filePath;
-    logToOutput("System", `Saved ${shortName}`, "success");
-    setTabs(p => p.map((t,i) => i===activeTabIndex ? {...t, content: contentToSave, isDirty:false} : t));
-  }, [activeTab, activeTabIndex, settings.formatOnSave]);
-
-  useEffect(() => {
-    if (settings.autoSave === "afterDelay" && activeTab?.isDirty) {
-      const timer = setTimeout(() => {
-        handleSave();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [settings.autoSave, activeTab?.isDirty, activeTab?.content, handleSave]);
-
-  useEffect(() => {
-    if (settings.autoSave === "onFocusChange") {
-      const handleBlur = () => {
-        if (activeTab?.isDirty) handleSave();
-      };
-      window.addEventListener("blur", handleBlur);
-      return () => window.removeEventListener("blur", handleBlur);
-    }
-  }, [settings.autoSave, activeTab, handleSave]);
-
   const handleOpenSettings = () => {
     api()?.openSettingsWindow?.();
-  };
-
-  const handleOpenFile = async (filePath: string, line?: number) => {
-    const ei = tabs.findIndex(t => t.filePath === filePath);
-    if (ei >= 0) {
-      setActiveDiff(null);
-      setActiveTabIndex(ei);
-      return;
-    }
-
-    const binaryExts = new Set([".db", ".sqlite", ".sqlite3", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".tar", ".gz", ".mp3", ".mp4", ".exe", ".dll", ".so", ".dylib", ".wasm", ".bin", ".woff", ".woff2", ".ttf", ".eot"]);
-    const ext = filePath.substring(filePath.lastIndexOf(".")).toLowerCase();
-    
-    let content = "";
-    let isBinary = false;
-    if (binaryExts.has(ext)) {
-      isBinary = true;
-    } else {
-      try { content = await api()?.readFile(filePath) ?? ""; } catch { content = "// read error"; }
-    }
-    
-    const language = determineLanguage(filePath);
-    setTabs(p => [...p, { filePath, content, language, isDirty: false, isBinary }]);
-    setActiveTabIndex(tabs.length);
-  };
-
-  const handleCloseTab = (i: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setTabs(p => {
-      const nextTabs = p.filter((_, j) => j !== i);
-      if (nextTabs.length === 0) {
-        setActiveTabIndex(0);
-        setSplitTabIndex(0);
-      } else {
-        setActiveTabIndex(prev => (prev >= nextTabs.length ? Math.max(0, nextTabs.length - 1) : prev));
-        setSplitTabIndex(prev => (prev >= nextTabs.length ? Math.max(0, nextTabs.length - 1) : prev));
-      }
-      return nextTabs;
-    });
   };
 
   const handleViewDiff = async (filePath: string, staged: boolean) => {
@@ -1434,159 +1358,25 @@ function AppInner() {
   return (
     <div style={s.root}>
 
-      <header style={s.titlebar}>
-        <div ref={menuRef} style={{ ...s.tbLeft, ...nodrag }}>
-          <img src={logoImg} alt="Atlas" style={s.logo} />
-          {Object.keys(menus).map(name => (
-            <div key={name} style={s.menuWrapper}>
-              <button
-                className="menu-btn"
-                style={{ ...s.menuItem, ...(openMenu===name ? s.menuItemOn : {}) }}
-                onClick={() => setOpenMenu(openMenu===name ? null : name)}
-                onMouseEnter={() => { if (openMenu && openMenu!==name) setOpenMenu(name); }}
-              >
-                {name}
-              </button>
-              {openMenu === name && (
-                <div style={s.dropdown}>
-                  {menus[name]!.map((item, i) => (
-                    item.separator
-                      ? <div key={i} style={s.dropSep} />
-                      : <div
-                          key={i}
-                          style={{ position: "relative" }}
-                          onMouseEnter={() => setSubmenuOpen(item.submenu ? i : null)}
-                        >
-                          <button
-                            className="drop-item"
-                            style={{ ...s.dropItem, ...(item.disabled ? s.dropDisabled : {}), display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}
-                            disabled={item.disabled}
-                            onClick={() => {
-                              if (!item.submenu) {
-                                item.action?.();
-                                setOpenMenu(null);
-                                setSubmenuOpen(null);
-                              }
-                            }}
-                          >
-                            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              {item.checked !== undefined ? (
-                                <span style={{ width: "12px", display: "inline-block", color: "#38bdf8", fontWeight: "bold", fontSize: "11px" }}>
-                                  {item.checked ? "✓" : ""}
-                                </span>
-                              ) : null}
-                              <span>{item.label}</span>
-                            </span>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              {item.shortcut && <span style={s.dropShortcut}>{item.shortcut}</span>}
-                              {item.submenu && <span style={{ opacity: 0.6, fontSize: "9px" }}>▶</span>}
-                            </div>
-                          </button>
-
-                          {/* Nested Submenu Dropdown */}
-                          {item.submenu && submenuOpen === i && (
-                            <div
-                              style={{
-                                position: "absolute",
-                                left: "100%",
-                                top: "0",
-                                marginTop: "-4px",
-                                marginLeft: "2px",
-                                backgroundColor: "var(--bg-glass-strong, rgba(14, 14, 18, 0.98))",
-                                backdropFilter: "blur(20px)",
-                                border: "1px solid var(--border-strong, #27272a)",
-                                borderRadius: "6px",
-                                boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-                                padding: "4px",
-                                minWidth: "190px",
-                                zIndex: 100000
-                              }}
-                              onMouseLeave={() => setSubmenuOpen(null)}
-                            >
-                              {item.submenu.map((sub, j) => (
-                                sub.separator ? (
-                                  <div key={j} style={s.dropSep} />
-                                ) : (
-                                  <button
-                                    key={j}
-                                    className="drop-item"
-                                    style={{ ...s.dropItem, ...(sub.disabled ? s.dropDisabled : {}), display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}
-                                    disabled={sub.disabled}
-                                    onClick={() => {
-                                      sub.action?.();
-                                      setSubmenuOpen(null);
-                                      setOpenMenu(null);
-                                    }}
-                                  >
-                                    <span>{sub.label}</span>
-                                    {sub.shortcut && <span style={s.dropShortcut}>{sub.shortcut}</span>}
-                                  </button>
-                                )
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-          <div style={{ ...s.tbCenter, cursor: "pointer" }} onClick={() => setShowCommandPalette(true)} className="hover-scale">
-            <SearchIcon size={12} color="var(--text-faint)" />
-            <span style={s.centerTxt}>{wname}</span>
-          </div>
-
-        <div style={{ ...s.tbRight, ...nodrag }}>
-          <Tooltip content="Search (Ctrl+K)" position="bottom">
-            <button style={s.iconBtn} onClick={()=>setShowCommandPalette(true)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="Toggle Split Editor (Ctrl+\)" position="bottom">
-            <button style={{...s.iconBtn, ...(isSplit ? s.iconOn : {})}} onClick={()=>setIsSplit(p=>!p)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="Toggle Explorer" position="bottom">
-            <button style={s.iconBtn} onClick={()=>setActiveSidebar("explorer")}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="Toggle Terminal" position="bottom">
-            <button style={{...s.iconBtn,...(showBottomPanel?s.iconOn:{})}} onClick={()=>setShowBottomPanel(p=>!p)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="1.5"/><line x1="3" y1="16" x2="21" y2="16"/></svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="Toggle AI Chat (Ctrl+L)" position="bottom">
-            <button style={{...s.iconBtn,...(showRightAiSidebar?s.iconOn:{})}} onClick={()=>setShowRightAiSidebar(p=>!p)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="Settings (Ctrl+,)" position="bottom">
-            <button style={s.iconBtn} onClick={handleOpenSettings}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 2z"/></svg>
-            </button>
-          </Tooltip>
-          <div style={s.winSep}/>
-          <Tooltip content="Minimize" position="bottom">
-            <button style={s.wc} onClick={()=>api()?.windowMinimize()}>
-              <svg width="10" height="1" viewBox="0 0 10 1"><line x1="0" y1="0.5" x2="10" y2="0.5" stroke="currentColor" strokeWidth="1.5"/></svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="Maximize" position="bottom">
-            <button style={s.wc} onClick={()=>api()?.windowMaximize()}>
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.75" y="0.75" width="8.5" height="8.5" rx="0.5" stroke="currentColor" strokeWidth="1.5"/></svg>
-            </button>
-          </Tooltip>
-          <Tooltip content="Close" position="bottom">
-            <button style={{...s.wc,...s.wcClose}} onClick={()=>api()?.windowClose()}>
-              <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" strokeWidth="1.5"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" strokeWidth="1.5"/></svg>
-            </button>
-          </Tooltip>
-        </div>
-      </header>
+      <MenuBar
+        menus={menus}
+        wname={wname || "Atlas Studio"}
+        isSplit={isSplit}
+        setIsSplit={setIsSplit}
+        activeSidebar={activeSidebar}
+        setActiveSidebar={setActiveSidebar}
+        activeTabIndex={activeTabIndex}
+        setActiveTabIndex={setActiveTabIndex}
+        tabsCount={tabs.length}
+        showBottomPanel={showBottomPanel}
+        setShowBottomPanel={setShowBottomPanel}
+        showRightAiSidebar={showRightAiSidebar}
+        setShowRightAiSidebar={setShowRightAiSidebar}
+        onShowCommandPalette={() => setShowCommandPalette(true)}
+        onOpenSettings={handleOpenSettings}
+        api={api}
+        logoImg={logoImg}
+      />
 
       <div style={{...s.body, flexDirection: settings.sidebarPosition === "right" ? "row-reverse" : "row"}}>
         <nav 
