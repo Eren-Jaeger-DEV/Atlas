@@ -407,7 +407,7 @@ export class GraphDB {
   logDecision(decision: Omit<DecisionRecord, "createdAt">): DecisionRecord {
     const record: DecisionRecord = { ...decision, createdAt: Date.now() };
     this.run(
-      `INSERT INTO decisions (id, title, description, rationale,
+      `INSERT OR IGNORE INTO decisions (id, title, description, rationale,
                               supersedes, commit_hash, created_at)
        VALUES ($id, $title, $description, $rationale,
                $supersedes, $commitHash, $createdAt)`,
@@ -628,6 +628,7 @@ export class GraphDB {
       `SELECT id, session_id, role, content, created_at
        FROM chat_nodes WHERE session_id = ? ORDER BY created_at ASC`
     );
+    stmt.bind([sessionId]);
     const results: any[] = [];
     while (stmt.step()) {
       const row = stmt.getAsObject();
@@ -666,6 +667,7 @@ export class GraphDB {
     const stmt = this.db.prepare(
       `SELECT id, session_id, role, content, created_at FROM chat_nodes WHERE id = ?`
     );
+    stmt.bind([id]);
     let result = null;
     if (stmt.step()) {
       const row = stmt.getAsObject();

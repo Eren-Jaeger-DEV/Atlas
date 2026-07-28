@@ -20,6 +20,13 @@ export interface EditorSettings {
   sidebarPosition?: "left" | "right";
   terminalPosition?: "bottom" | "right";
   customThemeColors?: Record<string, string>;
+  atlascordEnabled?: boolean;
+  atlascordShowWorkspaceName?: boolean;
+  atlascordShowActiveFile?: boolean;
+  atlascordShowAgentState?: boolean;
+  atlascordIdleTimeoutMinutes?: number;
+  atlascordCustomDetailsTemplate?: string;
+  atlascordCustomStateTemplate?: string;
 }
 
 export const DEFAULT_SETTINGS: EditorSettings = {
@@ -40,6 +47,13 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   gitDiffGuttersEnabled: true,
   sidebarPosition: "left",
   terminalPosition: "bottom",
+  atlascordEnabled: true,
+  atlascordShowWorkspaceName: true,
+  atlascordShowActiveFile: true,
+  atlascordShowAgentState: true,
+  atlascordIdleTimeoutMinutes: 5,
+  atlascordCustomDetailsTemplate: "Editing {file} in {workspace}",
+  atlascordCustomStateTemplate: "Atlas Studio v1.0 • {language}",
 };
 
 interface SettingsPanelProps {
@@ -52,6 +66,7 @@ const CATEGORIES = [
   "Editor",
   "Terminal",
   "AI Configuration",
+  "Atlascord (Discord RPC)",
   "Advanced"
 ];
 
@@ -213,15 +228,17 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
     );
   };
 
-  const SettingGroup = ({ children }: { children: React.ReactNode }) => (
-    <div className="anim-fade-in" style={{
-      backgroundColor: "rgba(0,0,0,0.2)",
-      border: "1px solid var(--border-medium)",
-      borderRadius: "8px",
-      overflow: "hidden",
-      marginBottom: "24px"
-    }}>
-      {children}
+  const SettingGroup = ({ children, title }: { children: React.ReactNode; title?: string }) => (
+    <div style={{ marginBottom: "24px" }}>
+      {title && <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main, #fafafa)", margin: "0 0 12px 0" }}>{title}</h3>}
+      <div className="anim-fade-in" style={{
+        backgroundColor: "rgba(0,0,0,0.2)",
+        border: "1px solid var(--border-medium)",
+        borderRadius: "8px",
+        overflow: "hidden"
+      }}>
+        {children}
+      </div>
     </div>
   );
 
@@ -619,6 +636,77 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               />
             </SettingGroup>
           </>
+        )}
+
+        {(searchQuery || activeCategory === "Atlascord (Discord RPC)") && (
+          <SettingGroup title="Atlascord (Discord Rich Presence)">
+            <SettingRow
+              title="Enable Discord Rich Presence"
+              description="Automatically broadcast your current editing activity, workspace, and language to Discord."
+              control={
+                <ToggleSwitch
+                  checked={localSettings.atlascordEnabled !== false}
+                  onChange={(v) => handleChange("atlascordEnabled", v)}
+                />
+              }
+            />
+            <SettingRow
+              title="Show Active Workspace Name"
+              description="Include the name of the open project workspace in Discord activity details."
+              control={
+                <ToggleSwitch
+                  checked={localSettings.atlascordShowWorkspaceName !== false}
+                  onChange={(v) => handleChange("atlascordShowWorkspaceName", v)}
+                />
+              }
+            />
+            <SettingRow
+              title="Show Active File Name"
+              description="Include the currently focused file name and cursor line position."
+              control={
+                <ToggleSwitch
+                  checked={localSettings.atlascordShowActiveFile !== false}
+                  onChange={(v) => handleChange("atlascordShowActiveFile", v)}
+                />
+              }
+            />
+            <SettingRow
+              title="Show AI Agent Execution State"
+              description="Broadcast active AI agent orchestrator states (Planning, Coding, Testing, Reviewing)."
+              control={
+                <ToggleSwitch
+                  checked={localSettings.atlascordShowAgentState !== false}
+                  onChange={(v) => handleChange("atlascordShowAgentState", v)}
+                />
+              }
+            />
+            <SettingRow
+              title="Details Line Template"
+              description="Custom string template. Available tags: {file}, {workspace}, {language}, {line}, {col}, {agentState}, {health}."
+              control={
+                <input
+                  type="text"
+                  value={localSettings.atlascordCustomDetailsTemplate ?? "Editing {file} in {workspace}"}
+                  onChange={(e) => handleChange("atlascordCustomDetailsTemplate", e.target.value)}
+                  placeholder="Editing {file} in {workspace}"
+                  style={textInputStyle}
+                />
+              }
+            />
+            <SettingRow
+              title="State Line Template"
+              description="Custom state string template. Available tags: {file}, {workspace}, {language}, {line}, {agentState}, {health}."
+              control={
+                <input
+                  type="text"
+                  value={localSettings.atlascordCustomStateTemplate ?? "Atlas Studio v1.0 • {language}"}
+                  onChange={(e) => handleChange("atlascordCustomStateTemplate", e.target.value)}
+                  placeholder="Atlas Studio v1.0 • {language}"
+                  style={textInputStyle}
+                />
+              }
+            />
+          </SettingGroup>
         )}
 
         {(searchQuery || activeCategory === "Advanced") && (

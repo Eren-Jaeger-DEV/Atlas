@@ -29,9 +29,24 @@ const ALLOWED_COMMANDS = new Set([
   "mocha",
 ]);
 
-function isCommandAllowed(command: string): boolean {
+function isCommandAllowed(command: string, args: string[] = []): { allowed: boolean; reason?: string } {
   const base = path.basename(command).replace(/\.exe$/i, "");
-  return ALLOWED_COMMANDS.has(base);
+  if (!ALLOWED_COMMANDS.has(base)) {
+    return { allowed: false, reason: `Command not allowed: ${command}. Allowed commands: ${[...ALLOWED_COMMANDS].join(", ")}` };
+  }
+
+  // Reject inline evaluation flags that bypass script execution boundaries
+  const dangerousFlags = ["-e", "-c", "--eval", "-p", "--print"];
+  for (const arg of args) {
+    if (dangerousFlags.includes(arg)) {
+      return { allowed: false, reason: `Execution flag '${arg}' is restricted for command '${base}'.` };
+    }
+    if (/eval\(|execSync|child_process|os\.system|subprocess/i.test(arg)) {
+      return { allowed: false, reason: `Inline shell invocation string is restricted.` };
+    }
+  }
+
+  return { allowed: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -51,10 +66,11 @@ export async function runCommandTool(
   repoRoot: string,
   timeoutMs = 120_000
 ): Promise<ShellToolResult> {
-  if (!isCommandAllowed(command)) {
+  const check = isCommandAllowed(command, args);
+  if (!check.allowed) {
     return {
       stdout: "",
-      stderr: `Command not allowed: ${command}. Allowed commands: ${[...ALLOWED_COMMANDS].join(", ")}`,
+      stderr: check.reason || `Command not allowed: ${command}.`,
       exitCode: 1,
       durationMs: 0,
     };
@@ -101,7 +117,10 @@ export async function runTestsTool(
     const scripts = content.scripts ?? {};
 
     if (scripts.test) {
-      const args = testPattern ? ["test", "--", testPattern] : ["test"];
+      // Inject --ignore-scripts to disable dangerous pretest/posttest package lifecycle scripts
+      const args = testPattern
+        ? ["test", "--ignore-scripts", "--", testPattern]
+        : ["test", "--ignore-scripts"];
       return runCommandTool("npm", args, repoRoot);
     }
   }

@@ -42,12 +42,26 @@ export class WorkspaceSearchIndexer {
       return [];
     }
 
+    const matchGlob = (filePath: string, pattern: string): boolean => {
+      if (!pattern) return true;
+      try {
+        const reStr = pattern
+          .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+          .replace(/\*\*/g, ".*")
+          .replace(/\*/g, "[^/]*")
+          .replace(/\?/g, ".");
+        return new RegExp(reStr, "i").test(filePath);
+      } catch {
+        return filePath.includes(pattern);
+      }
+    };
+
     for (const file of files) {
       if (matches.length >= maxResults) break;
 
-      // Filter file paths by exclude/include pattern basic check
-      if (options.excludePattern && file.path.includes(options.excludePattern)) continue;
-      if (options.includePattern && !file.path.includes(options.includePattern)) continue;
+      // Filter file paths by exclude/include pattern using glob matching
+      if (options.excludePattern && matchGlob(file.path, options.excludePattern)) continue;
+      if (options.includePattern && !matchGlob(file.path, options.includePattern)) continue;
 
       const lines = file.content.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {

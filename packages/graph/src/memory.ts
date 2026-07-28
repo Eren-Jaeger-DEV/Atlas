@@ -159,11 +159,19 @@ export class MemoryEngine {
     score -= Math.min(orphanModules.length * 2, 20);
     score = Math.max(score, 50);
 
+    let todoCount = 0;
+    for (const node of allNodes) {
+      const text = `${(node as any).name || node.label || ""} ${node.filePath || ""} ${node.summary || ""}`;
+      if (/\b(TODO|FIXME|HACK|XXX)\b/i.test(text)) {
+        todoCount++;
+      }
+    }
+
     return {
       score,
       totalFiles: fileNodes.length,
       totalSymbols: symbolNodes.length,
-      todoCount: 0,
+      todoCount,
       circularDependenciesCount: cycles.length,
       orphanModulesCount: orphanModules.length,
       circularDependencies: cycles,

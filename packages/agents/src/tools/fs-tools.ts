@@ -19,8 +19,10 @@ import { AtlasIgnore } from "@atlas/core";
 // ---------------------------------------------------------------------------
 
 export function validatePath(filePath: string, repoRoot: string): string {
-  const resolved = path.resolve(repoRoot, filePath);
-  if (!resolved.startsWith(path.resolve(repoRoot))) {
+  const root = path.resolve(repoRoot);
+  const resolved = path.resolve(root, filePath);
+  const rel = path.relative(root, resolved);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(`Path escapes repo root: ${filePath}`);
   }
   return resolved;

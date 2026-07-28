@@ -94,13 +94,15 @@ export interface PlannerOptions {
   memory: MemoryEngine;
   repoRoot: string;
   onProgress?: (message: string) => void;
+  onEmit?: (event: import("@atlas/core").OrchestratorEvent) => void;
+  runId?: string;
 }
 
 export async function runPlanner(
   goal: string,
   options: PlannerOptions
 ): Promise<Plan> {
-  const { provider, memory, repoRoot, onProgress } = options;
+  const { provider, memory, repoRoot, onProgress, onEmit, runId } = options;
 
   onProgress?.("🔍 Planner: researching codebase...");
 
@@ -121,12 +123,19 @@ export async function runPlanner(
   while (iterations < MAX_ITERATIONS) {
     iterations++;
 
-    const response = await provider.complete({
-      messages,
-      tools,
-      toolChoice: "auto",
-      temperature: 0.2,
-    });
+    const response = await provider.stream(
+      {
+        messages,
+        tools,
+        toolChoice: "auto",
+        temperature: 0.2,
+      },
+      (chunk: string) => {
+        if (chunk) {
+          onEmit?.({ type: "token", content: chunk, runId: runId ?? "", agentRole: "planner" });
+        }
+      }
+    );
 
     // Check if the model made tool calls
     if (response.toolCalls.length > 0) {

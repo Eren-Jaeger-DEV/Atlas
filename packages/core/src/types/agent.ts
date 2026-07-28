@@ -185,6 +185,8 @@ export type OrchestratorEvent =
   | { type: "done"; record: RunRecord; runId: string }
   | { type: "error"; message: string; runId: string }
   | { type: "dag_update"; taskId?: string; data?: any; nodes?: any[]; runId: string }
-  | { type: "token"; content: string; runId: string }
+  | { type: "token"; content: string; runId: string; agentRole?: "planner" | "coder" | "tester" | "reviewer" | "chat" }
+  | { type: "tool_start"; tool: string; args: Record<string, any>; runId: string; agentRole: string }
+  | { type: "tool_result"; tool: string; summary: string; success: boolean; runId: string; agentRole: string }
   | { type: "log"; message: string; runId: string };
 

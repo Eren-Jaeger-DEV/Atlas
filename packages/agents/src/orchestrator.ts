@@ -134,16 +134,19 @@ export class Orchestrator {
 
             this.emit({ type: "coder_output", output: coderOutput, runId });
 
-            this.config.memory.recordDecision({
-              id: sha256(`coder:${task.id}`).slice(0, 24),
-              title: `Coder output for task: ${task.id}`,
-              description: `Modified ${coderOutput.modifiedFiles.length} files.`,
-              rationale: coderOutput.reasoning
-            });
-
             dag.updateTaskStatus(task.id, "COMPLETED", coderOutput);
             this.emit({ type: "dag_update", nodes: dag.getAllTasks(), runId });
             this.config.memory.logTaskEvent(runId, task.id, "complete", { success: true });
+            try {
+              this.config.memory.recordDecision({
+                id: sha256(`coder:${task.id}:${Date.now()}`).slice(0, 24),
+                title: `Coder output for task: ${task.id}`,
+                description: `Modified ${coderOutput.modifiedFiles.length} files.`,
+                rationale: coderOutput.reasoning
+              });
+            } catch {
+              // Non-fatal: duplicate decision record on retry — ignore
+            }
           }
           
           else if (task.type === "TEST") {
@@ -218,6 +221,8 @@ export class Orchestrator {
       repoRoot: this.config.repoRoot,
       onProgress: (msg: string) => this.progress(msg),
       onCheckPermission: this.config.checkPermission,
+      onEmit: (ev: OrchestratorEvent) => this.emit(ev),
+      runId,
     };
 
     try {
@@ -503,7 +508,11 @@ When the user asks to create, make, build, install, or modify files, scripts, bo
       let coderRetries = 0;
       const maxRetries = this.config.maxCoderRetries ?? 0;
 
-      while (dag.hasFailedTasks() && coderRetries < maxRetries) {
+      // Retry only when TEST-type tasks failed — VERIFY failures are non-blocking
+      const hasFailedTestTasks = () =>
+        dag.getAllTasks().some(t => t.status === "FAILED" && t.type === "TEST");
+
+      while (hasFailedTestTasks() && coderRetries < maxRetries) {
         coderRetries++;
         this.progress(`[RETRY] DAG execution failed. Retrying Coder attempt ${coderRetries}/${maxRetries}...`);
         

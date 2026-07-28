@@ -168,12 +168,36 @@ async function handleCoderToolCall(
 // Coder
 // ---------------------------------------------------------------------------
 
+function summarizeToolResult(toolName: string, result: string, toolArgs?: Record<string, unknown>): string {
+  if (result.startsWith("[Error") || result.startsWith("[Access denied")) {
+    return result.slice(0, 150);
+  }
+  if (toolName === "read_file") {
+    const lines = result.split("\n").length;
+    const fp = String(toolArgs?.file_path || "").split("/").pop() || "file";
+    return `Read ${lines} lines from ${fp}`;
+  }
+  if (toolName === "write_file" || toolName === "multi_replace_file_content") {
+    const fp = String(toolArgs?.file_path || "").split("/").pop() || "file";
+    return `Modified ${fp}`;
+  }
+  if (toolName === "run_command") {
+    return `Ran command '${toolArgs?.command || ""}'`;
+  }
+  if (toolName === "list_directory") {
+    return `Explored directory '${toolArgs?.dir_path || "."}'`;
+  }
+  return result.slice(0, 120);
+}
+
 export interface CoderOptions {
   provider: ILLMProvider;
   memory: MemoryEngine;
   repoRoot: string;
   onProgress?: (message: string) => void;
   onCheckPermission?: (permission: string, data: any) => Promise<boolean>;
+  onEmit?: (event: import("@atlas/core").OrchestratorEvent) => void;
+  runId?: string;
 }
 
 function computeLineStats(beforeStr: string, afterStr: string): { added: number; deleted: number } {
@@ -193,7 +217,7 @@ export async function runCoder(
   step: PlanStep,
   options: CoderOptions
 ): Promise<CoderOutput> {
-  const { provider, memory, repoRoot, onProgress, onCheckPermission } = options;
+  const { provider, memory, repoRoot, onProgress, onCheckPermission, onEmit, runId } = options;
 
   onProgress?.(`Coder: working on "${step.title}"...`);
 
@@ -236,12 +260,19 @@ export async function runCoder(
   while (iterations < MAX_ITERATIONS) {
     iterations++;
 
-    const response = await provider.complete({
-      messages,
-      tools,
-      toolChoice: "auto",
-      temperature: 0.1, // Low temperature for coding
-    });
+    const response = await provider.stream(
+      {
+        messages,
+        tools,
+        toolChoice: "auto",
+        temperature: 0.1, // Low temperature for coding
+      },
+      (chunk: string) => {
+        if (chunk) {
+          onEmit?.({ type: "token", content: chunk, runId: runId ?? "", agentRole: "coder" });
+        }
+      }
+    );
 
     if (response.toolCalls.length > 0) {
       messages.push({
@@ -251,6 +282,7 @@ export async function runCoder(
       });
 
       for (const tc of response.toolCalls) {
+        onEmit?.({ type: "tool_start", tool: tc.name, args: tc.arguments ?? {}, runId: runId ?? "", agentRole: "coder" });
         if (tc.name === "run_command") {
           onProgress?.(`Ran ${tc.arguments?.command || "command"}`);
         } else if (tc.name === "read_file") {
@@ -266,6 +298,14 @@ export async function runCoder(
           const afterStr = ctx.filesAfter.get(fullPath) || "";
           const stats = computeLineStats(beforeStr, afterStr);
           onProgress?.(`Edited ${fp} +${stats.added} -${stats.deleted}`);
+          onEmit?.({
+            type: "tool_result",
+            tool: tc.name,
+            summary: summarizeToolResult(tc.name, result, tc.arguments),
+            success: !result.startsWith("[Error") && !result.startsWith("[Access denied"),
+            runId: runId ?? "",
+            agentRole: "coder",
+          });
           messages.push({
             role: "tool" as const,
             content: result,
@@ -276,6 +316,14 @@ export async function runCoder(
           onProgress?.(`Tool: ${tc.name}`);
         }
         const result = await handleCoderToolCall(tc.name, tc.arguments, ctx);
+        onEmit?.({
+          type: "tool_result",
+          tool: tc.name,
+          summary: summarizeToolResult(tc.name, result, tc.arguments),
+          success: !result.startsWith("[Error") && !result.startsWith("[Access denied"),
+          runId: runId ?? "",
+          agentRole: "coder",
+        });
         messages.push({
           role: "tool" as const,
           content: result,

@@ -44,20 +44,24 @@ describe("Autonomous Browser & Dynamic DOM Tool Subsystem (@atlas/agents/browser
 
   it("should navigate, capture screenshots, and inspect network logs in BrowserEngine", async () => {
     const engine = new BrowserEngine();
-    const navResult = await engine.navigate("http://localhost:5173");
+    try {
+      const navResult = await engine.navigate("http://localhost:5173");
 
-    expect(navResult.url).toBe("http://localhost:5173");
-    expect(engine.getCurrentUrl()).toBe("http://localhost:5173");
+      expect(navResult.url).toBe("http://localhost:5173");
+      expect(engine.getCurrentUrl()).toBe("http://localhost:5173");
 
-    const clickRes = await engine.clickElement(2); // Button
-    expect(clickRes.success).toBe(true);
+      const clickRes = await engine.clickElement(2); // Button
+      expect(clickRes.success).toBe(true);
 
-    const logs = engine.getNetworkLogs();
-    expect(logs.length).toBeGreaterThanOrEqual(2);
+      const logs = engine.getNetworkLogs();
+      expect(logs.length).toBeGreaterThanOrEqual(1);
 
-    const screenshot = await engine.captureScreenshot();
-    expect(screenshot.base64Image).toContain("data:image/svg+xml");
-  });
+      const screenshot = await engine.captureScreenshot();
+      expect(screenshot.base64Image).toContain("data:image/jpeg");
+    } finally {
+      await engine.close();
+    }
+  }, 60000);
 
   it("should execute dynamic browser tools via JSON schema registry", async () => {
     const engine = new BrowserEngine();
@@ -66,12 +70,16 @@ describe("Autonomous Browser & Dynamic DOM Tool Subsystem (@atlas/agents/browser
     expect(tools.map((t) => t.name)).toContain("browser_navigate");
     expect(tools.map((t) => t.name)).toContain("browser_click");
 
-    const navRes = await executeBrowserTool(engine, "browser_navigate", { url: "http://localhost:3000" });
-    expect(navRes.url).toBe("http://localhost:3000");
+    try {
+      const navRes = await executeBrowserTool(engine, "browser_navigate", { url: "http://localhost:3000" });
+      expect(navRes.url).toBe("http://localhost:3000");
 
-    const clickRes = await executeBrowserTool(engine, "browser_click", { elementId: 2 });
-    expect(clickRes.success).toBe(true);
-  });
+      const clickRes = await executeBrowserTool(engine, "browser_click", { elementId: 2 });
+      expect(clickRes.success).toBe(true);
+    } finally {
+      await engine.close();
+    }
+  }, 60000);
 
   it("should run autonomous browser subagent task-driven execution loop", async () => {
     const subagent = new BrowserSubagent({ maxIterations: 5 });

@@ -3,6 +3,7 @@
  *
  * Manages the local developer profile and offline detection.
  * Note: This is not an authentication system.
+ * User ID is persisted durably to guarantee identity stability across boots.
  */
 
 import { LocalTokenStore } from "./LocalTokenStore.js";
@@ -34,8 +35,13 @@ export class AccountService {
     if (token) {
       const storedName = await this.storage.getItem("atlas_user_name") || "";
       const storedEmail = await this.storage.getItem("atlas_user_email") || "";
+      let storedId = await this.storage.getItem("atlas_user_id");
+      if (!storedId) {
+        storedId = `usr_${crypto.randomUUID()}`;
+        await this.storage.setItem("atlas_user_id", storedId);
+      }
       this.currentUser = {
-        id: `usr_${Date.now()}`,
+        id: storedId,
         name: storedName,
         email: storedEmail,
         plan: "Local",
@@ -48,11 +54,16 @@ export class AccountService {
     await LocalTokenStore.setSecureItem("user_token", token);
 
     const userName = name || email.split("@")[0] || "Developer";
+    let userId = await this.storage.getItem("atlas_user_id");
+    if (!userId) {
+      userId = "usr_" + crypto.randomUUID();
+      await this.storage.setItem("atlas_user_id", userId);
+    }
     await this.storage.setItem("atlas_user_name", userName);
     await this.storage.setItem("atlas_user_email", email);
 
     const user: UserProfile = {
-      id: "usr_" + crypto.randomUUID(),
+      id: userId,
       name: userName,
       email,
       plan: "Local",
@@ -66,6 +77,7 @@ export class AccountService {
     await LocalTokenStore.removeSecureItem("user_token");
     await this.storage.removeItem("atlas_user_name");
     await this.storage.removeItem("atlas_user_email");
+    await this.storage.removeItem("atlas_user_id");
     this.currentUser = null;
   }
 

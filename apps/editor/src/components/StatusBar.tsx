@@ -19,6 +19,10 @@ interface StatusBarProps {
   useTabs?: boolean;
   eol?: "LF" | "CRLF";
   hasActiveFile?: boolean;
+  discordRpcState?: "connected" | "reconnecting" | "disconnected";
+  onToggleDiscordRpc?: () => void;
+  onOpenExtensionDetail?: (extData: any) => void;
+  onShowContextMenu?: (options: { x: number; y: number; items: any[] }) => void;
 }
 
 interface PickerProps {
@@ -177,12 +181,17 @@ export function StatusBar({
   tabSize = 2,
   useTabs = false,
   eol = "LF",
-  hasActiveFile = false
+  hasActiveFile = false,
+  discordRpcState = "connected",
+  onToggleDiscordRpc,
+  onOpenExtensionDetail,
+  onShowContextMenu
 }: StatusBarProps) {
   const [activePicker, setActivePicker] = useState<PickerKind>(null);
   const [pickerAnchor, setPickerAnchor] = useState({ x: 0, y: 0 });
   const [currentProvider, setCurrentProvider] = useState<string>("gemini");
   const [activeModel, setActiveModel] = useState<string>(selectedModel);
+  const [hideDiscordItem, setHideDiscordItem] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -247,6 +256,38 @@ export function StatusBar({
     userSelect: "none",
     whiteSpace: "nowrap"
   });
+
+  const handleDiscordContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onShowContextMenu?.({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: "Manage Extension (Atlascord)",
+          onClick: () => {
+            onOpenExtensionDetail?.({
+              id: "atlascord",
+              name: "Atlascord",
+              publisher: "Eren-Jaeger-DEV",
+              version: "1.0.0",
+              description: "Highly customizable Discord Rich Presence extension for Atlas Studio",
+              repository: "https://github.com/Eren-Jaeger-DEV/Atlascord",
+              license: "MIT"
+            });
+          }
+        },
+        {
+          label: discordRpcState === "connected" ? "Disconnect Discord RPC" : "Connect Discord RPC",
+          onClick: () => onToggleDiscordRpc?.()
+        },
+        {
+          label: "Hide 'Atlascord (Extension)'",
+          onClick: () => setHideDiscordItem(true)
+        }
+      ]
+    });
+  };
 
   return (
     <>
@@ -343,6 +384,37 @@ export function StatusBar({
             </div>
           )}
 
+          {/* Discord RPC Status Bar Item */}
+          {!hideDiscordItem && (
+            <div
+              id="statusbar-discord-rpc"
+              className="statusbar-item"
+              style={itemStyle()}
+              title={
+                discordRpcState === "connected"
+                  ? "Discord RPC Connected (Click to Disconnect, Right Click to Manage)"
+                  : discordRpcState === "reconnecting"
+                  ? "Discord RPC Connecting... (Click to Retry, Right Click to Manage)"
+                  : "Discord RPC Disconnected (Click to Connect, Right Click to Manage)"
+              }
+              onClick={onToggleDiscordRpc}
+              onContextMenu={handleDiscordContextMenu}
+            >
+              {discordRpcState === "connected" ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              )}
+              <span>
+                {discordRpcState === "connected"
+                  ? "Discord RPC"
+                  : discordRpcState === "reconnecting"
+                  ? "Discord RPC (Connecting...)"
+                  : "Discord RPC (Disconnected)"}
+              </span>
+            </div>
+          )}
+
           <div className="statusbar-item" style={itemStyle(false)}>Atlas Studio</div>
         </div>
       </footer>
@@ -402,10 +474,10 @@ export function StatusBar({
 const s: Record<string, React.CSSProperties> = {
   statusBar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    height: "22px", backgroundColor: "var(--bg-statusbar, #09090b)",
+    height: "22px", backgroundColor: "var(--bg-statusbar, #000000)",
     color: "#ffffff",
     userSelect: "none", overflow: "hidden", flexShrink: 0,
-    borderTop: "1px solid var(--border-subtle, #27272a)",
+    borderTop: "1px solid var(--border-subtle, #18181b)",
   },
   leftGroup: { display: "flex", alignItems: "center", height: "100%" },
   rightGroup: { display: "flex", alignItems: "center", height: "100%" },

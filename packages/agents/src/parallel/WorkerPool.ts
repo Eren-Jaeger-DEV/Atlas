@@ -76,14 +76,11 @@ export class WorkerPool {
 
     // Topological execution with concurrency limit
     const completed = new Set<string>(); // completed task IDs
+    const failed = new Set<string>();    // failed task IDs
     const running = new Set<string>();   // worker IDs currently running
 
     const isReady = (task: ParallelSubTask): boolean => {
-      return task.deps.every(depId => {
-        const depWorkerId = taskIdToWorkerId.get(depId);
-        if (!depWorkerId) return true; // unknown dep = ignore
-        return completed.has(depId);
-      });
+      return task.deps.every(depId => completed.has(depId));
     };
 
     const pendingTasks = [...plan.tasks];
@@ -161,7 +158,7 @@ export class WorkerPool {
             error: verifyResult.errorSummary ?? "Tri-surface verification failed"
           });
           this.config.onEvent({ workerId, type: "error", status: "error", message: verifyResult.errorSummary });
-          completed.add(task.id);
+          failed.add(task.id);
           return;
         }
 
@@ -172,7 +169,7 @@ export class WorkerPool {
         const msg = err?.message ?? String(err);
         this.updateWorker(workerId, { status: "error", finishedAt: new Date().toISOString(), error: msg });
         this.config.onEvent({ workerId, type: "error", status: "error", message: msg });
-        completed.add(task.id); // mark done even on error so deps can unblock
+        failed.add(task.id);
       } finally {
         running.delete(workerId);
       }
@@ -180,6 +177,20 @@ export class WorkerPool {
 
     // Scheduler loop
     while (pendingTasks.length > 0 || running.size > 0) {
+      // Check for pending tasks whose dependencies failed
+      for (let i = pendingTasks.length - 1; i >= 0; i--) {
+        const t = pendingTasks[i]!;
+        const failedDep = t.deps.find(d => failed.has(d));
+        if (failedDep) {
+          const wid = taskIdToWorkerId.get(t.id)!;
+          const msg = `Aborted execution: prerequisite task '${failedDep}' failed.`;
+          this.updateWorker(wid, { status: "error", finishedAt: new Date().toISOString(), error: msg });
+          this.config.onEvent({ workerId: wid, type: "error", status: "error", message: msg });
+          failed.add(t.id);
+          pendingTasks.splice(i, 1);
+        }
+      }
+
       // Find tasks that are ready and not yet started
       const startable = pendingTasks.filter(t => {
         const wid = taskIdToWorkerId.get(t.id)!;
@@ -196,7 +207,7 @@ export class WorkerPool {
         runWorker(task, workerId); // do NOT await — run concurrently
       }
 
-      if (running.size === 0 && toStart.length === 0) break; // stuck on cancelled deps
+      if (running.size === 0 && toStart.length === 0) break; // stuck on cancelled or failed deps
 
       // Yield to event loop
       await new Promise<void>(r => setTimeout(r, 100));

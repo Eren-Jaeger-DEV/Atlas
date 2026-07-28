@@ -48,13 +48,25 @@ export class BrowserSubagent {
 
   public async runTask(goal: string, targetUrl?: string): Promise<BrowserSubagentResult> {
     const history: BrowserSubagentResult["history"] = [];
-    let step = 1;
 
     if (targetUrl) {
-      const navRes = await executeBrowserTool(this.engine, "browser_navigate", { url: targetUrl });
-      history.push({ step: step++, action: `browser_navigate(${targetUrl})`, result: navRes });
+      const navRes = await this.engine.navigate(targetUrl);
+      history.push({ step: 1, action: "navigate", result: navRes });
     }
 
+    const axSummary = await this.engine.getAXTree();
+
+    if (!this.provider) {
+      history.push({ step: 2, action: "inspect_tree", result: axSummary.formattedTreeText });
+      return {
+        success: true,
+        finalUrl: this.engine.getCurrentUrl(),
+        history,
+        axTreeText: axSummary.formattedTreeText,
+      };
+    }
+
+    let step = 1;
     const messages: LLMMessage[] = [
       { role: "system", content: BROWSER_SYSTEM_PROMPT },
       { role: "user", content: `Goal: ${goal}` },

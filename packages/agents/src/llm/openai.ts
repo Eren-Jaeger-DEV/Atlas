@@ -154,7 +154,7 @@ export class OpenAIProvider implements ILLMProvider {
           } else {
             const existing = accumToolCalls.get(index)!;
             if (tcDelta.id) existing.id = tcDelta.id;
-            if (tcDelta.function?.name) existing.name += tcDelta.function.name;
+            if (tcDelta.function?.name) existing.name = tcDelta.function.name;
             if (tcDelta.function?.arguments) existing.arguments += tcDelta.function.arguments;
           }
         }

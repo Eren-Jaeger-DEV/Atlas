@@ -1,0 +1,97 @@
+/**
+ * @atlas/editor — AtlascordPresenceEngine
+ *
+ * Real-time Discord Rich Presence calculation and template interpolation engine for Atlas Studio.
+ * Derived dynamically from live workspace, active file tab, cursor position, and agent orchestrator state.
+ */
+
+export interface PresenceTemplateParams {
+  file?: string;
+  workspace?: string;
+  language?: string;
+  line?: number;
+  col?: number;
+  agentState?: string;
+  health?: number | null;
+  customDetailsTemplate?: string;
+  customStateTemplate?: string;
+  showWorkspaceName?: boolean;
+  showActiveFile?: boolean;
+  showAgentState?: boolean;
+}
+
+export interface AtlascordPresencePayload {
+  details: string;
+  state: string;
+  largeImageKey: string;
+  largeImageText: string;
+  smallImageKey: string;
+  smallImageText: string;
+  startTimestamp: number;
+}
+
+export class AtlascordPresenceEngine {
+  private static startTimestamp: number = Date.now();
+
+  public static formatPresence(params: PresenceTemplateParams): AtlascordPresencePayload {
+    const file = params.showActiveFile !== false && params.file ? params.file.split("/").pop() || params.file : "No Active File";
+    const workspace = params.showWorkspaceName !== false && params.workspace ? params.workspace.split("/").pop() || params.workspace : "Atlas Workspace";
+    const language = params.language ? params.language.toUpperCase() : "PLAINTEXT";
+    const line = params.line ?? 1;
+    const col = params.col ?? 1;
+    const agentState = params.showAgentState !== false && params.agentState ? params.agentState.toUpperCase() : "IDLE";
+    const health = params.health !== undefined && params.health !== null ? `${params.health}%` : "100%";
+
+    const defaultDetails = params.file
+      ? `Editing ${file} (${line}:${col})`
+      : `Exploring ${workspace}`;
+
+    const defaultState = params.agentState && params.agentState !== "IDLE"
+      ? `Agent: ${agentState} • ${workspace}`
+      : `Atlas Studio v1.0 • ${language}`;
+
+    let details = params.customDetailsTemplate || defaultDetails;
+    let state = params.customStateTemplate || defaultState;
+
+    // Interpolate template tags
+    details = details
+      .replace(/\{file\}/g, file)
+      .replace(/\{workspace\}/g, workspace)
+      .replace(/\{language\}/g, language)
+      .replace(/\{line\}/g, String(line))
+      .replace(/\{col\}/g, String(col))
+      .replace(/\{agentState\}/g, agentState)
+      .replace(/\{health\}/g, health);
+
+    state = state
+      .replace(/\{file\}/g, file)
+      .replace(/\{workspace\}/g, workspace)
+      .replace(/\{language\}/g, language)
+      .replace(/\{line\}/g, String(line))
+      .replace(/\{col\}/g, String(col))
+      .replace(/\{agentState\}/g, agentState)
+      .replace(/\{health\}/g, health);
+
+    const smallImageKey = params.agentState && params.agentState !== "IDLE"
+      ? "agent-active"
+      : language.toLowerCase();
+
+    const smallImageText = params.agentState && params.agentState !== "IDLE"
+      ? `AI Agent: ${agentState}`
+      : `Language: ${language}`;
+
+    return {
+      details,
+      state,
+      largeImageKey: "atlas-logo",
+      largeImageText: `Atlas Studio IDE — ${workspace}`,
+      smallImageKey,
+      smallImageText,
+      startTimestamp: this.startTimestamp,
+    };
+  }
+
+  public static resetTimer(): void {
+    this.startTimestamp = Date.now();
+  }
+}

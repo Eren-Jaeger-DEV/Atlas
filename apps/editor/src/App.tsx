@@ -21,6 +21,7 @@ import { AiSidebar } from "./components/AiSidebar.js";
 import { DependencyGraph } from "./components/DependencyGraph.js";
 import { ProjectHealth } from "./components/ProjectHealth.js";
 import { ExtensionGallery } from "./components/ExtensionGallery.js";
+import { ExtensionDetailView } from "./components/ExtensionDetailView.js";
 import { onLspStatusChange, LSPStatus } from "./lsp/LSPClient.js";
 import { GitHistoryPanel } from "./components/GitHistoryPanel.js";
 import { TimelinePanel } from "./components/TimelinePanel.js";
@@ -156,8 +157,11 @@ function AppInner() {
     untitledCounterRef,
     handleSave,
     handleCloseTab,
-    handleOpenFile
+    handleOpenFile,
+    handleOpenExtensionDetail
   } = useWorkspaceTabs();
+
+  const [discordRpcState, setDiscordRpcState] = useState<"connected" | "reconnecting" | "disconnected">("connected");
 
   const [multiCursorCtrlCmd, setMultiCursorCtrlCmd]   = useState(false);
   const [columnSelectionMode, setColumnSelectionMode] = useState(false);
@@ -2178,7 +2182,7 @@ function AppInner() {
               {activeSidebar==="timeline"   && <TimelinePanel repoPath={repoPath}/>}
               {activeSidebar==="parallel"   && <ParallelAgentsDashboard repoPath={repoPath} />}
               {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
-              {activeSidebar==="extensions" && <ExtensionGallery />}
+              {activeSidebar==="extensions" && <ExtensionGallery onOpenExtensionDetail={handleOpenExtensionDetail} />}
               {activeSidebar==="ai"         && (
                 <div style={s.agentPane}>
                   <p style={s.paneHdr}>ATLAS AI AGENT</p>
@@ -2419,7 +2423,12 @@ function AppInner() {
               <div style={{ display: "flex", width: "100%", height: "100%" }}>
                 <div style={{ flex: 1, borderRight: isSplit ? "1px solid #27272a" : "none", height: "100%", overflow: "auto" }}>
                   {activeTab && (
-                      activeTab.isBinary ? (
+                      activeTab.tabType === "extension-detail" ? (
+                        <ExtensionDetailView
+                          extension={activeTab.extensionData || { id: "atlascord", name: "Atlascord" }}
+                          onOpenSettings={handleOpenSettings}
+                        />
+                      ) : activeTab.isBinary ? (
                         <BinaryFileView onOpenAnyway={async () => {
                           const c = await api()?.readFile(activeTab.filePath).catch(()=>"// read error") || "";
                           setTabs(p => p.map((t,i) => i === activeTabIndex ? {...t, isBinary: false, content: c} : t));
@@ -2695,6 +2704,13 @@ function AppInner() {
           useTabs={editorUseTabs}
           eol={editorEol}
           hasActiveFile={!!activeTab}
+          discordRpcState={discordRpcState}
+          onToggleDiscordRpc={() => {
+            setDiscordRpcState(prev => prev === "connected" ? "disconnected" : "connected");
+            api()?.emitEvent?.("AtlascordToggleConnect", {});
+          }}
+          onOpenExtensionDetail={handleOpenExtensionDetail}
+          onShowContextMenu={showContextMenu}
           onChangeLanguage={(lang) => {
             if (!activeTab) return;
             setTabs(p => p.map((t, i) => i === activeTabIndex ? { ...t, language: lang } : t));

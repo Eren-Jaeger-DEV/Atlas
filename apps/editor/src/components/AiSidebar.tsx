@@ -720,10 +720,30 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
     const unsub = api.onEvent((ev: any) => {
       setStreamEvents((prev) => [...prev, ev]);
 
-      // Token streaming
+      // Token streaming by role
       if (ev.type === "token" && ev.content) {
         streamingTokenRef.current += ev.content;
-        setStreamingTokenText((prev) => prev + ev.content);
+        if (ev.agentRole === "planner") {
+          thinkingTextRef.current += ev.content;
+        }
+      }
+
+      // Live tool execution events
+      if (ev.type === "tool_start" && ev.tool) {
+        const detail = ev.args?.file_path
+          ? String(ev.args.file_path).split("/").pop()
+          : (ev.args?.command || ev.args?.query || ev.args?.dir_path || "");
+        const stepMsg = `Analyzed ${ev.tool} ${detail ? `(${detail})` : ""}`;
+        accumulatedStepsRef.current.push(stepMsg);
+        logToOutput("Agent", `[TOOL START] ${ev.tool}${detail ? `: ${detail}` : ""}`, "info");
+      }
+
+      if (ev.type === "tool_result") {
+        const isErr = !ev.success;
+        if (ev.summary) {
+          accumulatedStepsRef.current.push(ev.summary);
+        }
+        logToOutput("Agent", `[TOOL RESULT] ${ev.summary || ev.tool}`, isErr ? "warn" : "info");
       }
 
       // Planning state — start tracking thinking time
@@ -735,7 +755,7 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
       if (ev.type === "plan_ready" && ev.plan) {
         const thinkingElapsed = thinkingStartTimeRef.current > 0 ? Date.now() - thinkingStartTimeRef.current : 0;
         thinkingMsRef.current = thinkingElapsed;
-        if (ev.plan.planningReasoning) {
+        if (ev.plan.planningReasoning && !thinkingTextRef.current) {
           thinkingTextRef.current = ev.plan.planningReasoning;
         }
         if (ev.plan.steps && ev.plan.steps.length > 0) {
@@ -781,6 +801,16 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
       if (unsubscribePlan) unsubscribePlan();
     };
   }, []);
+
+  // 50ms interval render buffer flush — prevents React render jank during live streaming
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (streamingTokenRef.current !== streamingTokenText) {
+        setStreamingTokenText(streamingTokenRef.current);
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [streamingTokenText]);
 
   const chatStreamRef = useRef<HTMLDivElement>(null);
 

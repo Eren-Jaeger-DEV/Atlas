@@ -6,6 +6,8 @@
  * Restricts command execution, auto-run NL rules, and shields `.env` credentials in untrusted folders.
  */
 
+import path from "node:path";
+
 export type TrustStatus = "TRUSTED" | "UNTRUSTED" | "PENDING_CONFIRMATION";
 
 export class WorkspaceTrustPolicy {
@@ -41,7 +43,7 @@ export class WorkspaceTrustPolicy {
    * Check if a file should be shielded due to untrusted workspace status or sensitivity.
    */
   public isFileShielded(filePath: string): boolean {
-    const filename = filePath.split("/").pop() || "";
+    const filename = path.basename(filePath.replace(/\\/g, "/"));
     const isSensitive =
       filename.startsWith(".env") ||
       filename.includes("id_rsa") ||

@@ -10,6 +10,8 @@ export interface EditorTab {
   targetLine?: number;
   targetColumn?: number;
   isBinary?: boolean;
+  tabType?: "file" | "extension-detail" | "settings";
+  extensionData?: any;
 }
 
 export function useWorkspaceTabs() {
@@ -25,7 +27,7 @@ export function useWorkspaceTabs() {
     if (!autoSaveEnabled) return;
     const timer = setInterval(() => {
       tabs.forEach((tab) => {
-        if (tab.isDirty && tab.filePath && !tab.filePath.startsWith("Untitled")) {
+        if (tab.isDirty && tab.filePath && !tab.filePath.startsWith("Untitled") && tab.tabType !== "extension-detail") {
           api()
             ?.writeFile(tab.filePath, tab.content)
             .then(() => {
@@ -39,7 +41,7 @@ export function useWorkspaceTabs() {
   }, [autoSaveEnabled, tabs]);
 
   const handleSave = useCallback(async () => {
-    if (!activeTab || !activeTab.isDirty) return;
+    if (!activeTab || !activeTab.isDirty || activeTab.tabType === "extension-detail") return;
     try {
       if (activeTab.filePath.startsWith("Untitled")) {
         const target = await api()?.saveFileAsDialog?.(activeTab.filePath);
@@ -90,7 +92,8 @@ export function useWorkspaceTabs() {
           isDirty: false,
           targetLine: line,
           targetColumn: col,
-          isBinary
+          isBinary,
+          tabType: "file"
         };
         const next = [...prev, newTab];
         setActiveTabIndex(next.length - 1);
@@ -99,6 +102,30 @@ export function useWorkspaceTabs() {
     } catch (err) {
       console.error("Failed to open file:", err);
     }
+  }, []);
+
+  const handleOpenExtensionDetail = useCallback((extensionData: any) => {
+    const extId = extensionData.id || extensionData.name || "atlascord";
+    const tabKey = `Extension: ${extensionData.name || "Atlascord"}`;
+
+    setTabs((prev) => {
+      const existingIdx = prev.findIndex((t) => t.filePath === tabKey);
+      if (existingIdx !== -1) {
+        setActiveTabIndex(existingIdx);
+        return prev;
+      }
+      const newTab: EditorTab = {
+        filePath: tabKey,
+        content: "",
+        language: "markdown",
+        isDirty: false,
+        tabType: "extension-detail",
+        extensionData
+      };
+      const next = [...prev, newTab];
+      setActiveTabIndex(next.length - 1);
+      return next;
+    });
   }, []);
 
   return {
@@ -112,6 +139,7 @@ export function useWorkspaceTabs() {
     untitledCounterRef,
     handleSave,
     handleCloseTab,
-    handleOpenFile
+    handleOpenFile,
+    handleOpenExtensionDetail
   };
 }
