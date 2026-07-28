@@ -90,6 +90,12 @@ import type * as pty from "node-pty";
 // ---------------------------------------------------------------------------
 process.on("uncaughtException", (error) => {
   console.error("[CRASH] Uncaught Exception in Main Process:", error);
+  // Isolate extension errors so third-party/external extension failures do not crash the editor core
+  if (error.stack && error.stack.includes("/extensions/")) {
+    console.error("[EXTENSION ERROR] Safely isolated error from extension:", error);
+    return;
+  }
+
   if (!app.isReady()) {
     process.exit(1);
   }
