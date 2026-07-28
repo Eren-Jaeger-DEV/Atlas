@@ -10,7 +10,7 @@
   },
   "main": "./electron-dist/main.js",
   "scripts": {
-    "dev": "tsc -p tsconfig.electron.json && npx cross-env NODE_ENV=development concurrently \"vite\" \"electron .\"",
+    "dev": "tsc -p tsconfig.electron.json && npx cross-env NODE_ENV=development concurrently -k \"vite\" \"npx wait-on tcp:127.0.0.1:5173 && electron .\"",
     "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" vite build && tsc -p tsconfig.electron.json",
     "electron": "electron .",
     "preview": "vite preview",

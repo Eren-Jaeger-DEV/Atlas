@@ -74,6 +74,29 @@ export class PermissionEngine {
     return [...this.auditLog];
   }
 
+  private isReadOnlyFS = false;
+
+  public setReadOnlyFS(readOnly: boolean): void {
+    this.isReadOnlyFS = readOnly;
+  }
+
+  public isReadOnlyMode(): boolean {
+    return this.isReadOnlyFS;
+  }
+
+  public checkResourceLimits(memoryUsageMb: number, cpuTimeMs: number): { allowed: boolean; violationReason?: string } {
+    const MAX_MEMORY_MB = 1024;
+    const MAX_CPU_MS = 30000;
+
+    if (memoryUsageMb > MAX_MEMORY_MB) {
+      return { allowed: false, violationReason: `Memory usage ${memoryUsageMb}MB exceeded limit of ${MAX_MEMORY_MB}MB` };
+    }
+    if (cpuTimeMs > MAX_CPU_MS) {
+      return { allowed: false, violationReason: `CPU time ${cpuTimeMs}ms exceeded limit of ${MAX_CPU_MS}ms` };
+    }
+    return { allowed: true };
+  }
+
   public exportState(): { permissions: Record<string, ExtensionPermission[]>; auditLog: PermissionAuditRecord[] } {
     const permissions: Record<string, ExtensionPermission[]> = {};
     for (const [id, set] of this.grantedPermissions.entries()) {

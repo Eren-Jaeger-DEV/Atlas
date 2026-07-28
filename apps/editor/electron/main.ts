@@ -199,12 +199,14 @@ function createWindow(options?: { empty?: boolean; profile?: string | undefined 
     }
   });
 
+  let loadRetries = 0;
   mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
     console.error(`[DID FAIL LOAD] ${errorCode}: ${errorDescription}`);
-    if (isDev && (errorCode === -102 || errorCode === -105 || errorCode === -106)) {
+    if (isDev && (errorCode === -102 || errorCode === -105 || errorCode === -106) && loadRetries < 5) {
+      loadRetries++;
       setTimeout(() => {
         mainWindow?.loadURL(devUrl);
-      }, 1000);
+      }, Math.min(1500 * loadRetries, 5000));
     }
   });
 

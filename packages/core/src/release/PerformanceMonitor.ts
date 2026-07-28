@@ -15,6 +15,10 @@ export interface PerformanceBudgets {
   browserLatencyMs: number;
   verificationMs: number;
   orchestrationMs: number;
+  contextBuildTimeMs?: number;
+  tokenUsage?: number;
+  cacheHitRate?: number;
+  dagExecutionTimeMs?: number;
 }
 
 export class PerformanceMonitor {
@@ -30,6 +34,10 @@ export class PerformanceMonitor {
     browserLatencyMs: 0,
     verificationMs: 0,
     orchestrationMs: 0,
+    contextBuildTimeMs: 0,
+    tokenUsage: 0,
+    cacheHitRate: 100,
+    dagExecutionTimeMs: 0,
   };
 
   public static markBootComplete(): void {

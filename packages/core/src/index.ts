@@ -80,7 +80,7 @@ export { ShadowWorkspace, type ShadowFile } from "./workspace/ShadowWorkspace.js
 
 // Importer & MCP OAuth Gateway
 export { CompetitorSettingsImporter, type CompetitorRule, type ImportedConfigResult } from "./importer/CompetitorSettingsImporter.js";
-export { McpOAuthGateway, type McpOAuthCredentials } from "./mcp/McpOAuthGateway.js";
+export { McpOAuthGateway, type McpOAuthProviderConfig, type McpTokenSet } from "./mcp/McpOAuthGateway.js";
 
 // Session, Terminal Suggest & Workspace Search
 export { SessionManager, type ChatSession, type ChatMessage } from "./session/SessionManager.js";
