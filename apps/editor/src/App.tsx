@@ -289,14 +289,34 @@ function AppInner() {
     window.addEventListener("atlas:split-editor", handleSplit);
     window.addEventListener("atlas:toggle-group-lock", handleLock);
 
+    const handleGlobalContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        !target ||
+        target.closest("input") ||
+        target.closest("textarea") ||
+        target.closest(".monaco-editor") ||
+        target.closest("button") ||
+        target.closest("[data-custom-context-menu]")
+      ) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      handleOpenWorkspaceContextMenu(e as any);
+    };
+
+    window.addEventListener("contextmenu", handleGlobalContextMenu);
+
     return () => {
       window.removeEventListener("atlas:new-text-file", handleNewFile);
       window.removeEventListener("atlas:open-command-palette", handleCmdPal);
       window.removeEventListener("atlas:new-terminal", handleTerm);
       window.removeEventListener("atlas:split-editor", handleSplit);
       window.removeEventListener("atlas:toggle-group-lock", handleLock);
+      window.removeEventListener("contextmenu", handleGlobalContextMenu);
     };
-  }, [handleCreateNewTextFile]);
+  }, [handleCreateNewTextFile, handleOpenWorkspaceContextMenu]);
 
   useKeyboardShortcuts({
     onSave: handleSave,

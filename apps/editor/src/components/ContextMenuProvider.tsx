@@ -43,22 +43,24 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const handleGlobalClick = () => hideContextMenu();
+    const handleGlobalClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && target.closest("#atlas-custom-context-menu")) return;
+      hideContextMenu();
+    };
     const handleGlobalEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") hideContextMenu();
     };
 
     if (menu) {
       const timer = setTimeout(() => {
-        document.addEventListener("click", handleGlobalClick);
-        document.addEventListener("contextmenu", handleGlobalClick);
-      }, 50);
+        document.addEventListener("pointerdown", handleGlobalClick);
+      }, 10);
       document.addEventListener("keydown", handleGlobalEsc);
 
       return () => {
         clearTimeout(timer);
-        document.removeEventListener("click", handleGlobalClick);
-        document.removeEventListener("contextmenu", handleGlobalClick);
+        document.removeEventListener("pointerdown", handleGlobalClick);
         document.removeEventListener("keydown", handleGlobalEsc);
       };
     }
@@ -70,14 +72,15 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
       <AnimatePresence>
         {menu && createPortal(
           <motion.div
+            id="atlas-custom-context-menu"
             initial={{ opacity: 0, scale: 0.94, y: -4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: -4 }}
             transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
             style={{
               position: "fixed",
-              top: Math.min(menu.y, window.innerHeight - (menu.items.length * 32 + 20)),
-              left: Math.min(menu.x, window.innerWidth - 220),
+              top: Math.max(10, Math.min(menu.y, window.innerHeight - (menu.items.length * 32 + 20))),
+              left: Math.max(10, Math.min(menu.x, window.innerWidth - 220)),
               width: "210px",
               backgroundColor: "var(--bg-glass-strong, rgba(14, 14, 18, 0.95))",
               backdropFilter: "blur(20px) saturate(1.5)",
