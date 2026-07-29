@@ -351,21 +351,31 @@ function buildApplicationMenu(): void {
 // ---------------------------------------------------------------------------
 async function createProvider(repoRoot: string, modelOverride?: string) {
   const settings = await getMergedSettings();
-  const providerName = settings.aiProvider || settings.ai?.provider || "openai";
+  let providerName = settings.aiProvider || settings.ai?.provider || "routing.run";
   let apiKey = settings.ai?.apiKeys?.[providerName] || "";
 
   // Fallback: read top-level plaintext provider keys saved by settings window
-  if (!apiKey && providerName === "routing.run") apiKey = settings.openRouterApiKey || settings.routingApiKey || "";
-  if (!apiKey && providerName === "openai") apiKey = settings.openaiApiKey || "";
-  if (!apiKey && providerName === "anthropic") apiKey = settings.anthropicApiKey || "";
-  if (!apiKey && providerName === "gemini") apiKey = settings.geminiApiKey || "";
-  if (!apiKey && providerName === "openai-compatible") apiKey = settings.openRouterApiKey || settings.openaiApiKey || "";
+  if (!apiKey && (providerName === "routing.run" || providerName === "openai-compatible")) {
+    apiKey = settings.routingApiKey || settings.openRouterApiKey || process.env.ROUTING_API_KEY || "";
+  }
+  if (!apiKey && providerName === "openai") apiKey = settings.openaiApiKey || process.env.OPENAI_API_KEY || "";
+  if (!apiKey && providerName === "anthropic") apiKey = settings.anthropicApiKey || process.env.ANTHROPIC_API_KEY || "";
+  if (!apiKey && providerName === "gemini") apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY || "";
 
-  if (providerName === "anthropic" && !apiKey) apiKey = process.env.ANTHROPIC_API_KEY || "";
-  if (providerName === "openai" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
-  if (providerName === "gemini" && !apiKey) apiKey = process.env.GEMINI_API_KEY || "";
-  if (providerName === "openai-compatible" && !apiKey) apiKey = process.env.OPENAI_API_KEY || "";
-  if (providerName === "routing.run" && !apiKey) apiKey = process.env.ROUTING_API_KEY || "";
+  const model = modelOverride || settings.aiModel || settings.ai?.model || "deepseek-v4-pro";
+
+  // Auto-detect routing.run for routing-specific models or if routing key exists
+  const routingModels = [
+    "claude-opus-4-8", "claude-sonnet-4-6", "deepseek-v4-flash", "deepseek-v4-pro",
+    "glm-5.2", "glm-5.2-nitro", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra",
+    "kimi-k2.6", "kimi-k2.6-nitro", "kimi-k2.7-code", "kimi-k2.7-code-nitro",
+    "nemotron-3-ultra", "qwen3.5-9b"
+  ];
+
+  if (routingModels.includes(model) || (process.env.ROUTING_API_KEY && !apiKey)) {
+    providerName = "routing.run";
+    if (!apiKey) apiKey = settings.routingApiKey || settings.openRouterApiKey || process.env.ROUTING_API_KEY || "";
+  }
 
   // If no plaintext key, try secure storage (new method via keys.json)
   if (!apiKey && safeStorage.isEncryptionAvailable()) {
@@ -396,13 +406,14 @@ async function createProvider(repoRoot: string, modelOverride?: string) {
     }
   }
 
+  // Sanitize API key: strip surrounding quotes and whitespace
+  const cleanKey = String(apiKey || "").replace(/^["']|["']$/g, "").trim();
+
   const config: any = {
     provider: providerName as any,
-    apiKey
+    apiKey: cleanKey,
+    model
   };
-  
-  const model = modelOverride || settings.aiModel || settings.ai?.model;
-  if (model) config.model = model;
 
   // routing.run always uses its own base URL; other compatible providers use aiBaseUrl
   if (providerName === "routing.run") {

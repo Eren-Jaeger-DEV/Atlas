@@ -18,7 +18,8 @@ export class OpenAIProvider implements ILLMProvider {
   private defaultModel: string;
 
   constructor(apiKey: string, model = "gpt-4o", baseUrl?: string) {
-    this.client = new OpenAI({ apiKey, baseURL: baseUrl });
+    const cleanKey = String(apiKey || "").replace(/^["']|["']$/g, "").trim();
+    this.client = new OpenAI({ apiKey: cleanKey, baseURL: baseUrl });
     this.defaultModel = model;
   }
 

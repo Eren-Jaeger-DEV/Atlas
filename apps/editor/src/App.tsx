@@ -255,6 +255,7 @@ function AppInner() {
           setActiveTabIndex(state.activeTabIndex || 0);
           
           restoredTabs.forEach((tab, index) => {
+            if (tab.tabType === "extension-detail" || tab.filePath?.startsWith("Extension: ")) return;
             api().readFile(tab.filePath).then((content: string) => {
               setTabs(curr => {
                 const updated = [...curr];
@@ -1974,7 +1975,7 @@ function AppInner() {
           if (tabIndex === -1) return prevTabs;
           
           const tab = prevTabs[tabIndex];
-          if (!tab || tab.isDirty) return prevTabs;
+          if (!tab || tab.isDirty || tab.tabType === "extension-detail" || tab.filePath?.startsWith("Extension: ")) return prevTabs;
           
           api().readFile(tab.filePath).then((newContent: string) => {
             setTabs((currentTabs) => {
