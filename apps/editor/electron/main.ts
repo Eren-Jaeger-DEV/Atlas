@@ -2301,8 +2301,8 @@ async function loadExtension(extPath: string, manifest: any) {
   }
 }
 
-// Auto-load installed extensions on startup
-app.whenReady().then(async () => {
+// Auto-load installed extensions asynchronously in the background after UI startup
+async function autoLoadExtensions() {
   const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
   try {
     const entries = await readdir(extDir, { withFileTypes: true });
@@ -2315,7 +2315,7 @@ app.whenReady().then(async () => {
       } catch { /* skip */ }
     }
   } catch { /* skip */ }
-});
+}
 
 
 
@@ -2393,6 +2393,11 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  // Defer extension loading asynchronously so window & UI show instantly (< 500ms)
+  setTimeout(() => {
+    autoLoadExtensions().catch(e => console.error("[ExtensionRuntime] Background load error:", e));
+  }, 500);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
