@@ -294,7 +294,9 @@ function AppInner() {
       if (
         !target ||
         (target.tagName === "INPUT" && (target as HTMLInputElement).type === "text") ||
-        target.closest("#atlas-custom-context-menu")
+        target.tagName === "TEXTAREA" ||
+        target.closest("#atlas-custom-context-menu") ||
+        target.closest("[data-custom-context-menu]")
       ) {
         return;
       }
@@ -303,7 +305,7 @@ function AppInner() {
       handleOpenWorkspaceContextMenu(e as any);
     };
 
-    window.addEventListener("contextmenu", handleGlobalContextMenu);
+    window.addEventListener("contextmenu", handleGlobalContextMenu, true);
 
     return () => {
       window.removeEventListener("atlas:new-text-file", handleNewFile);
@@ -311,7 +313,7 @@ function AppInner() {
       window.removeEventListener("atlas:new-terminal", handleTerm);
       window.removeEventListener("atlas:split-editor", handleSplit);
       window.removeEventListener("atlas:toggle-group-lock", handleLock);
-      window.removeEventListener("contextmenu", handleGlobalContextMenu);
+      window.removeEventListener("contextmenu", handleGlobalContextMenu, true);
     };
   }, [handleCreateNewTextFile, handleOpenWorkspaceContextMenu]);
 
