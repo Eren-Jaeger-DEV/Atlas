@@ -228,6 +228,9 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   gitStashList: (repoPath: string): Promise<string[]> =>
     ipcRenderer.invoke("atlas:git-stash-list", repoPath),
 
+  newWindow: (options?: { profile?: string }): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke("atlas:new-window", options),
+
   // TODO/FIXME scanner
   scanTodos: (repoPath: string): Promise<{ total: number }> =>
     ipcRenderer.invoke("atlas:scan-todos", repoPath),

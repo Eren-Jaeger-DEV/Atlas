@@ -158,8 +158,12 @@ function AppInner() {
     handleSave,
     handleCloseTab,
     handleOpenFile,
-    handleOpenExtensionDetail
+    handleOpenExtensionDetail,
+    handleCreateNewTextFile
   } = useWorkspaceTabs();
+
+  const [isGroupLocked, setIsGroupLocked] = useState(false);
+  const [splitDirection, setSplitDirection] = useState<"up" | "down" | "left" | "right">("right");
 
   const [discordRpcState, setDiscordRpcState] = useState<"connected" | "reconnecting" | "disconnected">("connected");
 
@@ -188,6 +192,81 @@ function AppInner() {
   const [bottomPanelHeight, setBottomPanelHeight]   = useState(220);
   const draggingRef = useRef<"sidebar" | "bottom" | "right-sidebar" | null>(null);
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
+
+  const handleOpenWorkspaceContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    showContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: "New Text File",
+          shortcut: "Ctrl+N",
+          onClick: handleCreateNewTextFile
+        },
+        {
+          label: "Open File...",
+          shortcut: "Ctrl+P",
+          onClick: () => setShowCommandPalette(true)
+        },
+        { separator: true },
+        {
+          label: "New Terminal",
+          onClick: () => {
+            setBottomTab("terminal");
+            setShowBottomPanel(true);
+            setTermAddTrigger((n) => n + 1);
+          }
+        },
+        { separator: true },
+        {
+          label: "Split Up",
+          shortcut: "Ctrl+K Ctrl+\\",
+          onClick: () => {
+            setSplitDirection("up");
+            setIsSplit(true);
+          }
+        },
+        {
+          label: "Split Down",
+          onClick: () => {
+            setSplitDirection("down");
+            setIsSplit(true);
+          }
+        },
+        {
+          label: "Split Left",
+          onClick: () => {
+            setSplitDirection("left");
+            setIsSplit(true);
+          }
+        },
+        {
+          label: "Split Right",
+          onClick: () => {
+            setSplitDirection("right");
+            setIsSplit(true);
+          }
+        },
+        { separator: true },
+        {
+          label: "New Window",
+          onClick: () => {
+            if (api()?.newWindow) {
+              api().newWindow();
+            }
+          }
+        },
+        { separator: true },
+        {
+          label: isGroupLocked ? "Unlock Group" : "Lock Group",
+          onClick: () => setIsGroupLocked((prev) => !prev)
+        }
+      ]
+    });
+  }, [handleCreateNewTextFile, isGroupLocked, showContextMenu]);
 
   useKeyboardShortcuts({
     onSave: handleSave,
@@ -630,6 +709,7 @@ function AppInner() {
 
 
       if (matchesShortcut("commandPalette", e)) { e.preventDefault(); setShowCommandPalette(p=>!p); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") { e.preventDefault(); handleCreateNewTextFile(); }
       else if (matchesShortcut("settings", e)) { e.preventDefault(); handleOpenSettings(); }
       else if (matchesShortcut("keybindings", e)) { e.preventDefault(); setShowKeybindings(true); }
       else if (matchesShortcut("toggleAi", e)) { e.preventDefault(); setShowRightAiSidebar(p=>!p); }
@@ -2215,7 +2295,7 @@ function AppInner() {
 
         <div className="resizer-x" style={s.resizerX} onMouseDown={e => { e.preventDefault(); draggingRef.current = "sidebar"; document.body.style.cursor = "col-resize"; }} onDoubleClick={() => { setShowPrimarySidebar(true); setSidebarWidth(240); }} title="Drag to resize sidebar, double-click to reset, drag past edge to collapse" />
 
-        <div style={{...s.center, flexDirection: settings.terminalPosition === "right" ? "row" : "column"}} onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+        <div style={{...s.center, flexDirection: settings.terminalPosition === "right" ? "row" : "column"}} onDragOver={e => e.preventDefault()} onDrop={handleDrop} onContextMenu={handleOpenWorkspaceContextMenu}>
           <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
           {tabs.length > 0 && (
             <div style={s.tabBar}>
@@ -2268,6 +2348,28 @@ function AppInner() {
 
               {/* Top Right Tab Controls matching Screenshot 2 & 3 */}
               <div style={{ display: "flex", alignItems: "center", height: "100%", paddingRight: "8px", gap: "2px", flexShrink: 0, position: "relative" }}>
+                {isGroupLocked && (
+                  <button
+                    style={{
+                      background: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                      color: "#f87171",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      borderRadius: "4px",
+                      padding: "2px 6px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      marginRight: "4px"
+                    }}
+                    onClick={() => setIsGroupLocked(false)}
+                    title="Editor group is locked. Click to unlock."
+                  >
+                    🔒 Locked Group
+                  </button>
+                )}
                 {/* Split Editor Button */}
                 <button
                   className="hover-scale"
@@ -2348,55 +2450,30 @@ function AppInner() {
                         {
                           label: "Close All",
                           shortcut: "Ctrl+K W",
-                          onClick: () => {
-                            setTabs([]);
-                            setActiveTabIndex(0);
-                          },
+                          onClick: () => setTabs([]),
                         },
                         {
                           label: "Close Saved",
-                          shortcut: "Ctrl+K U",
-                          onClick: () => {
-                            setTabs(prev => prev.filter(t => t.isDirty));
-                            setActiveTabIndex(0);
-                          },
+                          onClick: () => setTabs(prev => prev.filter(t => t.isDirty)),
                         },
                         { separator: true },
                         {
-                          label: `${previewMode ? "✓  " : "    "}Enable Preview Editors`,
-                          onClick: () => setPreviewMode(prev => !prev),
-                        },
-                        { separator: true },
-                        {
-                          label: `${groupLocked ? "✓  " : "    "}Lock Group`,
-                          onClick: () => setGroupLocked(prev => !prev),
-                        },
-                        { separator: true },
-                        {
-                          label: "Configure Editors",
-                          onClick: () => api()?.openSettingsWindow?.(),
-                        },
+                          label: "Toggle Split Editor",
+                          shortcut: "Ctrl+\\",
+                          onClick: () => setIsSplit(p => !p),
+                        }
                       ]
                     });
                   }}
-                  title="More Editor Actions..."
+                  title="More Actions..."
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg>
                 </button>
               </div>
             </div>
           )}
 
-          {activeTab && (
-            <Breadcrumb
-              filePath={activeTab.filePath}
-              repoPath={repoPath}
-              cursorSymbol={cursorSymbol}
-              onFind={() => activeEditorRef.current?.getAction?.("actions.find")?.run()}
-            />
-          )}
-
-          <div style={s.editorArea}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
             {showInlineAi && (
               <InlineAiTool
                 onExplain={() => {}}
@@ -2414,6 +2491,15 @@ function AppInner() {
               />
             )}
 
+            {activeTab && (
+              <Breadcrumb
+                filePath={activeTab.filePath}
+                repoPath={repoPath}
+                cursorSymbol={cursorSymbol}
+                onFind={() => activeEditorRef.current?.getAction?.("actions.find")?.run()}
+              />
+            )}
+
             {activeSidebar === "preview" ? (
               <WebPreviewPanel onClose={() => setActiveSidebar("explorer")} />
             ) : showMergeConflict ? (
@@ -2421,7 +2507,12 @@ function AppInner() {
             ) : activeDiff ? (
               <DiffViewer filePath={activeDiff.filePath} diffText={activeDiff.diffText} onClose={()=>setActiveDiff(null)}/>
             ) : tabs.length > 0 ? (
-              <div style={{ display: "flex", width: "100%", height: "100%" }}>
+              <div style={{
+                display: "flex",
+                width: "100%",
+                height: "100%",
+                flexDirection: splitDirection === "up" ? "column-reverse" : splitDirection === "down" ? "column" : splitDirection === "left" ? "row-reverse" : "row"
+              }}>
                 <div style={{ flex: 1, borderRight: isSplit ? "1px solid #27272a" : "none", height: "100%", overflow: "auto" }}>
                   {activeTab && (
                       activeTab.tabType === "extension-detail" ? (
@@ -2478,13 +2569,13 @@ function AppInner() {
                         />
                       )
                     ) : (
-                      <div style={s.splitPlaceholder}>Select tab to view in split pane</div>
+                      <div style={s.splitPlaceholder} onContextMenu={handleOpenWorkspaceContextMenu}>Select tab to view in split pane</div>
                     )}
                   </div>
                 )}
               </div>
             ) : (
-              <div style={s.welcome}>
+              <div style={s.welcome} onContextMenu={handleOpenWorkspaceContextMenu}>
                 <div style={s.welcomeContent}>
                   <img src={logoImg} alt="Atlas" style={s.welcomeLogo}/>
                   <h2 style={s.welcomeH2}>Atlas Studio</h2>

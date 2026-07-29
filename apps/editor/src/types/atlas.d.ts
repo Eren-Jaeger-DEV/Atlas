@@ -65,7 +65,7 @@ export interface AtlasAPI {
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
   windowClose: () => Promise<void>;
-  windowIsMaximized: () => Promise<boolean>;
+  newWindow: (options?: { profile?: string }) => Promise<{ success: boolean }>;
   onMenuAction: (handler: (action: string) => void) => () => void;
 
   getSystemUserInfo: () => Promise<{ username: string; homedir: string; platform: string; hostname: string }>;

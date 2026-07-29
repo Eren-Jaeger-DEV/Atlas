@@ -128,6 +128,23 @@ export function useWorkspaceTabs() {
     });
   }, []);
 
+  const handleCreateNewTextFile = useCallback(() => {
+    const filename = `Untitled-${untitledCounterRef.current}.txt`;
+    untitledCounterRef.current += 1;
+    const newTab: EditorTab = {
+      filePath: filename,
+      content: "",
+      language: "plaintext",
+      isDirty: true,
+      tabType: "file"
+    };
+    setTabs((prev) => {
+      const next = [...prev, newTab];
+      setActiveTabIndex(next.length - 1);
+      return next;
+    });
+  }, []);
+
   return {
     tabs,
     setTabs,
@@ -140,6 +157,7 @@ export function useWorkspaceTabs() {
     handleSave,
     handleCloseTab,
     handleOpenFile,
-    handleOpenExtensionDetail
+    handleOpenExtensionDetail,
+    handleCreateNewTextFile
   };
 }
