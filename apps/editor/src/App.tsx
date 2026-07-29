@@ -293,11 +293,8 @@ function AppInner() {
       const target = e.target as HTMLElement;
       if (
         !target ||
-        target.closest("input") ||
-        target.closest("textarea") ||
-        target.closest(".monaco-editor") ||
-        target.closest("button") ||
-        target.closest("[data-custom-context-menu]")
+        (target.tagName === "INPUT" && (target as HTMLInputElement).type === "text") ||
+        target.closest("#atlas-custom-context-menu")
       ) {
         return;
       }

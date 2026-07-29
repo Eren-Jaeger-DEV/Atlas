@@ -44,6 +44,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
+      if (e.button === 2) return;
       const target = e.target as HTMLElement;
       if (target && target.closest("#atlas-custom-context-menu")) return;
       hideContextMenu();
@@ -54,13 +55,13 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
 
     if (menu) {
       const timer = setTimeout(() => {
-        document.addEventListener("pointerdown", handleGlobalClick);
-      }, 10);
+        document.addEventListener("mousedown", handleGlobalClick);
+      }, 50);
       document.addEventListener("keydown", handleGlobalEsc);
 
       return () => {
         clearTimeout(timer);
-        document.removeEventListener("pointerdown", handleGlobalClick);
+        document.removeEventListener("mousedown", handleGlobalClick);
         document.removeEventListener("keydown", handleGlobalEsc);
       };
     }
