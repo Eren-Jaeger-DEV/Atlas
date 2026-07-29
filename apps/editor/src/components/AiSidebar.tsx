@@ -703,9 +703,19 @@ export function AiSidebar({ repoPath, activeFilePath, activeContent, openTabs, c
 
   const handleModelChange = (modelVal: string) => {
     setSelectedModel(modelVal);
+    const routingModels = [
+      "claude-opus-4-8", "claude-sonnet-4-6", "deepseek-v4-flash", "deepseek-v4-pro",
+      "glm-5.2", "glm-5.2-nitro", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra",
+      "kimi-k2.6", "kimi-k2.6-nitro", "kimi-k2.7-code", "kimi-k2.7-code-nitro",
+      "nemotron-3-ultra", "qwen3.5-9b"
+    ];
+    const newProvider = routingModels.includes(modelVal) ? "routing.run" : currentProvider;
+    if (newProvider !== currentProvider) {
+      setCurrentProvider(newProvider);
+    }
     const api = window.atlasAPI;
     if (api?.updateSettings) {
-      api.updateSettings({ aiModel: modelVal });
+      api.updateSettings({ aiModel: modelVal, aiProvider: newProvider });
     }
   };
 
