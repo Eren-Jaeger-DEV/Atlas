@@ -72,19 +72,42 @@ export class AtlascordPresenceEngine {
       .replace(/\{agentState\}/g, agentState)
       .replace(/\{health\}/g, health);
 
+    const langKeyMap: Record<string, string> = {
+      TYPESCRIPT: "typescript",
+      TSX: "react",
+      JAVASCRIPT: "javascript",
+      JSX: "react",
+      PYTHON: "python",
+      CPP: "cpp",
+      C: "c",
+      HTML: "html",
+      CSS: "css",
+      JSON: "json",
+      MARKDOWN: "markdown",
+      RUST: "rust",
+      GO: "go",
+      JAVA: "java",
+      PHP: "php",
+      RUBY: "ruby"
+    };
+
+    const langAssetKey = langKeyMap[language] || language.toLowerCase();
+    const largeImageKey = params.file ? langAssetKey : "atlas-logo";
+    const largeImageText = params.file ? `Editing ${language} file` : `Atlas Studio — ${workspace}`;
+
     const smallImageKey = params.agentState && params.agentState !== "IDLE"
       ? "agent-active"
-      : language.toLowerCase();
+      : "atlas-logo";
 
     const smallImageText = params.agentState && params.agentState !== "IDLE"
       ? `AI Agent: ${agentState}`
-      : `Language: ${language}`;
+      : `Atlas Studio IDE`;
 
     return {
       details,
       state,
-      largeImageKey: "atlas-logo",
-      largeImageText: `Atlas Studio IDE — ${workspace}`,
+      largeImageKey,
+      largeImageText,
       smallImageKey,
       smallImageText,
       startTimestamp: this.startTimestamp,
