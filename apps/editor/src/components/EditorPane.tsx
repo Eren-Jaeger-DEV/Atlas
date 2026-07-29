@@ -843,6 +843,49 @@ export function EditorPane({
           label: "Command Palette",
           shortcut: "Ctrl+Shift+P",
           onClick: () => editor.getAction("editor.action.quickCommand")?.run()
+        },
+        { separator: true },
+        {
+          label: "New Text File",
+          shortcut: "Ctrl+N",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:new-text-file"))
+        },
+        {
+          label: "Open File...",
+          shortcut: "Ctrl+P",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:open-command-palette"))
+        },
+        {
+          label: "New Terminal",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:new-terminal"))
+        },
+        { separator: true },
+        {
+          label: "Split Up",
+          shortcut: "Ctrl+K Ctrl+\\",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:split-editor", { detail: "up" }))
+        },
+        {
+          label: "Split Down",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:split-editor", { detail: "down" }))
+        },
+        {
+          label: "Split Left",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:split-editor", { detail: "left" }))
+        },
+        {
+          label: "Split Right",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:split-editor", { detail: "right" }))
+        },
+        { separator: true },
+        {
+          label: "New Window",
+          onClick: () => window.atlasAPI?.newWindow?.()
+        },
+        { separator: true },
+        {
+          label: "Lock Group",
+          onClick: () => window.dispatchEvent(new CustomEvent("atlas:toggle-group-lock"))
         }
       ];
 

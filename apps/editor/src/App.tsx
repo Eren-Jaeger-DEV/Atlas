@@ -268,6 +268,36 @@ function AppInner() {
     });
   }, [handleCreateNewTextFile, isGroupLocked, showContextMenu]);
 
+  useEffect(() => {
+    const handleNewFile = () => handleCreateNewTextFile();
+    const handleCmdPal = () => setShowCommandPalette(true);
+    const handleTerm = () => {
+      setBottomTab("terminal");
+      setShowBottomPanel(true);
+      setTermAddTrigger((n) => n + 1);
+    };
+    const handleSplit = (e: Event) => {
+      const dir = (e as CustomEvent).detail || "right";
+      setSplitDirection(dir);
+      setIsSplit(true);
+    };
+    const handleLock = () => setIsGroupLocked((prev) => !prev);
+
+    window.addEventListener("atlas:new-text-file", handleNewFile);
+    window.addEventListener("atlas:open-command-palette", handleCmdPal);
+    window.addEventListener("atlas:new-terminal", handleTerm);
+    window.addEventListener("atlas:split-editor", handleSplit);
+    window.addEventListener("atlas:toggle-group-lock", handleLock);
+
+    return () => {
+      window.removeEventListener("atlas:new-text-file", handleNewFile);
+      window.removeEventListener("atlas:open-command-palette", handleCmdPal);
+      window.removeEventListener("atlas:new-terminal", handleTerm);
+      window.removeEventListener("atlas:split-editor", handleSplit);
+      window.removeEventListener("atlas:toggle-group-lock", handleLock);
+    };
+  }, [handleCreateNewTextFile]);
+
   useKeyboardShortcuts({
     onSave: handleSave,
     onOpenFolder: () => handleSelectRepo(),
@@ -2143,7 +2173,7 @@ function AppInner() {
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
 
   return (
-    <div style={s.root}>
+    <div style={s.root} onContextMenu={handleOpenWorkspaceContextMenu}>
 
       <MenuBar
         menus={menus}
