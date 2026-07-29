@@ -194,6 +194,16 @@ function AppInner() {
   const [settings, setSettings]       = useState<EditorSettings>(DEFAULT_SETTINGS);
 
   const handleOpenWorkspaceContextMenu = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      !target ||
+      (target.tagName === "INPUT" && (target as HTMLInputElement).type === "text") ||
+      target.tagName === "TEXTAREA" ||
+      target.closest("#atlas-custom-context-menu") ||
+      target.closest("[data-custom-context-menu]")
+    ) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
 
@@ -289,33 +299,14 @@ function AppInner() {
     window.addEventListener("atlas:split-editor", handleSplit);
     window.addEventListener("atlas:toggle-group-lock", handleLock);
 
-    const handleGlobalContextMenu = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        !target ||
-        (target.tagName === "INPUT" && (target as HTMLInputElement).type === "text") ||
-        target.tagName === "TEXTAREA" ||
-        target.closest("#atlas-custom-context-menu") ||
-        target.closest("[data-custom-context-menu]")
-      ) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      handleOpenWorkspaceContextMenu(e as any);
-    };
-
-    window.addEventListener("contextmenu", handleGlobalContextMenu, true);
-
     return () => {
       window.removeEventListener("atlas:new-text-file", handleNewFile);
       window.removeEventListener("atlas:open-command-palette", handleCmdPal);
       window.removeEventListener("atlas:new-terminal", handleTerm);
       window.removeEventListener("atlas:split-editor", handleSplit);
       window.removeEventListener("atlas:toggle-group-lock", handleLock);
-      window.removeEventListener("contextmenu", handleGlobalContextMenu, true);
     };
-  }, [handleCreateNewTextFile, handleOpenWorkspaceContextMenu]);
+  }, [handleCreateNewTextFile]);
 
   useKeyboardShortcuts({
     onSave: handleSave,
@@ -2192,7 +2183,7 @@ function AppInner() {
   const nodrag: React.CSSProperties = { WebkitAppRegion:"no-drag" } as any;
 
   return (
-    <div style={s.root} onContextMenu={handleOpenWorkspaceContextMenu}>
+    <div style={s.root}>
 
       <MenuBar
         menus={menus}
