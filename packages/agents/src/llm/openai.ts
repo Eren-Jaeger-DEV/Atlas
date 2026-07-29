@@ -91,7 +91,7 @@ export class OpenAIProvider implements ILLMProvider {
     let fullContent = "";
     const accumToolCalls: Map<number, { id: string; name: string; arguments: string }> = new Map();
 
-    const fallbackModels = ["deepseek-v4-pro", "kimi-k2.7-code", "gpt-5.6-luna"];
+    const fallbackModels = ["deepseek-v4-pro", "kimi-k2.7-code", "kimi-k2.6", "glm-5.2", "qwen3.5-9b"];
     const tryModels = [model, ...fallbackModels.filter((m) => m !== model)];
 
     let stream: any = null;
