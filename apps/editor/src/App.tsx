@@ -2261,7 +2261,6 @@ function AppInner() {
                 {id:"history",   lbl:"History", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
                 {id:"timeline",  lbl:"Timeline",icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
                 {id:"extensions",lbl:"Market",  icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
-                {id:"ai",        lbl:"Agent",   icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="15" x2="23" y2="15"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="15" x2="4" y2="15"/></svg>},
                 {id:"parallel",  lbl:"Parallel Agents", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><line x1="5" y1="3" x2="5" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="19" y1="3" x2="19" y2="21"/><line x1="5" y1="7" x2="12" y2="7"/><line x1="12" y1="13" x2="19" y2="13"/><circle cx="5" cy="7" r="1.5" fill="currentColor"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/><circle cx="19" cy="17" r="1.5" fill="currentColor"/></svg>},
               ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
                 <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
@@ -2313,31 +2312,6 @@ function AppInner() {
               {activeSidebar==="parallel"   && <ParallelAgentsDashboard repoPath={repoPath} />}
               {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
               {activeSidebar==="extensions" && <ExtensionGallery onOpenExtensionDetail={handleOpenExtensionDetail} />}
-              {activeSidebar==="ai"         && (
-                <div style={s.agentPane}>
-                  <p style={s.paneHdr}>ATLAS AI AGENT</p>
-                  <textarea style={s.agentArea} placeholder="Describe task..." value={aiGoal} onChange={e=>setAiGoal(e.target.value)}/>
-                  <button style={s.agentBtn} disabled={aiRunning} onClick={async()=>{
-                    if(!aiGoal.trim()||!repoPath) return;
-                    const a=api(); if(!a?.run) return;
-                    setAiRunning(true);
-                    logToOutput("Agent", `Starting: ${aiGoal.slice(0,80)}${aiGoal.length>80?"...":""}`, "info");
-                    try {
-                      const r=await a.run(aiGoal);
-                      const msg = r.error ? `[FAIL] ${r.error}` : "[PASS] Done";
-                      setAiEvents(p=>[...p, msg]);
-                      logToOutput("Agent", msg, r.error ? "error" : "success");
-                    }
-                    catch(e){
-                      setAiEvents(p=>[...p,`[FAIL] ${e}`]);
-                      logToOutput("Agent", `[FAIL] ${e}`, "error");
-                    }
-                    setAiRunning(false);
-                  }}>
-                    {aiRunning?"Running...":"Run (Enter)"}
-                  </button>
-                </div>
-              )}
             </motion.aside>
           )}
         </AnimatePresence>
