@@ -67,6 +67,13 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     }
   }, [menu]);
 
+  const itemHeight = 30;
+  const menuHeight = menu ? menu.items.length * itemHeight + 16 : 200;
+  const menuWidth = 210;
+
+  const topPos = menu ? (menu.y + menuHeight > window.innerHeight ? Math.max(10, window.innerHeight - menuHeight) : Math.max(10, menu.y)) : 10;
+  const leftPos = menu ? (menu.x + menuWidth > window.innerWidth ? Math.max(10, window.innerWidth - menuWidth) : Math.max(10, menu.x)) : 10;
+
   return (
     <ContextMenuContext.Provider value={{ showContextMenu, hideContextMenu }}>
       {children}
@@ -80,18 +87,20 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
             transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
             style={{
               position: "fixed",
-              top: Math.max(10, Math.min(menu.y, window.innerHeight - (menu.items.length * 32 + 20))),
-              left: Math.max(10, Math.min(menu.x, window.innerWidth - 220)),
-              width: "210px",
-              backgroundColor: "var(--bg-glass-strong, rgba(14, 14, 18, 0.95))",
+              top: `${topPos}px`,
+              left: `${leftPos}px`,
+              width: `${menuWidth}px`,
+              backgroundColor: "rgba(18, 18, 22, 0.96)",
               backdropFilter: "blur(20px) saturate(1.5)",
               WebkitBackdropFilter: "blur(20px) saturate(1.5)",
-              border: "1px solid var(--border-strong, #27272a)",
+              border: "1px solid #3f3f46",
               borderRadius: "8px",
-              boxShadow: "var(--shadow-lg), 0 20px 40px rgba(0, 0, 0, 0.6)",
-              zIndex: 999999,
+              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.75)",
+              zIndex: 9999999,
               padding: "5px",
-              fontFamily: "var(--font-ui)"
+              fontFamily: "var(--font-ui, system-ui, sans-serif)",
+              color: "#fafafa",
+              pointerEvents: "auto"
             }}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
