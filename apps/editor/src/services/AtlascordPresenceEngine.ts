@@ -72,6 +72,15 @@ export class AtlascordPresenceEngine {
       .replace(/\{agentState\}/g, agentState)
       .replace(/\{health\}/g, health);
 
+    // Infer language key from file extension if available
+    let ext = "";
+    if (params.file) {
+      const parts = params.file.split(".");
+      if (parts.length > 1) {
+        ext = parts.pop()?.toLowerCase() || "";
+      }
+    }
+
     const langKeyMap: Record<string, string> = {
       TYPESCRIPT: "typescript",
       TSX: "react",
@@ -79,19 +88,75 @@ export class AtlascordPresenceEngine {
       JSX: "react",
       PYTHON: "python",
       CPP: "cpp",
+      CXX: "cpp",
       C: "c",
+      CSHARP: "csharp",
+      CS: "csharp",
+      "C#": "csharp",
+      JAVA: "java",
+      GO: "go",
+      GOLANG: "go",
+      RUST: "rust",
+      RS: "rust",
+      KOTLIN: "kotlin",
+      KT: "kotlin",
+      SWIFT: "swift",
+      PHP: "php",
+      RUBY: "ruby",
+      RB: "ruby",
+      DART: "dart",
+      VUE: "vue",
+      SVELTE: "svelte",
+      BASH: "bash",
+      SHELL: "bash",
+      SH: "bash",
+      SQL: "sql",
+      DOCKER: "docker",
+      DOCKERFILE: "docker",
+      YAML: "yaml",
+      YML: "yaml",
       HTML: "html",
       CSS: "css",
       JSON: "json",
-      MARKDOWN: "markdown",
-      RUST: "rust",
-      GO: "go",
-      JAVA: "java",
-      PHP: "php",
-      RUBY: "ruby"
+      MARKDOWN: "markdown"
     };
 
-    const langAssetKey = langKeyMap[language] || language.toLowerCase();
+    const extKeyMap: Record<string, string> = {
+      ts: "typescript",
+      tsx: "react",
+      js: "javascript",
+      jsx: "react",
+      py: "python",
+      cpp: "cpp",
+      cxx: "cpp",
+      cc: "cpp",
+      hpp: "cpp",
+      c: "c",
+      h: "c",
+      cs: "csharp",
+      java: "java",
+      go: "go",
+      rs: "rust",
+      kt: "kotlin",
+      kts: "kotlin",
+      swift: "swift",
+      php: "php",
+      rb: "ruby",
+      dart: "dart",
+      vue: "vue",
+      svelte: "svelte",
+      sh: "bash",
+      bash: "bash",
+      zsh: "bash",
+      sql: "sql",
+      dockerfile: "docker",
+      yml: "yaml",
+      yaml: "yaml",
+      md: "markdown",
+      json: "json"
+    };
+
+    const langAssetKey = langKeyMap[language] || extKeyMap[ext] || language.toLowerCase();
     const largeImageKey = params.file ? langAssetKey : "atlas-logo";
     const largeImageText = params.file ? `Editing ${language} file` : `Atlas Studio — ${workspace}`;
 
