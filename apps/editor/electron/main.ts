@@ -2199,20 +2199,6 @@ ipcMain.handle("atlas:uninstall-plugin", async (_event, pluginId: string) => {
     return false;
   }
 });
-    `;
-    await writeFile(path.join(targetPath, "main.js"), mockMainJs, "utf-8");
-    manifest.main = "main.js";
-    
-    await writeFile(path.join(targetPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
-
-    // Attempt to load it immediately
-    await loadExtension(targetPath, manifest);
-    return true;
-  } catch (e) {
-    console.error("[ExtensionRuntime] Failed to install marketplace extension:", e);
-    throw e;
-  }
-});
 
 ipcMain.handle("atlas:extension-execute-command", async (_event, id: string, ...args: any[]) => {
   const handler = extensionCommands.get(id);
