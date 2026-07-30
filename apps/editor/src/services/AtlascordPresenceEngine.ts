@@ -27,6 +27,10 @@ export interface AtlascordPresencePayload {
   largeImageText: string;
   smallImageKey: string;
   smallImageText: string;
+  large_image?: string;
+  large_text?: string;
+  small_image?: string;
+  small_text?: string;
   startTimestamp: number;
 }
 
@@ -156,9 +160,9 @@ export class AtlascordPresenceEngine {
       json: "json"
     };
 
-    const langAssetKey = langKeyMap[language] || extKeyMap[ext] || language.toLowerCase();
+    const langAssetKey = (ext && extKeyMap[ext]) || langKeyMap[language] || language.toLowerCase();
     const largeImageKey = params.file ? langAssetKey : "atlas-logo";
-    const largeImageText = params.file ? `Editing ${language} file` : `Atlas Studio — ${workspace}`;
+    const largeImageText = params.file ? `Editing ${file}` : `Atlas Studio — ${workspace}`;
 
     const smallImageKey = params.agentState && params.agentState !== "IDLE"
       ? "agent-active"
@@ -175,6 +179,10 @@ export class AtlascordPresenceEngine {
       largeImageText,
       smallImageKey,
       smallImageText,
+      large_image: largeImageKey,
+      large_text: largeImageText,
+      small_image: smallImageKey,
+      small_text: smallImageText,
       startTimestamp: this.startTimestamp,
     };
   }
