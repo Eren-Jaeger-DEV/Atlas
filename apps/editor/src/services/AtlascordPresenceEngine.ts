@@ -31,6 +31,15 @@ export interface AtlascordPresencePayload {
   large_text?: string;
   small_image?: string;
   small_text?: string;
+  assets?: {
+    large_image: string;
+    large_text: string;
+    small_image: string;
+    small_text: string;
+  };
+  timestamps?: {
+    start: number;
+  };
   startTimestamp: number;
 }
 
@@ -183,6 +192,15 @@ export class AtlascordPresenceEngine {
       large_text: largeImageText,
       small_image: smallImageKey,
       small_text: smallImageText,
+      assets: {
+        large_image: largeImageKey,
+        large_text: largeImageText,
+        small_image: smallImageKey,
+        small_text: smallImageText,
+      },
+      timestamps: {
+        start: this.startTimestamp,
+      },
       startTimestamp: this.startTimestamp,
     };
   }
