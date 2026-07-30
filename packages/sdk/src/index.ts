@@ -1,20 +1,21 @@
 /**
- * @atlas/sdk — Official Atlas Extension SDK Entry Point
+ * @atlas/sdk — Official Atlas Plugin SDK Entry Point
  */
 
-import type { AtlasExtension } from "./types.js";
+import type { AtlasPlugin } from "./types.js";
 
 export type {
-  ExtensionPermission,
-  ExtensionManifest,
-  ExtensionContext,
-  AtlasExtension,
+  PluginPermission,
+  PluginManifest,
+  PluginContext,
+  LanguageContribution,
+  AtlasPlugin,
 } from "./types.js";
 
 export class AtlasSDK {
-  public static readonly VERSION = "0.1.0";
+  public static readonly VERSION = "1.0.0";
 
-  public static defineExtension(ext: AtlasExtension): AtlasExtension {
-    return ext;
+  public static definePlugin(plugin: AtlasPlugin): AtlasPlugin {
+    return plugin;
   }
 }

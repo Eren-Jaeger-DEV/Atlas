@@ -2106,128 +2106,99 @@ ipcMain.handle("atlas:generate-sbom", async () => {
   return SecurityAuditService.generateSbom(results);
 });
 
-// List real installed extensions from ~/.atlas/extensions/
-ipcMain.handle("atlas:list-extensions", async () => {
-  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
+// List real installed plugins from ~/.atlas/plugins/
+async function getPluginsDir() {
+  return path.join(app.getPath("userData"), "..", "atlas", "plugins");
+}
+
+ipcMain.handle("atlas:list-plugins", async () => {
+  const pluginsDir = await getPluginsDir();
   try {
-    const entries = await readdir(extDir, { withFileTypes: true });
+    const entries = await readdir(pluginsDir, { withFileTypes: true });
     const manifests = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const mPath = path.join(extDir, entry.name, "manifest.json");
+      const pPath = path.join(pluginsDir, entry.name, "plugin.json");
+      const mPath = path.join(pluginsDir, entry.name, "manifest.json");
       try {
-        const raw = await readFile(mPath, "utf-8");
+        let raw = "";
+        try {
+          raw = await readFile(pPath, "utf-8");
+        } catch {
+          raw = await readFile(mPath, "utf-8");
+        }
         manifests.push({ dirName: entry.name, ...JSON.parse(raw) });
-      } catch { /* skip malformed or missing manifest */ }
+      } catch { /* skip malformed */ }
     }
     return manifests;
   } catch {
-    return []; // Extensions directory doesn't exist yet — no extensions installed
+    return [];
   }
 });
 
-// Get real metadata for a single extension: README content, dir size, and package.json fields
-ipcMain.handle("atlas:extension-meta", async (_event, dirName: string) => {
-  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
-  const extPath = path.join(extDir, dirName);
-
-  // Real README content
-  let readme: string | null = null;
-  for (const candidate of ["README.md", "readme.md", "Readme.md"]) {
-    try {
-      readme = await readFile(path.join(extPath, candidate), "utf-8");
-      break;
-    } catch { /* try next */ }
-  }
-
-  // Real directory size (recursive sum of file sizes)
-  async function getDirSize(dirPath: string): Promise<number> {
-    let total = 0;
-    try {
-      const entries = await readdir(dirPath, { withFileTypes: true });
-      for (const e of entries) {
-        const full = path.join(dirPath, e.name);
-        if (e.isDirectory()) {
-          total += await getDirSize(full);
-        } else {
-          try {
-            const s = await stat(full);
-            total += s.size;
-          } catch { /* skip */ }
+ipcMain.handle("atlas:list-extensions", async () => {
+  const pluginsDir = await getPluginsDir();
+  try {
+    const entries = await readdir(pluginsDir, { withFileTypes: true });
+    const manifests = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const pPath = path.join(pluginsDir, entry.name, "plugin.json");
+      const mPath = path.join(pluginsDir, entry.name, "manifest.json");
+      try {
+        let raw = "";
+        try {
+          raw = await readFile(pPath, "utf-8");
+        } catch {
+          raw = await readFile(mPath, "utf-8");
         }
-      }
-    } catch { /* skip */ }
-    return total;
+        manifests.push({ dirName: entry.name, ...JSON.parse(raw) });
+      } catch { /* skip */ }
+    }
+    return manifests;
+  } catch {
+    return [];
   }
-  const sizeBytes = await getDirSize(extPath);
-  const sizeKB = (sizeBytes / 1024).toFixed(2);
-  const sizeStr = sizeBytes >= 1024 * 1024
-    ? `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
-    : `${sizeKB} KB`;
-
-  // Real package.json fields (repository, license, etc.)
-  let pkgJson: Record<string, any> = {};
-  try {
-    pkgJson = JSON.parse(await readFile(path.join(extPath, "package.json"), "utf-8"));
-  } catch { /* no package.json */ }
-
-  // Real manifest.json fields
-  let manifestJson: Record<string, any> = {};
-  try {
-    manifestJson = JSON.parse(await readFile(path.join(extPath, "manifest.json"), "utf-8"));
-  } catch { /* no manifest */ }
-
-  // Real file modification time as "last updated"
-  let lastUpdated: string | null = null;
-  try {
-    const mStat = await stat(path.join(extPath, "manifest.json"));
-    lastUpdated = mStat.mtime.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-  } catch { /* skip */ }
-
-  return {
-    readme,
-    sizeStr,
-    repository: pkgJson.repository?.url ?? manifestJson.repository ?? null,
-    license: pkgJson.license ?? manifestJson.license ?? null,
-    lastUpdated,
-    keywords: pkgJson.keywords ?? [],
-  };
 });
 
-ipcMain.handle("atlas:extension-install", async (_event, sourcePath: string) => {
-  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
-  const manifestPath = path.join(sourcePath, "manifest.json");
+ipcMain.handle("atlas:install-plugin", async (_event, sourcePath: string | any) => {
+  const pluginsDir = await getPluginsDir();
+  if (typeof sourcePath === "string") {
+    const pPath = path.join(sourcePath, "plugin.json");
+    const mPath = path.join(sourcePath, "manifest.json");
+    try {
+      let raw = "";
+      try {
+        raw = await readFile(pPath, "utf-8");
+      } catch {
+        raw = await readFile(mPath, "utf-8");
+      }
+      const manifest = JSON.parse(raw);
+      const targetPath = path.join(pluginsDir, manifest.id || manifest.name);
 
+      await mkdir(targetPath, { recursive: true });
+      await fsCp(sourcePath, targetPath, { recursive: true });
+      return true;
+    } catch (e) {
+      console.error("[PluginRuntime] Failed to install plugin:", e);
+      throw e;
+    }
+  }
+  return true;
+});
+
+ipcMain.handle("atlas:uninstall-plugin", async (_event, pluginId: string) => {
+  const pluginsDir = await getPluginsDir();
+  const targetPath = path.join(pluginsDir, pluginId);
   try {
-    const raw = await readFile(manifestPath, "utf-8");
-    const manifest = JSON.parse(raw);
-    const targetPath = path.join(extDir, manifest.id || manifest.name);
-
-    await mkdir(targetPath, { recursive: true });
-    await fsCp(sourcePath, targetPath, { recursive: true });
-
-    // Attempt to load it immediately
-    await loadExtension(targetPath, manifest);
+    const { rm } = await import("node:fs/promises");
+    await rm(targetPath, { recursive: true, force: true });
     return true;
   } catch (e) {
-    console.error("[ExtensionRuntime] Failed to install extension:", e);
-    throw e;
+    console.error("[PluginRuntime] Failed to uninstall plugin:", e);
+    return false;
   }
 });
-
-ipcMain.handle("atlas:extension-install-marketplace", async (_event, manifest: any) => {
-  const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
-  const targetPath = path.join(extDir, manifest.id || manifest.name);
-
-  try {
-    await mkdir(targetPath, { recursive: true });
-    
-    // Add dummy main.js
-    const mockMainJs = `
-      module.exports = {
-        activate: function(ctx) { console.log("${manifest.name} activated"); },
-        deactivate: function() { console.log("${manifest.name} deactivated"); }
-      };
     `;
     await writeFile(path.join(targetPath, "main.js"), mockMainJs, "utf-8");
     manifest.main = "main.js";

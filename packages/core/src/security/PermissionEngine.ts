@@ -1,72 +1,72 @@
 /**
  * PermissionEngine
  *
- * Enforces security permission checks for extensions (`workspace.read`, `workspace.write`, etc).
+ * Enforces security permission checks for plugins (`workspace.read`, `workspace.write`, `workspace.execute`, etc).
  * Features persistent state serialization and audit logging.
  */
 
-import type { ExtensionPermission } from "../types/extension.js";
+import type { PluginPermission } from "../types/plugin.js";
 
 export interface PermissionRequest {
-  extensionId: string;
-  extensionName?: string;
-  permissions: ExtensionPermission[];
+  pluginId: string;
+  pluginName?: string;
+  permissions: PluginPermission[];
   granted: boolean;
   timestamp: number;
 }
 
 export interface PermissionAuditRecord {
-  extensionId: string;
+  pluginId: string;
   action: "GRANT" | "REVOKE";
-  permissions: ExtensionPermission[];
+  permissions: PluginPermission[];
   timestamp: number;
 }
 
 export class PermissionEngine {
-  private grantedPermissions: Map<string, Set<ExtensionPermission>> = new Map();
+  private grantedPermissions: Map<string, Set<PluginPermission>> = new Map();
   private auditLog: PermissionAuditRecord[] = [];
 
-  public grantPermissions(extensionId: string, permissions: ExtensionPermission[]): void {
-    if (!this.grantedPermissions.has(extensionId)) {
-      this.grantedPermissions.set(extensionId, new Set());
+  public grantPermissions(pluginId: string, permissions: PluginPermission[]): void {
+    if (!this.grantedPermissions.has(pluginId)) {
+      this.grantedPermissions.set(pluginId, new Set());
     }
-    const set = this.grantedPermissions.get(extensionId)!;
+    const set = this.grantedPermissions.get(pluginId)!;
     permissions.forEach(p => set.add(p));
 
     this.auditLog.push({
-      extensionId,
+      pluginId,
       action: "GRANT",
       permissions: [...permissions],
       timestamp: Date.now(),
     });
   }
 
-  public revokePermissions(extensionId: string): void {
-    const existing = this.grantedPermissions.get(extensionId);
+  public revokePermissions(pluginId: string): void {
+    const existing = this.grantedPermissions.get(pluginId);
     if (existing) {
       this.auditLog.push({
-        extensionId,
+        pluginId,
         action: "REVOKE",
         permissions: Array.from(existing),
         timestamp: Date.now(),
       });
-      this.grantedPermissions.delete(extensionId);
+      this.grantedPermissions.delete(pluginId);
     }
   }
 
-  public hasPermission(extensionId: string, permission: ExtensionPermission): boolean {
-    const set = this.grantedPermissions.get(extensionId);
+  public hasPermission(pluginId: string, permission: PluginPermission): boolean {
+    const set = this.grantedPermissions.get(pluginId);
     return set ? set.has(permission) : false;
   }
 
-  public checkOrThrow(extensionId: string, permission: ExtensionPermission): void {
-    if (!this.hasPermission(extensionId, permission)) {
-      throw new Error(`[PermissionEngine] Extension '${extensionId}' lacks required permission '${permission}'`);
+  public checkOrThrow(pluginId: string, permission: PluginPermission): void {
+    if (!this.hasPermission(pluginId, permission)) {
+      throw new Error(`[PermissionEngine] Plugin '${pluginId}' lacks required permission '${permission}'`);
     }
   }
 
-  public getGrantedPermissions(extensionId: string): ExtensionPermission[] {
-    const set = this.grantedPermissions.get(extensionId);
+  public getGrantedPermissions(pluginId: string): PluginPermission[] {
+    const set = this.grantedPermissions.get(pluginId);
     return set ? Array.from(set) : [];
   }
 
@@ -97,8 +97,8 @@ export class PermissionEngine {
     return { allowed: true };
   }
 
-  public exportState(): { permissions: Record<string, ExtensionPermission[]>; auditLog: PermissionAuditRecord[] } {
-    const permissions: Record<string, ExtensionPermission[]> = {};
+  public exportState(): { permissions: Record<string, PluginPermission[]>; auditLog: PermissionAuditRecord[] } {
+    const permissions: Record<string, PluginPermission[]> = {};
     for (const [id, set] of this.grantedPermissions.entries()) {
       permissions[id] = Array.from(set);
     }
@@ -115,7 +115,7 @@ export class PermissionEngine {
     if (permissions && typeof permissions === "object") {
       for (const [id, perms] of Object.entries(permissions)) {
         if (Array.isArray(perms)) {
-          this.grantPermissions(id, perms as ExtensionPermission[]);
+          this.grantPermissions(id, perms as PluginPermission[]);
         }
       }
     }

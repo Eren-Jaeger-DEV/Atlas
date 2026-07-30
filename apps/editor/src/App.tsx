@@ -20,8 +20,8 @@ import { dapClient } from "./dap/DAPClient.js";
 import { AiSidebar } from "./components/AiSidebar.js";
 import { DependencyGraph } from "./components/DependencyGraph.js";
 import { ProjectHealth } from "./components/ProjectHealth.js";
-import { ExtensionGallery } from "./components/ExtensionGallery.js";
-import { ExtensionDetailView } from "./components/ExtensionDetailView.js";
+import { ForgeGallery } from "./components/ForgeGallery.js";
+import { ForgePluginDetail } from "./components/ForgePluginDetail.js";
 import { onLspStatusChange, LSPStatus } from "./lsp/LSPClient.js";
 import { GitHistoryPanel } from "./components/GitHistoryPanel.js";
 import { TimelinePanel } from "./components/TimelinePanel.js";
@@ -2300,7 +2300,7 @@ function AppInner() {
               {activeSidebar==="history"    && <GitHistoryPanel repoPath={repoPath}/>}
               {activeSidebar==="timeline"   && <TimelinePanel repoPath={repoPath}/>}
               {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
-              {activeSidebar==="extensions" && <ExtensionGallery onOpenExtensionDetail={handleOpenExtensionDetail} />}
+              {activeSidebar==="extensions" && <ForgeGallery onOpenPluginDetail={handleOpenExtensionDetail} />}
             </motion.aside>
           )}
         </AnimatePresence>
@@ -2528,9 +2528,9 @@ function AppInner() {
                 <div style={{ flex: 1, borderRight: isSplit ? "1px solid #27272a" : "none", height: "100%", overflow: "auto" }}>
                   {activeTab && (
                       activeTab.tabType === "extension-detail" ? (
-                        <ExtensionDetailView
-                          extension={activeTab.extensionData || { id: "atlascord", name: "Atlascord" }}
-                          onOpenSettings={handleOpenSettings}
+                        <ForgePluginDetail
+                          pluginData={activeTab.extensionData || { id: "atlas-lang-typescript", name: "TypeScript Language Support" }}
+                          onClose={() => handleCloseTab(activeTabIndex)}
                         />
                       ) : activeTab.isBinary ? (
                         <BinaryFileView onOpenAnyway={async () => {

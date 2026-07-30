@@ -1,0 +1,18 @@
+{
+  "id": "atlas-lang-typescript",
+  "name": "TypeScript & JavaScript Support",
+  "version": "1.0.0",
+  "description": "Provides TypeScript & JavaScript language features, IntelliSense, and debugging.",
+  "publisher": "atlas-core",
+  "main": "index.js",
+  "contributes": {
+    "languages": [
+      { "id": "typescript", "extensions": [".ts", ".tsx"], "aliases": ["TypeScript"] },
+      { "id": "javascript", "extensions": [".js", ".jsx"], "aliases": ["JavaScript"] }
+    ],
+    "commands": [
+      { "id": "typescript.restartLsp", "title": "TypeScript: Restart Language Server" }
+    ]
+  },
+  "permissions": ["workspace.read", "workspace.execute"]
+}

@@ -1,0 +1,28 @@
+{
+  "plugins": [
+    {
+      "id": "atlas-lang-typescript",
+      "name": "TypeScript & JavaScript Support",
+      "latestVersion": "1.0.0",
+      "description": "Provides TypeScript & JavaScript language features, IntelliSense, and debugging.",
+      "publisher": "atlas-core",
+      "verified": true
+    },
+    {
+      "id": "atlas-lang-python",
+      "name": "Python Language Support",
+      "latestVersion": "1.0.0",
+      "description": "Adds Python IntelliSense and debugging via Pyright and Debugpy.",
+      "publisher": "atlas-core",
+      "verified": true
+    },
+    {
+      "id": "atlas-viewer-markdown",
+      "name": "Markdown Preview Viewer",
+      "latestVersion": "1.0.0",
+      "description": "Live Markdown rendering preview for .md and .markdown files.",
+      "publisher": "atlas-core",
+      "verified": true
+    }
+  ]
+}

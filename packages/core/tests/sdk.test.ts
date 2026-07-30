@@ -1,58 +1,57 @@
 import { describe, it, expect, vi } from "vitest";
-import { PermissionEngine, ExtensionManager, ExtensionHost, CommandService, EventBus } from "../src/index.js";
-import type { ExtensionManifest, AtlasExtensionModule } from "../src/index.js";
+import { PermissionEngine, PluginManager, PluginHost, CommandService, EventBus } from "../src/index.js";
+import type { PluginManifest, AtlasPluginModule } from "../src/index.js";
 
-describe("Extension SDK & Marketplace Foundation", () => {
+describe("Plugin SDK & Marketplace Foundation", () => {
   it("should grant and check security permissions via PermissionEngine", () => {
     const permissions = new PermissionEngine();
 
-    expect(permissions.hasPermission("ext.git", "workspace.read")).toBe(false);
+    expect(permissions.hasPermission("plugin.git", "workspace.read")).toBe(false);
 
-    permissions.grantPermissions("ext.git", ["workspace.read", "terminal.execute"]);
-    expect(permissions.hasPermission("ext.git", "workspace.read")).toBe(true);
-    expect(permissions.hasPermission("ext.git", "workspace.write")).toBe(false);
+    permissions.grantPermissions("plugin.git", ["workspace.read", "workspace.execute"]);
+    expect(permissions.hasPermission("plugin.git", "workspace.read")).toBe(true);
+    expect(permissions.hasPermission("plugin.git", "workspace.write")).toBe(false);
 
-    expect(() => permissions.checkOrThrow("ext.git", "workspace.write")).toThrow();
+    expect(() => permissions.checkOrThrow("plugin.git", "workspace.write")).toThrow();
 
-    permissions.revokePermissions("ext.git");
-    expect(permissions.hasPermission("ext.git", "workspace.read")).toBe(false);
+    permissions.revokePermissions("plugin.git");
+    expect(permissions.hasPermission("plugin.git", "workspace.read")).toBe(false);
   });
 
-  it("should install and manage extensions via ExtensionManager", async () => {
+  it("should install and manage plugins via PluginManager", async () => {
     const bus = new EventBus();
     const cmd = new CommandService(bus);
-    const host = new ExtensionHost(cmd, bus);
     const permissions = new PermissionEngine();
-    const manager = new ExtensionManager(permissions, host);
+    const host = new PluginHost(cmd, permissions, bus);
+    const manager = new PluginManager(permissions, host);
 
     const activateFn = vi.fn((ctx: any) => {
-      ctx.registerCommand("myext.run", "Run My Ext", () => "hello");
+      ctx.registerCommand("myplugin.run", "Run My Plugin", () => "hello");
     });
 
-    const manifest: ExtensionManifest = {
-      id: "myext",
-      name: "My Extension",
+    const manifest: PluginManifest = {
+      id: "myplugin",
+      name: "My Plugin",
       version: "1.0.0",
       publisher: "Dev",
       main: "index.js",
       permissions: ["workspace.read"],
     };
 
-    const module: AtlasExtensionModule = {
-      manifest,
+    const module: AtlasPluginModule = {
       activate: activateFn,
     };
 
-    await manager.installExtension(manifest, module);
+    await manager.installPlugin(manifest, module);
 
-    expect(manager.getInstalledExtensions()).toHaveLength(1);
-    expect(permissions.hasPermission("myext", "workspace.read")).toBe(true);
+    expect(manager.getInstalledPlugins()).toHaveLength(1);
+    expect(permissions.hasPermission("myplugin", "workspace.read")).toBe(true);
 
-    const res = await cmd.executeCommand("myext.run");
+    const res = await cmd.executeCommand("myplugin.run");
     expect(res).toBe("hello");
 
-    await manager.uninstallExtension("myext");
-    expect(manager.getInstalledExtensions()).toHaveLength(0);
-    expect(permissions.hasPermission("myext", "workspace.read")).toBe(false);
+    await manager.uninstallPlugin("myplugin");
+    expect(manager.getInstalledPlugins()).toHaveLength(0);
+    expect(permissions.hasPermission("myplugin", "workspace.read")).toBe(false);
   });
 });

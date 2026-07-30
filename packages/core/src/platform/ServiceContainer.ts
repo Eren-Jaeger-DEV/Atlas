@@ -7,7 +7,7 @@
 import { EventBus } from "../events/EventBus.js";
 import { CommandService } from "../services/CommandService.js";
 import { SettingsService } from "../services/SettingsService.js";
-import { ExtensionHost } from "../services/ExtensionHost.js";
+import { PluginHost } from "../services/PluginHost.js";
 
 export class ServiceContainer {
   private static instance: ServiceContainer;
@@ -15,7 +15,10 @@ export class ServiceContainer {
   public readonly eventBus: EventBus;
   public readonly commandService: CommandService;
   public readonly settingsService: SettingsService;
-  public readonly extensionHost: ExtensionHost;
+  public readonly pluginHost: PluginHost;
+  public get extensionHost(): PluginHost {
+    return this.pluginHost;
+  }
 
   private services: Map<string, any> = new Map();
 
@@ -23,13 +26,14 @@ export class ServiceContainer {
     this.eventBus = EventBus.getInstance();
     this.commandService = new CommandService(this.eventBus);
     this.settingsService = new SettingsService(this.eventBus);
-    this.extensionHost = new ExtensionHost(this.commandService, this.eventBus);
+    this.pluginHost = new PluginHost(this.commandService, undefined, this.eventBus);
 
     // Register built-in services
     this.register("EventBus", this.eventBus);
     this.register("CommandService", this.commandService);
     this.register("SettingsService", this.settingsService);
-    this.register("ExtensionHost", this.extensionHost);
+    this.register("PluginHost", this.pluginHost);
+    this.register("ExtensionHost", this.pluginHost);
   }
 
   public static getInstance(): ServiceContainer {

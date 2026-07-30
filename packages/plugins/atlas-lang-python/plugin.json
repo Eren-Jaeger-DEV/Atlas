@@ -1,0 +1,17 @@
+{
+  "id": "atlas-lang-python",
+  "name": "Python Language Support",
+  "version": "1.0.0",
+  "description": "Adds Python IntelliSense and debugging via Pyright and Debugpy.",
+  "publisher": "atlas-core",
+  "main": "index.js",
+  "contributes": {
+    "languages": [
+      { "id": "python", "extensions": [".py", ".pyw"], "aliases": ["Python"] }
+    ],
+    "commands": [
+      { "id": "python.runFile", "title": "Python: Run Current File" }
+    ]
+  },
+  "permissions": ["workspace.read", "workspace.execute"]
+}

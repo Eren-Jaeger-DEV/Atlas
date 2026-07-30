@@ -38,7 +38,7 @@ export type {
   LLMProviderConfig,
   LLMProviderName,
 } from "./types/llm.js";
-export type { ExtensionPermission, ExtensionManifest } from "./types/extension.js";
+export type { PluginPermission, PluginManifest, LanguageContribution, AtlasPluginModule } from "./types/plugin.js";
 
 // Plugin API
 export type {
@@ -59,13 +59,13 @@ export { LSPBridge, type LSPDiagnostic, type LSPSymbol, type LSPConfig } from ".
 export { ServiceContainer } from "./platform/ServiceContainer.js";
 export { CommandService, type CommandDescriptor, type CommandHandler } from "./services/CommandService.js";
 export { SettingsService, DEFAULT_SETTINGS_SCHEMA, type SettingsSchema } from "./services/SettingsService.js";
-export { ExtensionHost, type ExtensionContext, type ExtensionModule } from "./services/ExtensionHost.js";
+export { PluginHost, type PluginContext, type PluginModule, type RegisteredViewItem, type RegisteredViewerItem } from "./services/PluginHost.js";
 export { PermissionEngine, type PermissionRequest } from "./security/PermissionEngine.js";
 export { AtlasIgnore } from "./security/AtlasIgnore.js";
 export { SandboxWrapper, type SandboxPolicyConfig } from "./security/SandboxWrapper.js";
 export { WorkspaceTrustPolicy, type TrustStatus } from "./security/WorkspaceTrustPolicy.js";
-export { ExtensionManager, type InstalledExtension, type AtlasExtensionModule } from "./extensions/ExtensionManager.js";
-export { ExtensionMarketplaceManager, type MarketplaceExtension } from "./extensions/ExtensionMarketplaceManager.js";
+export { PluginManager, type InstalledPlugin } from "./extensions/PluginManager.js";
+export { ForgeRegistryManager, type ForgePluginItem } from "./extensions/ForgeRegistryManager.js";
 export { RemoteAuthorityTunnel, type RemoteAuthorityType, type RemoteConnectionConfig } from "./remote/RemoteAuthorityTunnel.js";
 
 // Protobuf Binary Transport

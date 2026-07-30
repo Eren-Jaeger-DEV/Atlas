@@ -1,5 +1,5 @@
 /**
- * @atlas/sdk — Public Plugin Types & Manifest Schema
+ * @atlas/core — Plugin Specification Types
  */
 
 export type PluginPermission =
@@ -21,8 +21,9 @@ export interface PluginManifest {
   id: string;
   name: string;
   version: string;
-  description?: string;
   publisher?: string;
+  description?: string;
+  icon?: string;
   main?: string;
   contributes?: {
     commands?: Array<{ id: string; title: string }>;
@@ -31,22 +32,12 @@ export interface PluginManifest {
     statusBarItems?: Array<{ id: string; text: string }>;
   };
   permissions?: PluginPermission[];
+  engines?: {
+    atlas?: string;
+  };
 }
 
-export interface PluginContext {
-  pluginId: string;
-  subscriptions: Array<() => void>;
-  registerCommand: (id: string, label: string, handler: (...args: any[]) => any) => void;
-  registerView: (id: string, title: string, renderFn: () => any) => void;
-  registerPanel: (id: string, title: string, renderFn: () => any) => void;
-  registerStatusBarItem: (id: string, text: string) => void;
-  registerLanguage: (config: LanguageContribution) => void;
-  registerFileViewer: (extensions: string[], renderFn: (filePath: string) => any) => void;
-  requestPermission: (permission: PluginPermission) => Promise<boolean>;
-}
-
-export interface AtlasPlugin {
-  manifest: PluginManifest;
-  activate: (context: PluginContext) => void | Promise<void>;
+export interface AtlasPluginModule {
+  activate: (context: any) => void | Promise<void>;
   deactivate?: () => void | Promise<void>;
 }

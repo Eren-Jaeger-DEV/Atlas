@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { useAtlasAPI } from "../hooks/useAtlasAPI";
 import { GlobalErrorBoundary } from "./GlobalErrorBoundary";
 
-interface ExtensionManifest {
+interface PluginManifest {
   id?: string;
   dirName?: string;
   name?: string;
@@ -12,10 +12,12 @@ interface ExtensionManifest {
   description?: string;
   permissions?: string[];
   readme?: string;
+  downloadUrl?: string;
+  verified?: boolean;
 }
 
-interface ExtensionGalleryProps {
-  onOpenExtensionDetail?: (extData: any) => void;
+interface ForgeGalleryProps {
+  onOpenPluginDetail?: (pluginData: any) => void;
 }
 
 const Container = styled.div`
@@ -52,7 +54,7 @@ const Subtext = styled.span`
   color: var(--text-muted, #71717a);
 `;
 
-const InstallBtn = styled.button`
+const ActionBtn = styled.button`
   background-color: transparent;
   border: none;
   color: var(--text-muted, #a1a1aa);
@@ -155,14 +157,14 @@ const CardHeader = styled.div`
   align-items: flex-start;
 `;
 
-const ExtName = styled.p`
+const PluginName = styled.p`
   font-size: 13px;
   font-weight: 700;
   margin: 0 0 2px;
   color: var(--text-main, #fafafa);
 `;
 
-const ExtMeta = styled.p`
+const PluginMeta = styled.p`
   font-size: 10px;
   color: var(--text-muted, #71717a);
   margin: 0;
@@ -182,7 +184,18 @@ const InstalledBadge = styled.span`
   white-space: nowrap;
 `;
 
-const ExtDesc = styled.p`
+const VerifiedBadge = styled.span`
+  font-size: 9px;
+  font-weight: 700;
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.08);
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-left: 4px;
+`;
+
+const PluginDesc = styled.p`
   font-size: 11px;
   color: var(--text-muted, #a1a1aa);
   margin: 0;
@@ -241,62 +254,94 @@ const Tab = styled.button<{ $active: boolean }>`
   }
 `;
 
-function ExtensionGalleryContent({ onOpenExtensionDetail }: ExtensionGalleryProps) {
+function ForgeGalleryContent({ onOpenPluginDetail }: ForgeGalleryProps) {
   const api = useAtlasAPI();
-  const [extensions, setExtensions] = useState<ExtensionManifest[]>([]);
+  const [plugins, setPlugins] = useState<PluginManifest[]>([]);
+  const [forgePlugins, setForgePlugins] = useState<PluginManifest[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"installed" | "marketplace">("installed");
+  const [activeTab, setActiveTab] = useState<"installed" | "forge">("installed");
 
-  const loadExtensions = () => {
+  const loadPlugins = () => {
     setLoading(true);
-    if (!api?.listExtensions) {
-      setExtensions([]);
-      setLoading(false);
-      return;
-    }
-    api.listExtensions()
-      .then((list: ExtensionManifest[]) => {
-        setExtensions(list || []);
+    const fetchInstalled = (api as any)?.listPlugins ? (api as any).listPlugins() : Promise.resolve([]);
+    
+    fetchInstalled
+      .then((list: PluginManifest[]) => {
+        setPlugins(list || []);
       })
-      .catch((e) => {
-        console.error("Failed to load extensions", e);
-        setExtensions([]);
+      .catch((e: any) => {
+        console.error("Failed to load installed plugins", e);
+        setPlugins([]);
       })
       .finally(() => setLoading(false));
   };
 
+  const loadForgeRegistry = () => {
+    // Default built-in Forge registry items
+    const registry: PluginManifest[] = [
+      {
+        id: "atlas-lang-typescript",
+        name: "TypeScript & JavaScript Support",
+        publisher: "atlas-core",
+        version: "1.0.0",
+        description: "Official TypeScript and JavaScript IntelliSense and debugging engine.",
+        verified: true,
+      },
+      {
+        id: "atlas-lang-python",
+        name: "Python Language Support",
+        publisher: "atlas-core",
+        version: "1.0.0",
+        description: "Adds Python IntelliSense and debugging via Pyright and Debugpy.",
+        verified: true,
+      },
+      {
+        id: "atlas-viewer-markdown",
+        name: "Markdown Preview Viewer",
+        publisher: "atlas-core",
+        version: "1.0.0",
+        description: "Live Markdown rendering preview for .md and .markdown files.",
+        verified: true,
+      },
+    ];
+    setForgePlugins(registry);
+  };
+
   useEffect(() => {
-    loadExtensions();
+    loadPlugins();
+    loadForgeRegistry();
   }, []);
 
-  const handleInstall = async () => {
+  const handleInstallLocal = async () => {
     setInstallError(null);
     try {
-      if (!api?.selectDirectory || !api?.installExtension) return;
+      if (!api?.selectDirectory) return;
       const dir = await api.selectDirectory();
       if (dir) {
         setLoading(true);
-        await api.installExtension(dir);
-        loadExtensions();
+        if ((api as any)?.installPlugin) {
+          await (api as any).installPlugin(dir);
+        }
+        loadPlugins();
       }
     } catch (e: unknown) {
-      console.error("Extension installation failed:", e);
-      setInstallError(e instanceof Error ? e.message : "Failed to install extension. Check the console for details.");
+      console.error("Plugin installation failed:", e);
+      setInstallError(e instanceof Error ? e.message : "Failed to install plugin. Check the console for details.");
       setLoading(false);
     }
   };
 
-  const displayList = activeTab === "installed" ? extensions : [];
+  const displayList = activeTab === "installed" ? plugins : forgePlugins;
 
-  const filtered = displayList.filter(ext => {
+  const filtered = displayList.filter(plugin => {
     const q = search.toLowerCase();
     return (
-      (ext.name ?? "").toLowerCase().includes(q) ||
-      (ext.description ?? "").toLowerCase().includes(q) ||
-      (ext.id ?? ext.dirName ?? "").toLowerCase().includes(q)
+      (plugin.name ?? "").toLowerCase().includes(q) ||
+      (plugin.description ?? "").toLowerCase().includes(q) ||
+      (plugin.id ?? plugin.dirName ?? "").toLowerCase().includes(q)
     );
   });
 
@@ -304,22 +349,21 @@ function ExtensionGalleryContent({ onOpenExtensionDetail }: ExtensionGalleryProp
     <Container>
       <Header>
         <HeaderLeft>
-          <Title>EXTENSIONS MARKETPLACE</Title>
+          <Title>ATLAS FORGE</Title>
           <Subtext>
-            {loading ? "Scanning..." : `${extensions.length} Installed`}
+            {loading ? "Scanning..." : `${plugins.length} Installed`}
           </Subtext>
         </HeaderLeft>
-        <InstallBtn onClick={handleInstall} title="Install Local Extension...">
+        <ActionBtn onClick={handleInstallLocal} title="Install Local Plugin Package...">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
           </svg>
-        </InstallBtn>
+        </ActionBtn>
       </Header>
 
       <TabBar>
         <Tab $active={activeTab === "installed"} onClick={() => setActiveTab("installed")}>Installed</Tab>
-        <Tab $active={activeTab === "marketplace"} onClick={() => setActiveTab("marketplace")}>Available</Tab>
-
+        <Tab $active={activeTab === "forge"} onClick={() => setActiveTab("forge")}>Marketplace</Tab>
       </TabBar>
 
       {installError && (
@@ -336,75 +380,66 @@ function ExtensionGalleryContent({ onOpenExtensionDetail }: ExtensionGalleryProp
 
       <SearchBox>
         <SearchInput
-          placeholder="Filter installed extensions..."
+          placeholder={activeTab === "installed" ? "Filter installed plugins..." : "Search Atlas Forge plugins..."}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </SearchBox>
 
       <List>
-        {activeTab === "marketplace" && (
+        {activeTab === "installed" && !loading && plugins.length === 0 && (
           <EmptyState>
-            <EmptyTitle>No Marketplace Connected</EmptyTitle>
+            <EmptyTitle>No Plugins Installed</EmptyTitle>
             <EmptyDesc>
-              The Atlas Marketplace backend is not yet configured. Install extensions manually
-              by placing a folder with a <Code>manifest.json</Code> into the extensions directory,
-              or use the install button above to select a local extension folder.
+              Install plugins by placing a folder containing a <Code>plugin.json</Code> into your Atlas plugins directory, or use the install button above.
             </EmptyDesc>
             <EmptyPath>
-              Extensions dir: <Code>~/.config/@atlas/atlas/extensions/</Code>
+              Plugins dir: <Code>~/.atlas/plugins/</Code>
             </EmptyPath>
           </EmptyState>
         )}
 
-        {activeTab === "installed" && !loading && extensions.length === 0 && (
-          <EmptyState>
-            <EmptyTitle>No Extensions Installed</EmptyTitle>
-            <EmptyDesc>
-              Install extensions by placing a folder containing a{" "}
-              <Code>manifest.json</Code> into the Atlas extensions directory.
-            </EmptyDesc>
-            <EmptyPath>
-              Extensions dir: <Code>~/.config/@atlas/atlas/extensions/</Code>
-            </EmptyPath>
-          </EmptyState>
-        )}
+        {filtered.map((plugin, idx) => {
+          const isInstalled = plugins.some(p => p.id === plugin.id);
+          return (
+            <Card key={plugin.id ?? plugin.dirName ?? idx} onClick={() => onOpenPluginDetail?.(plugin)}>
+              <CardHeader>
+                <div>
+                  <PluginName>
+                    {plugin.name ?? plugin.dirName ?? plugin.id}
+                    {plugin.verified && <VerifiedBadge>[VERIFIED]</VerifiedBadge>}
+                  </PluginName>
+                  <PluginMeta>
+                    {plugin.version && <>v{plugin.version} </>}
+                    {plugin.publisher && <>by <Publisher>{plugin.publisher}</Publisher></>}
+                  </PluginMeta>
+                </div>
+                {isInstalled && <InstalledBadge>[INSTALLED]</InstalledBadge>}
+              </CardHeader>
 
-        {activeTab === "installed" && filtered.map((ext, idx) => (
-          <Card key={ext.id ?? ext.dirName ?? idx} onClick={() => onOpenExtensionDetail?.(ext)}>
-            <CardHeader>
-              <div>
-                <ExtName>{ext.name ?? ext.dirName ?? ext.id}</ExtName>
-                <ExtMeta>
-                  {ext.version && <>v{ext.version} </>}
-                  {ext.publisher && <>by <Publisher>{ext.publisher}</Publisher></>}
-                </ExtMeta>
-              </div>
-              <InstalledBadge>[INSTALLED]</InstalledBadge>
-            </CardHeader>
+              {plugin.description && (
+                <PluginDesc>{plugin.description}</PluginDesc>
+              )}
 
-            {ext.description && (
-              <ExtDesc>{ext.description}</ExtDesc>
-            )}
-
-            {Array.isArray(ext.permissions) && ext.permissions.length > 0 && (
-              <PermList>
-                {ext.permissions.map(p => (
-                  <PermBadge key={p}>{p}</PermBadge>
-                ))}
-              </PermList>
-            )}
-          </Card>
-        ))}
+              {Array.isArray(plugin.permissions) && plugin.permissions.length > 0 && (
+                <PermList>
+                  {plugin.permissions.map(p => (
+                    <PermBadge key={p}>{p}</PermBadge>
+                  ))}
+                </PermList>
+              )}
+            </Card>
+          );
+        })}
       </List>
     </Container>
   );
 }
 
-export function ExtensionGallery({ onOpenExtensionDetail }: ExtensionGalleryProps) {
+export function ForgeGallery({ onOpenPluginDetail }: ForgeGalleryProps) {
   return (
     <GlobalErrorBoundary>
-      <ExtensionGalleryContent onOpenExtensionDetail={onOpenExtensionDetail} />
+      <ForgeGalleryContent onOpenPluginDetail={onOpenPluginDetail} />
     </GlobalErrorBoundary>
   );
 }

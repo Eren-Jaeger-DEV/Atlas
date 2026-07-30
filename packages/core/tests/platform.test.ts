@@ -4,7 +4,7 @@ import {
   ServiceContainer,
   CommandService,
   SettingsService,
-  ExtensionHost,
+  PluginHost,
 } from "../src/index.js";
 
 describe("Platform Foundation — ServiceContainer & EventBus", () => {
@@ -12,13 +12,13 @@ describe("Platform Foundation — ServiceContainer & EventBus", () => {
     const bus = new EventBus();
     const fn = vi.fn();
 
-    const unsub = bus.on("FileOpened", fn);
-    bus.emit("FileOpened", { path: "/test/file.ts" });
+    const unsub = bus.on("FileOpened" as any, fn);
+    bus.emit("FileOpened" as any, { path: "/test/file.ts" });
 
     expect(fn).toHaveBeenCalledWith({ path: "/test/file.ts" });
 
     unsub();
-    bus.emit("FileOpened", { path: "/test/file2.ts" });
+    bus.emit("FileOpened" as any, { path: "/test/file2.ts" });
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
@@ -50,30 +50,30 @@ describe("Platform Foundation — ServiceContainer & EventBus", () => {
     expect(settings.get("fontSize")).toBe(18);
   });
 
-  it("should activate and deactivate extensions via ExtensionHost", async () => {
+  it("should activate and deactivate plugins via PluginHost", async () => {
     const bus = new EventBus();
     const cmdService = new CommandService(bus);
-    const host = new ExtensionHost(cmdService, bus);
+    const host = new PluginHost(cmdService, undefined, bus);
 
     const activateFn = vi.fn((ctx) => {
       ctx.registerCommand("ext.hello", "Hello Ext", () => "world");
     });
 
-    host.registerExtension({
+    host.registerPlugin({
       id: "test-plugin",
       name: "Test Plugin",
       activate: activateFn,
     });
 
-    await host.activateExtension("test-plugin");
+    await host.activatePlugin("test-plugin");
     expect(activateFn).toHaveBeenCalled();
-    expect(host.getActiveExtensions()).toContain("test-plugin");
+    expect(host.getActivePlugins()).toContain("test-plugin");
 
     const result = await cmdService.executeCommand("ext.hello");
     expect(result).toBe("world");
 
-    await host.deactivateExtension("test-plugin");
-    expect(host.getActiveExtensions()).not.toContain("test-plugin");
+    await host.deactivatePlugin("test-plugin");
+    expect(host.getActivePlugins()).not.toContain("test-plugin");
   });
 
   it("should register platform services inside ServiceContainer", () => {
@@ -81,6 +81,6 @@ describe("Platform Foundation — ServiceContainer & EventBus", () => {
     expect(container.eventBus).toBeDefined();
     expect(container.commandService).toBeDefined();
     expect(container.settingsService).toBeDefined();
-    expect(container.extensionHost).toBeDefined();
+    expect(container.pluginHost).toBeDefined();
   });
 });

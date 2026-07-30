@@ -232,15 +232,25 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   scanTodos: (repoPath: string): Promise<{ total: number }> =>
     ipcRenderer.invoke("atlas:scan-todos", repoPath),
 
-  // Extension listing
+  // Plugin & Forge listing
+  listPlugins: (): Promise<Record<string, unknown>[]> =>
+    ipcRenderer.invoke("atlas:list-plugins"),
+
+  installPlugin: (sourcePath: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:install-plugin", sourcePath),
+
+  uninstallPlugin: (pluginId: string): Promise<boolean> =>
+    ipcRenderer.invoke("atlas:uninstall-plugin", pluginId),
+
+  // Extension listing (backwards compatible)
   listExtensions: (): Promise<Record<string, unknown>[]> =>
-    ipcRenderer.invoke("atlas:list-extensions"),
+    ipcRenderer.invoke("atlas:list-plugins"),
 
   installExtension: (sourcePath: string): Promise<boolean> =>
-    ipcRenderer.invoke("atlas:extension-install", sourcePath),
+    ipcRenderer.invoke("atlas:install-plugin", sourcePath),
 
   installMarketplaceExtension: (manifest: any): Promise<boolean> =>
-    ipcRenderer.invoke("atlas:extension-install-marketplace", manifest),
+    ipcRenderer.invoke("atlas:install-plugin", manifest),
 
   executeExtensionCommand: (id: string, ...args: any[]): Promise<any> =>
     ipcRenderer.invoke("atlas:extension-execute-command", id, ...args),
