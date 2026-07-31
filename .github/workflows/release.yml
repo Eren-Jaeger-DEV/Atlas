@@ -33,9 +33,10 @@ jobs:
           NODE_OPTIONS: '--max-old-space-size=4096'
 
       - name: Package Linux
-        run: pnpm --filter @atlas/editor exec electron-builder --linux deb AppImage
+        run: pnpm --filter @atlas/editor exec electron-builder --linux deb AppImage --publish never
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
@@ -69,9 +70,10 @@ jobs:
           NODE_OPTIONS: '--max-old-space-size=4096'
 
       - name: Package Windows
-        run: pnpm --filter @atlas/editor exec electron-builder --win nsis
+        run: pnpm --filter @atlas/editor exec electron-builder --win nsis --publish never
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -103,9 +105,10 @@ jobs:
           NODE_OPTIONS: '--max-old-space-size=4096'
 
       - name: Package macOS
-        run: pnpm --filter @atlas/editor exec electron-builder --mac dmg
+        run: pnpm --filter @atlas/editor exec electron-builder --mac dmg --publish never
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
