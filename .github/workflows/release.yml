@@ -27,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build (Vite + Electron TypeScript)
-        run: pnpm --filter @atlas/editor build
+      - name: Build (All packages + Editor)
+        run: pnpm build
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
 
@@ -63,8 +63,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build (Vite + Electron TypeScript)
-        run: pnpm --filter @atlas/editor build
+      - name: Build (All packages + Editor)
+        run: pnpm build
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
 
@@ -97,8 +97,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build (Vite + Electron TypeScript)
-        run: pnpm --filter @atlas/editor build
+      - name: Build (All packages + Editor)
+        run: pnpm build
         env:
           NODE_OPTIONS: '--max-old-space-size=4096'
 
