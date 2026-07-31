@@ -36,10 +36,7 @@ export default defineConfig({
       "styled-components",
       "framer-motion",
       "lucide-react",
-      "vite-plugin-node-polyfills/shims/process",
-      "vite-plugin-node-polyfills/shims/buffer",
     ],
-    holdUntilCrawlEnd: true,
   },
   build: {
     outDir: "dist",
