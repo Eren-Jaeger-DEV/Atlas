@@ -5,7 +5,14 @@
  * macOS `sandbox-exec` policy and Linux `bwrap` container runtime (Chapter 13).
  */
 
-import { execSync } from "node:child_process";
+function getExecSync(): ((cmd: string, opts?: any) => any) | null {
+  try {
+    const cp = require("node:child_process");
+    return cp.execSync || null;
+  } catch {
+    return null;
+  }
+}
 
 export interface SandboxPolicyConfig {
   repoPath: string;
@@ -26,6 +33,12 @@ export class SandboxWrapper {
     }
 
     try {
+      const execSync = getExecSync();
+      if (!execSync) {
+        SandboxWrapper.cachedAvailability = false;
+        return false;
+      }
+
       if (platform === "linux") {
         execSync("which bwrap", { stdio: "ignore" });
         SandboxWrapper.cachedAvailability = true;

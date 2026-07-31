@@ -5,6 +5,7 @@
   "description": "Atlas Studio — AI-native code editor with a zero-AI editor core",
   "scripts": {
     "build": "pnpm --filter @atlas/editor build",
+    "package:deb": "pnpm build && pnpm --filter @atlas/editor dist",
     "start": "pnpm build && pnpm --filter @atlas/editor launch",
     "dev": "pnpm --filter @atlas/editor dev",
     "test": "turbo run test",

@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "description": "Your codebase. Fully mapped. A professional, architecture-aware IDE.",
-  "author": "Eren-Jaeger-DEV",
+  "author": {
+    "name": "Eren-Jaeger-DEV",
+    "email": "dev@atlas-studio.io"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Eren-Jaeger-DEV/Atlas.git"
@@ -59,5 +62,30 @@
     "typescript": "^5.9.3",
     "vite": "^6.0.7",
     "vite-plugin-node-polyfills": "^0.28.0"
+  },
+  "build": {
+    "appId": "com.atlas.studio",
+    "productName": "Atlas Studio",
+    "executableName": "atlas-studio",
+    "artifactName": "atlas-studio_${version}_${arch}.${ext}",
+    "directories": {
+      "output": "dist-app"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-dist/**/*",
+      "package.json"
+    ],
+    "deb": {
+      "packageName": "atlas-studio"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "category": "Development",
+      "maintainer": "Eren-Jaeger-DEV <dev@atlas-studio.io>"
+    }
   }
 }
