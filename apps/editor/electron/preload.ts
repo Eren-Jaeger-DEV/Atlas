@@ -399,6 +399,10 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   scanDeps: (repoPath: string) =>
     ipcRenderer.invoke("atlas:scan-deps", repoPath),
 
+  // File Viewers
+  getFileViewer: (filePath: string): Promise<{ supported: boolean; type?: string; html?: string; error?: string }> =>
+    ipcRenderer.invoke("atlas:get-file-viewer", filePath),
+
   // Ghost Text Streaming
   emitGhostToken: (token: string, line: number) =>
     ipcRenderer.send("atlas:ghost-token-emit", { token, line }),

@@ -1,3 +1,5 @@
+const cp = require("child_process");
+
 module.exports = {
   activate: async function(ctx) {
     console.log("[Plugin:Python] Activating Python Language Plugin...");
@@ -7,8 +9,12 @@ module.exports = {
       extensions: [".py", ".pyw"],
       aliases: ["Python"],
       startLsp: async function(repoPath) {
-        console.log("[Plugin:Python] Starting pyright at:", repoPath);
-        return { active: true, language: "python" };
+        const isWin = process.platform === "win32";
+        const proc = cp.spawn("npx", ["-y", "--package=pyright", "pyright-langserver", "--stdio"], {
+          cwd: repoPath,
+          shell: isWin
+        });
+        return { active: true, language: "python", process: proc };
       }
     });
 

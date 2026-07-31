@@ -1065,30 +1065,44 @@ const handleStartLsp = async (event: any, repoPath: string, language: string = "
   activeLanguageServerType = language;
 
   try {
-    if (language === "python") {
-      activeLanguageServer = cp.spawn("npx", ["-y", "--package=pyright", "pyright-langserver", "--stdio"], { cwd: repoPath, shell: process.platform === "win32" });
-    } else {
-      let tsserverPath = require.resolve("typescript-language-server/lib/cli.mjs");
-      if (tsserverPath.includes("app.asar")) {
-        tsserverPath = tsserverPath.replace("app.asar", "app.asar.unpacked");
+    const { ServiceContainer } = await import("@atlas/core");
+    const pluginHost = ServiceContainer.getInstance().pluginHost;
+    const langContribution = pluginHost.getRegisteredLanguage(language);
+
+    if (langContribution && langContribution.startLsp) {
+      console.log(`[PluginHost] Spawning LSP for '${language}' via registered plugin...`);
+      const result = await langContribution.startLsp(repoPath);
+      if (result && result.process) {
+        activeLanguageServer = result.process;
       }
-      activeLanguageServer = cp.spawn("node", [tsserverPath, "--stdio"], { cwd: repoPath });
+    } else {
+      if (language === "python") {
+        activeLanguageServer = cp.spawn("npx", ["-y", "--package=pyright", "pyright-langserver", "--stdio"], { cwd: repoPath, shell: process.platform === "win32" });
+      } else {
+        let tsserverPath = require.resolve("typescript-language-server/lib/cli.mjs");
+        if (tsserverPath.includes("app.asar")) {
+          tsserverPath = tsserverPath.replace("app.asar", "app.asar.unpacked");
+        }
+        activeLanguageServer = cp.spawn("node", [tsserverPath, "--stdio"], { cwd: repoPath });
+      }
     }
 
-    activeLanguageServer.stdout?.on("data", (data: Buffer) => {
-      safeSend(event.sender, "atlas:lsp-server-to-client", data.toString("utf-8"));
-    });
+    if (activeLanguageServer) {
+      activeLanguageServer.stdout?.on("data", (data: Buffer) => {
+        safeSend(event.sender, "atlas:lsp-server-to-client", data.toString("utf-8"));
+      });
 
-    activeLanguageServer.stderr?.on("data", (data: Buffer) => {
-      console.error(`[LSP Server Error - ${language}]:`, data.toString("utf-8"));
-    });
+      activeLanguageServer.stderr?.on("data", (data: Buffer) => {
+        console.error(`[LSP Server Error - ${language}]:`, data.toString("utf-8"));
+      });
 
-    activeLanguageServer.on("close", () => {
-      if (activeLanguageServerType === language) {
-        activeLanguageServer = null;
-        activeLanguageServerType = null;
-      }
-    });
+      activeLanguageServer.on("close", () => {
+        if (activeLanguageServerType === language) {
+          activeLanguageServer = null;
+          activeLanguageServerType = null;
+        }
+      });
+    }
 
     return "started";
   } catch (err) {
@@ -1098,6 +1112,22 @@ const handleStartLsp = async (event: any, repoPath: string, language: string = "
 };
 ipcMain.handle("atlas:lsp-start", handleStartLsp);
 ipcMain.handle("atlas:start-lsp", handleStartLsp);
+
+ipcMain.handle("atlas:get-file-viewer", async (_event, filePath: string) => {
+  try {
+    const { ServiceContainer } = await import("@atlas/core");
+    const pluginHost = ServiceContainer.getInstance().pluginHost;
+    const viewer = pluginHost.getViewerForFile(filePath);
+    if (viewer) {
+      const result = await viewer.renderFn(filePath);
+      return { supported: true, ...result };
+    }
+  } catch (e: any) {
+    console.error("[PluginHost] Error getting file viewer:", e);
+    return { supported: false, error: e.message };
+  }
+  return { supported: false };
+});
 
 ipcMain.on("atlas:lsp-client-to-server", (_event, message: string) => {
   if (activeLanguageServer && activeLanguageServer.stdin) {

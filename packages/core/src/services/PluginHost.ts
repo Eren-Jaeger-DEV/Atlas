@@ -215,6 +215,10 @@ export class PluginHost {
     return Array.from(this.registeredLanguages.values());
   }
 
+  public getRegisteredLanguage(languageId: string): LanguageContribution | undefined {
+    return this.registeredLanguages.get(languageId);
+  }
+
   public getViewerForFile(filePath: string): RegisteredViewerItem | undefined {
     const ext = filePath.split(".").pop()?.toLowerCase();
     if (!ext) return undefined;
