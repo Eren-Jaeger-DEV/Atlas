@@ -104,7 +104,12 @@ export function registerFsIPCHandlers(getProjectRoot: () => string) {
       properties: ["openDirectory"],
     });
     if (result.canceled || result.filePaths.length === 0) return null;
-    return result.filePaths[0] || null;
+    const selectedPath = (result.filePaths[0] || "").replace(/\\/g, "/");
+    if (selectedPath) {
+      (global as any).__atlasRepoRoot = selectedPath;
+      (global as any).__atlasWorkspaceRoots = [selectedPath];
+    }
+    return selectedPath;
   });
 
   ipcMain.handle("atlas:open-file-dialog", async () => {

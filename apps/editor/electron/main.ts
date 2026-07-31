@@ -480,17 +480,7 @@ ipcMain.handle("atlas:search", async (_event, query: string) => {
   }
 });
 
-ipcMain.handle("atlas:select-directory", async () => {
-  if (!mainWindow) return null;
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ["openDirectory"],
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  const selectedPath = result.filePaths[0]!.replace(/\\/g, "/");
-  global.__atlasRepoRoot = selectedPath;
-  global.__atlasWorkspaceRoots = [selectedPath];
-  return selectedPath;
-});
+
 
 ipcMain.handle("atlas:add-directory", async () => {
   if (!mainWindow) return null;
@@ -519,25 +509,7 @@ ipcMain.handle("atlas:toggle-devtools", async () => {
   return { success: false };
 });
 
-ipcMain.handle("atlas:open-file-dialog", async () => {
-  if (!mainWindow) return null;
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ["openFile"],
-    title: "Open File"
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  return result.filePaths[0]!.replace(/\\/g, "/");
-});
 
-ipcMain.handle("atlas:save-file-as-dialog", async (_event, defaultPath?: string) => {
-  if (!mainWindow) return null;
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: "Save File As",
-    defaultPath: defaultPath || "Untitled"
-  });
-  if (result.canceled || !result.filePath) return null;
-  return result.filePath.replace(/\\/g, "/");
-});
 
 ipcMain.handle("atlas:save-workspace-as-dialog", async (_event, defaultPath?: string) => {
   if (!mainWindow) return null;
