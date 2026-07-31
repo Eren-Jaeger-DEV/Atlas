@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import DOMPurify from "dompurify";
 
 interface PluginViewerPaneProps {
   filePath: string;
@@ -63,7 +64,7 @@ export const PluginViewerPane: React.FC<PluginViewerPaneProps> = ({ filePath }) 
     <div style={{ width: "100%", height: "100%", overflow: "auto", background: "#09090b", color: "#f4f4f5", padding: "32px 48px", boxSizing: "border-box" }}>
       <div
         className="markdown-body"
-        dangerouslySetInnerHTML={{ __html: htmlContent }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlContent) }}
         style={{
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
           lineHeight: 1.6,

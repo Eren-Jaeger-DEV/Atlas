@@ -2477,11 +2477,22 @@ ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
 // Remote Phone Control (Phase 5)
 // ---------------------------------------------------------------------------
 const remoteClients = new Set<WebSocket>();
+let remoteAuthToken: string = crypto.randomBytes(16).toString("hex");
 
 function startRemoteServer() {
   const tryPort = (port: number) => {
     const server = http.createServer((req, res) => {
-      if (req.url === '/') {
+      const hostHeader = req.headers.host || `localhost:${port}`;
+      const reqUrl = new URL(req.url || '/', `http://${hostHeader}`);
+      const token = reqUrl.searchParams.get("token");
+
+      if (token !== remoteAuthToken) {
+        res.writeHead(401, { 'Content-Type': 'text/html' });
+        res.end(`<h2 style="color:red;font-family:sans-serif;">401 Unauthorized</h2><p style="font-family:sans-serif;">Invalid or missing Atlas Remote token.</p>`);
+        return;
+      }
+
+      if (reqUrl.pathname === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end(`
         <!DOCTYPE html>
@@ -2498,19 +2509,31 @@ function startRemoteServer() {
             .event-review { color: #f87171; }
             .user-msg { color: #fff; align-self: flex-end; background: #27272a; padding: 8px; border-radius: 8px; max-width: 80%; }
             .agent-msg { background: #18181b; padding: 8px; border-radius: 8px; max-width: 90%; }
-            input { padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; margin-bottom: 10px; }
-            button { padding: 12px; font-size: 16px; border-radius: 8px; border: none; background: #38bdf8; color: #000; font-weight: bold; cursor: pointer; }
+            .action-bar { display: flex; gap: 10px; margin-bottom: 10px; }
+            input { flex: 1; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #333; background: #222; color: #fff; }
+            button { padding: 12px 20px; font-size: 16px; border-radius: 8px; border: none; background: #38bdf8; color: #000; font-weight: bold; cursor: pointer; }
+            button.approve { background: #22c55e; color: #fff; }
+            button.reject { background: #ef4444; color: #fff; }
           </style>
         </head>
         <body>
           <h2>Atlas Remote</h2>
           <div id="log"></div>
-          <input type="text" id="prompt" placeholder="Ask agent..." />
-          <button id="sendBtn">Send</button>
+          <div id="approvalBar" class="action-bar" style="display:none;">
+            <button id="approveBtn" class="approve">Approve Edit</button>
+            <button id="rejectBtn" class="reject">Reject</button>
+          </div>
+          <div class="action-bar">
+            <input type="text" id="prompt" placeholder="Ask agent..." />
+            <button id="sendBtn">Send</button>
+          </div>
           <script>
-            const ws = new WebSocket('ws://' + location.host);
+            const token = "${remoteAuthToken}";
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(wsProtocol + '//' + location.host + '?token=' + token);
             const log = document.getElementById('log');
-            
+            let currentReqId = null;
+
             function appendMsg(content, className) {
               const div = document.createElement('div');
               div.className = className;
@@ -2524,16 +2547,37 @@ function startRemoteServer() {
               if (ev.type === 'state_change') {
                 appendMsg('State: ' + ev.state, 'agent-msg event-code');
               } else if (ev.type === 'plan_ready') {
-                appendMsg('Plan generated with ' + ev.plan.steps.length + ' steps.', 'agent-msg event-plan');
+                appendMsg('Plan generated with ' + (ev.plan?.steps?.length || 0) + ' steps.', 'agent-msg event-plan');
               } else if (ev.type === 'test_result') {
                 appendMsg('Tests ' + ev.result.status, 'agent-msg ' + (ev.result.status === 'passed' ? 'event-test' : 'event-review'));
               } else if (ev.type === 'review_result') {
                 appendMsg('Review risk: ' + ev.result.overallRisk, 'agent-msg event-review');
-              } else if (ev.type === 'awaiting_human') {
-                appendMsg('[WARN] Awaiting Human: ' + ev.reason, 'agent-msg');
-                log.lastChild.style.color = 'yellow';
+              } else if (ev.type === 'awaiting_human' || ev.type === 'request_permission') {
+                currentReqId = ev.reqId;
+                appendMsg('[WARN] Awaiting Approval: ' + (ev.reason || ev.permission || 'File Edit'), 'agent-msg');
+                log.lastChild.style.color = '#f59e0b';
+                document.getElementById('approvalBar').style.display = 'flex';
               }
             };
+
+            document.getElementById('approveBtn').onclick = () => {
+              if (currentReqId) {
+                ws.send(JSON.stringify({ type: 'permission_response', reqId: currentReqId, approved: true }));
+                document.getElementById('approvalBar').style.display = 'none';
+                appendMsg('Approved edit.', 'user-msg');
+                currentReqId = null;
+              }
+            };
+
+            document.getElementById('rejectBtn').onclick = () => {
+              if (currentReqId) {
+                ws.send(JSON.stringify({ type: 'permission_response', reqId: currentReqId, approved: false }));
+                document.getElementById('approvalBar').style.display = 'none';
+                appendMsg('Rejected edit.', 'user-msg');
+                currentReqId = null;
+              }
+            };
+
             document.getElementById('sendBtn').onclick = () => {
               const text = document.getElementById('prompt').value;
               if (text) {
@@ -2552,17 +2596,41 @@ function startRemoteServer() {
       }
     });
 
-    const wss = new WebSocket.Server({ server });
-    wss.on('error', (err) => console.warn('[Remote] WebSocket server warning:', err));
+    const wss = new WebSocket.Server({ noServer: true });
+
+    server.on('upgrade', (request, socket, head) => {
+      const hostHeader = request.headers.host || `localhost:${port}`;
+      const reqUrl = new URL(request.url || '/', `http://${hostHeader}`);
+      const token = reqUrl.searchParams.get("token");
+
+      if (token !== remoteAuthToken) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    });
 
     wss.on('connection', (ws) => {
       remoteClients.add(ws);
-      console.log('[Remote] Phone connected');
+      console.log('[Remote] Authenticated phone connected');
       ws.on('close', () => remoteClients.delete(ws));
 
       ws.on('message', async (data) => {
         try {
           const msg = JSON.parse(data.toString());
+          if (msg.type === 'permission_response') {
+            const resolver = permissionRequests.get(msg.reqId);
+            if (resolver) {
+              resolver(msg.approved === true);
+              permissionRequests.delete(msg.reqId);
+            }
+            return;
+          }
+
           if (msg.type === 'run') {
             const repoRoot = global.__atlasRepoRoot || global.__atlasWorkspaceRoots?.[0];
             if (!repoRoot) {
@@ -2580,19 +2648,30 @@ function startRemoteServer() {
               memory,
               repoRoot,
               onEvent: (ev) => {
-                ws.send(JSON.stringify(ev));
+                const jsonEv = JSON.stringify(ev);
+                remoteClients.forEach(client => {
+                  if (client.readyState === WebSocket.OPEN) {
+                    client.send(jsonEv);
+                  }
+                });
                 if (mainWindow) {
                   mainWindow.webContents.send("atlas:event", ev);
                 }
               },
               checkPermission: async (permission, data) => {
                 return new Promise<boolean>((resolve) => {
+                  const reqId = crypto.randomUUID();
+                  permissionRequests.set(reqId, resolve);
+
+                  const reqPayload = JSON.stringify({ type: 'request_permission', reqId, permission, data });
+                  remoteClients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                      client.send(reqPayload);
+                    }
+                  });
+
                   if (mainWindow) {
-                    const reqId = crypto.randomUUID();
-                    permissionRequests.set(reqId, resolve);
                     mainWindow.webContents.send("atlas:request-permission", { reqId, permission, data });
-                  } else {
-                    resolve(false);
                   }
                 });
               }
@@ -2622,7 +2701,7 @@ function startRemoteServer() {
     });
 
     server.listen(port, '0.0.0.0', () => {
-      console.log(`[Remote] Control server running on port ${port}`);
+      console.log(`[Remote] Authenticated control server running at http://localhost:${port}?token=${remoteAuthToken}`);
     });
   };
 
