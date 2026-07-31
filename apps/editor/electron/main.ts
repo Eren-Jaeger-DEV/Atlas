@@ -681,30 +681,6 @@ ipcMain.handle("atlas:get-tasks", async (_event, repoPath: string) => {
   return tasks;
 });
 
-// Snippets
-ipcMain.handle("atlas:get-snippets", async () => {
-  try {
-    const userSnippetsPath = path.join(app.getPath("userData"), "..", "atlas", "snippets.json");
-    let userSnippets = {};
-    if (await stat(userSnippetsPath).catch(() => null)) {
-      userSnippets = JSON.parse(await readFile(userSnippetsPath, "utf-8"));
-    }
-
-    let workspaceSnippets = {};
-    if (global.__atlasRepoRoot) {
-      const wsSnippetsPath = path.join(global.__atlasRepoRoot, ".atlas", "snippets.json");
-      if (await stat(wsSnippetsPath).catch(() => null)) {
-        workspaceSnippets = JSON.parse(await readFile(wsSnippetsPath, "utf-8"));
-      }
-    }
-
-    return { ...userSnippets, ...workspaceSnippets };
-  } catch (err) {
-    console.error("[get-snippets] error:", err);
-    return {};
-  }
-});
-
 // Settings
 export interface AtlasSettings {
   ai?: {
@@ -1344,50 +1320,7 @@ ipcMain.on("atlas:dap-client-to-server", async (event, message: string) => {
   }
 });
 
-// File Operations
-ipcMain.handle("atlas:read-file", async (_event, filePath: string) => {
-  const root = global.__atlasRepoRoot || process.cwd();
-  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
-  return readFile(absPath, "utf-8");
-});
-
-ipcMain.handle("atlas:write-file", async (_event, filePath: string, content: string) => {
-  const root = global.__atlasRepoRoot || process.cwd();
-  const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
-  await mkdir(path.dirname(absPath), { recursive: true });
-  await writeFile(absPath, content, "utf-8");
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("atlas:event", { type: "file_changed", filePath: absPath });
-  }
-});
-
-ipcMain.handle("atlas:copy-file", async (_event, src: string, dest: string) => {
-  await fsCp(src, dest, { recursive: true });
-});
-
-ipcMain.handle("atlas:move-file", async (_event, src: string, dest: string) => {
-  await rename(src, dest);
-});
-
-ipcMain.handle("atlas:mkdir", async (_event, dirPath: string) => {
-  await mkdir(dirPath, { recursive: true });
-});
-
-ipcMain.handle("atlas:read-dir", async (_event, dirPath: string) => {
-  try {
-    const entries = await readdir(dirPath, { withFileTypes: true });
-    return entries
-      .filter((e) => !e.name.startsWith(".git") && e.name !== "node_modules" && e.name !== "dist" && e.name !== "dist-app")
-      .map((e) => ({
-        name: e.name,
-        path: path.join(dirPath, e.name).replace(/\\/g, "/"),
-        isDirectory: e.isDirectory(),
-      }))
-      .sort((a, b) => (a.isDirectory === b.isDirectory ? a.name.localeCompare(b.name) : a.isDirectory ? -1 : 1));
-  } catch {
-    return [];
-  }
-});
+// File Operations handled by fsIPC.ts
 
 
 
@@ -1430,22 +1363,7 @@ ipcMain.handle("atlas:apply-workspace-edit", async (_event, editsByFile: Record<
   }
 });
 
-ipcMain.handle("atlas:create-file", async (_event, filePath: string, isDirectory: boolean) => {
-  if (isDirectory) {
-    await mkdir(filePath, { recursive: true });
-  } else {
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, "", "utf-8");
-  }
-});
 
-ipcMain.handle("atlas:delete-file", async (_event, filePath: string) => {
-  await rm(filePath, { recursive: true, force: true });
-});
-
-ipcMain.handle("atlas:rename-file", async (_event, oldPath: string, newPath: string) => {
-  await rename(oldPath, newPath);
-});
 
 // Integrated Terminal - real PTY via node-pty (ANSI colors, interactive programs, real resize)
 
@@ -1540,161 +1458,7 @@ ipcMain.handle("atlas:clipboard-write", (_event, text: string) => {
   clipboard.writeText(text);
 });
 
-// Git Source Control
-ipcMain.handle("atlas:git-status", async (_event, repoPath: string) => {
-  try {
-    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    const { stdout } = await execFileAsync("git", ["status", "--porcelain"], { cwd });
-    const lines = stdout.split("\n").filter(Boolean);
-    return lines.map((line) => {
-      const indexStatus = line.slice(0, 1);
-      const workStatus = line.slice(1, 2);
-      const file = line.slice(3).trim().replace(/\\/g, "/");
-      const isStaged = indexStatus !== " " && indexStatus !== "?";
-      let status = "modified";
-      if (indexStatus === "?" || workStatus === "?") status = "untracked";
-      else if (indexStatus === "A" || workStatus === "A") status = "added";
-      else if (indexStatus === "D" || workStatus === "D") status = "deleted";
-
-      return { path: file, status, staged: isStaged };
-    });
-  } catch {
-    return [];
-  }
-});
-
-ipcMain.handle("atlas:git-stage", async (_event, repoPath: string, filePath: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  await execFileAsync("git", ["add", filePath], { cwd });
-});
-
-ipcMain.handle("atlas:git-unstage", async (_event, repoPath: string, filePath: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  await execFileAsync("git", ["restore", "--staged", filePath], { cwd });
-});
-
-ipcMain.handle("atlas:git-commit", async (_event, repoPath: string, message: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  await execFileAsync("git", ["commit", "-m", message], { cwd });
-});
-
-ipcMain.handle("atlas:git-diff", async (_event, repoPath: string, filePath: string, staged: boolean) => {
-  try {
-    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    const args = staged ? ["diff", "--cached", filePath] : ["diff", filePath];
-    const { stdout } = await execFileAsync("git", args, { cwd });
-    return stdout;
-  } catch {
-    return "";
-  }
-});
-
-ipcMain.handle("atlas:git-init", async (_event, repoPath: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  await execFileAsync("git", ["init"], { cwd });
-  return true;
-});
-
-ipcMain.handle("atlas:git-clone", async (_event, url: string, targetPath: string) => {
-  await execFileAsync("git", ["clone", url, targetPath], { cwd: path.dirname(targetPath) });
-  return true;
-});
-
-ipcMain.handle("atlas:git-stash-save", async (_event, repoPath: string, message?: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  const args = message ? ["stash", "push", "-m", message] : ["stash"];
-  await execFileAsync("git", args, { cwd });
-  return true;
-});
-
-ipcMain.handle("atlas:git-stash-pop", async (_event, repoPath: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  await execFileAsync("git", ["stash", "pop"], { cwd });
-  return true;
-});
-
-ipcMain.handle("atlas:git-create-branch", async (_event, repoPath: string, branchName: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  await execFileAsync("git", ["checkout", "-b", branchName], { cwd });
-  return true;
-});
-
-ipcMain.handle("atlas:git-delete-branch", async (_event, repoPath: string, branchName: string) => {
-  const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-  await execFileAsync("git", ["branch", "-D", branchName], { cwd });
-  return true;
-});
-
-ipcMain.handle("atlas:git-log", async (_event, repoPath: string, limit = 20) => {
-  try {
-    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    const { stdout } = await execFileAsync("git", ["log", `-n${limit}`, "--pretty=format:%h|%an|%ar|%s"], { cwd });
-    return stdout.split("\n").filter(Boolean).map(line => {
-      const [hash, author, date, message] = line.split("|");
-      return { hash, author, date, message };
-    });
-  } catch {
-    return [];
-  }
-});
-
-ipcMain.handle("atlas:git-blame", async (_event, repoPath: string, filePath: string) => {
-  try {
-    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    const { stdout } = await execFileAsync("git", ["blame", "-s", filePath], { cwd });
-    return stdout;
-  } catch {
-    return "";
-  }
-});
-
-ipcMain.handle("atlas:git-blame-content", async (_event, repoPath: string, filePath: string, content: string) => {
-  let tempPath = "";
-  try {
-    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    tempPath = path.join(os.tmpdir(), `atlas-blame-${crypto.randomUUID()}.tmp`);
-    await writeFile(tempPath, content);
-    const { stdout } = await execFileAsync("git", ["blame", "--contents", tempPath, filePath], { cwd });
-    return stdout;
-  } catch {
-    return "";
-  } finally {
-    if (tempPath) {
-      rm(tempPath, { force: true }).catch(() => { });
-    }
-  }
-});
-
-ipcMain.handle("atlas:git-diff-content", async (_event, repoPath: string, filePath: string, content: string) => {
-  let tempPath = "";
-  try {
-    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    tempPath = path.join(os.tmpdir(), `atlas-diff-${crypto.randomUUID()}.tmp`);
-    await writeFile(tempPath, content);
-    const { stdout } = await execFileAsync("git", ["diff", "-U0", `HEAD:${filePath}`, tempPath], { cwd });
-    return stdout;
-  } catch (err: any) {
-    // If diff fails, it might be because the file is not in HEAD (untracked), we can just return stdout if it exists
-    if (err && err.stdout) {
-      return err.stdout.toString();
-    }
-    return "";
-  } finally {
-    if (tempPath) {
-      rm(tempPath, { force: true }).catch(() => { });
-    }
-  }
-});
-
-ipcMain.handle("atlas:git-stash-list", async (_event, repoPath: string) => {
-  try {
-    const cwd = repoPath || global.__atlasRepoRoot || process.cwd();
-    const { stdout } = await execFileAsync("git", ["stash", "list", "--pretty=format:%gd: %s"], { cwd });
-    return stdout.split("\n").filter(Boolean);
-  } catch {
-    return [];
-  }
-});
+// Git Source Control handled by gitIPC.ts
 
 ipcMain.handle("atlas:scan-todos", async (_event, repoPath: string) => {
   try {
