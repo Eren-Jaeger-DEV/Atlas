@@ -11,7 +11,7 @@
   "main": "./electron-dist/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"npx wait-on tcp:127.0.0.1:5173 && electron .\"",
-    "build": "vite build && tsc -p tsconfig.electron.json",
+    "build": "npx cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" vite build && tsc -p tsconfig.electron.json",
     "launch": "electron .",
     "electron": "electron .",
     "preview": "vite preview",
