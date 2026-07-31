@@ -86,6 +86,24 @@
       ],
       "category": "Development",
       "maintainer": "Eren-Jaeger-DEV <dev@atlas-studio.io>"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Atlas Studio"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64"] }
+      ],
+      "category": "public.app-category.developer-tools"
     }
   }
 }

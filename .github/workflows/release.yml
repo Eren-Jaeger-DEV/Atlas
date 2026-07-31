@@ -1,0 +1,174 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (.deb + AppImage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (Vite + Electron TypeScript)
+        run: pnpm --filter @atlas/editor build
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Package Linux
+        run: pnpm --filter @atlas/editor exec electron-builder --linux deb AppImage
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            apps/editor/dist-app/*.deb
+            apps/editor/dist-app/*.AppImage
+
+  build-windows:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (Vite + Electron TypeScript)
+        run: pnpm --filter @atlas/editor build
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Package Windows
+        run: pnpm --filter @atlas/editor exec electron-builder --win nsis
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: apps/editor/dist-app/*.exe
+
+  build-mac:
+    name: Build macOS (.dmg)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (Vite + Electron TypeScript)
+        run: pnpm --filter @atlas/editor build
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Package macOS
+        run: pnpm --filter @atlas/editor exec electron-builder --mac dmg
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: apps/editor/dist-app/*.dmg
+
+  release:
+    name: Create GitHub Release
+    needs: [build-linux, build-windows, build-mac]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux packages
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-packages
+          path: dist-release/linux
+
+      - name: Download Windows packages
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-packages
+          path: dist-release/windows
+
+      - name: Download macOS packages
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-packages
+          path: dist-release/macos
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Atlas Studio ${{ github.ref_name }}
+          body: |
+            ## Atlas Studio ${{ github.ref_name }}
+
+            A professional, AI-native code editor with a zero-AI editor core.
+
+            ### Downloads
+
+            | Platform | File |
+            |---|---|
+            | Windows 10/11 (64-bit) | `atlas-studio_*_x64.exe` |
+            | Linux (Debian/Ubuntu) | `atlas-studio_*_amd64.deb` |
+            | Linux (Universal) | `atlas-studio_*_x86_64.AppImage` |
+            | macOS | `atlas-studio_*_x64.dmg` |
+
+            ### Install
+
+            **Windows**: Run the `.exe` installer.
+            **Linux (deb)**: `sudo dpkg -i atlas-studio_*_amd64.deb`
+            **Linux (AppImage)**: `chmod +x atlas-studio_*.AppImage && ./atlas-studio_*.AppImage`
+            **macOS**: Open the `.dmg` and drag Atlas Studio to Applications.
+          files: |
+            dist-release/linux/*
+            dist-release/windows/*
+            dist-release/macos/*
+          draft: false
+          prerelease: false
