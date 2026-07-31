@@ -147,7 +147,7 @@ function createWindow(options?: { empty?: boolean; profile?: string | undefined 
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: "#000000",
+    backgroundColor: "#09090b",
     icon: path.join(__dirname, "../build/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
