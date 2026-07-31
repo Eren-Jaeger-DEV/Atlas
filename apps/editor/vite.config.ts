@@ -7,7 +7,14 @@ export default defineConfig({
   base: "./",
   plugins: [
     react(),
-    nodePolyfills(),
+    nodePolyfills({
+      include: ["buffer", "process", "util", "path", "events", "crypto", "stream", "string_decoder"],
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+    }),
     {
       name: "remove-crossorigin",
       transformIndexHtml(html) {
@@ -37,6 +44,7 @@ export default defineConfig({
       "framer-motion",
       "lucide-react",
     ],
+    exclude: ["electron", "child_process", "fs", "net", "tls", "dns"],
   },
   build: {
     outDir: "dist",
