@@ -22,6 +22,10 @@ export interface SettingsSchema {
   aiBaseUrl: string;
   gitBlameEnabled: boolean;
   gitDiffGuttersEnabled: boolean;
+  /** Enable the Atlas Remote HTTP/WebSocket control server. Defaults to false. */
+  enableRemoteControl: boolean;
+  /** Port the Atlas Remote server listens on. Defaults to 4000. */
+  remoteControlPort: number;
 }
 
 export const DEFAULT_SETTINGS_SCHEMA: SettingsSchema = {
@@ -40,6 +44,8 @@ export const DEFAULT_SETTINGS_SCHEMA: SettingsSchema = {
   aiBaseUrl: "",
   gitBlameEnabled: true,
   gitDiffGuttersEnabled: true,
+  enableRemoteControl: false,
+  remoteControlPort: 4000,
 };
 
 export class SettingsService {

@@ -329,6 +329,12 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   respondPermission: (reqId: string, granted: boolean): Promise<void> =>
     ipcRenderer.invoke("atlas:permission-response", reqId, granted),
 
+  onPluginPermissionRequest: (handler: (payload: { reqId: string; pluginId: string; pluginName?: string; permission: string }) => void) => {
+    const listener = (_event: any, payload: any) => handler(payload);
+    ipcRenderer.on("atlas:plugin-permission-request", listener);
+    return () => ipcRenderer.off("atlas:plugin-permission-request", listener);
+  },
+
   sendPlanDecision: (reqId: string, approved: boolean) =>
     ipcRenderer.send("atlas:plan-decision", { reqId, approved }),
 

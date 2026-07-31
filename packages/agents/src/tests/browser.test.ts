@@ -83,10 +83,14 @@ describe("Autonomous Browser & Dynamic DOM Tool Subsystem (@atlas/agents/browser
 
   it("should run autonomous browser subagent task-driven execution loop", async () => {
     const subagent = new BrowserSubagent({ maxIterations: 5 });
-    const result = await subagent.runTask("Navigate to app and search for products", "http://localhost:5173");
+    try {
+      const result = await subagent.runTask("Navigate to app and search for products", "http://localhost:5173");
 
-    expect(result.success).toBe(true);
-    expect(result.history.length).toBeGreaterThanOrEqual(2);
-    expect(result.axTreeText).toContain("Search Query");
+      expect(result.success).toBe(true);
+      expect(result.history.length).toBeGreaterThanOrEqual(2);
+      expect(result.axTreeText).toContain("Search Query");
+    } finally {
+      await subagent.close();
+    }
   });
 });

@@ -155,4 +155,8 @@ What is your next action? (Call a tool, or output JSON to finish)`
   public getEngine(): BrowserEngine {
     return this.engine;
   }
+
+  public async close(): Promise<void> {
+    await this.engine.close();
+  }
 }

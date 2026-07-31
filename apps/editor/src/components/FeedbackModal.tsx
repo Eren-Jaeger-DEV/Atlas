@@ -83,9 +83,9 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
                       }}
                       onClick={() => setType(cat)}
                     >
-                      {cat === "feature" && "💡 Feature Suggestion"}
-                      {cat === "bug" && "🐛 Bug Report"}
-                      {cat === "docs" && "📖 Documentation"}
+                      {cat === "feature" && "[FEATURE] Feature Suggestion"}
+                      {cat === "bug" && "[BUG] Bug Report"}
+                      {cat === "docs" && "[DOCS] Documentation"}
                     </button>
                   ))}
                 </div>

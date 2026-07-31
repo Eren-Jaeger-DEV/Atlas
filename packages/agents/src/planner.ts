@@ -104,7 +104,7 @@ export async function runPlanner(
 ): Promise<Plan> {
   const { provider, memory, repoRoot, onProgress, onEmit, runId } = options;
 
-  onProgress?.("🔍 Planner: researching codebase...");
+  onProgress?.("[PLANNER] Researching codebase...");
 
   const messages: import("@atlas/core").LLMMessage[] = [
     { role: "system", content: PLANNER_SYSTEM },

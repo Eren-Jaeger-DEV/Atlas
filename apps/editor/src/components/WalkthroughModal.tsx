@@ -28,15 +28,15 @@ export function WalkthroughModal({ isOpen, onClose }: WalkthroughModalProps) {
               <span style={{ fontSize: "11px", color: "#a1a1aa" }}>Full parity with VS Code & Antigravity IDE shortcuts.</span>
             </div>
             <div style={styles.featureItem}>
-              <span style={{ fontWeight: 600, color: "#ffffff" }}>🧠 Autonomous AI Swarms</span>
+              <span style={{ fontWeight: 600, color: "#ffffff" }}>[AGENT] Autonomous AI Swarms</span>
               <span style={{ fontSize: "11px", color: "#a1a1aa" }}>Parallel reasoning & automated plan approvals.</span>
             </div>
             <div style={styles.featureItem}>
-              <span style={{ fontWeight: 600, color: "#ffffff" }}>⚡ Live DAP & Terminal</span>
+              <span style={{ fontWeight: 600, color: "#ffffff" }}>[CORE] Live DAP & Terminal</span>
               <span style={{ fontSize: "11px", color: "#a1a1aa" }}>Interactive xterm shell and protocol debug client.</span>
             </div>
             <div style={styles.featureItem}>
-              <span style={{ fontWeight: 600, color: "#ffffff" }}>📊 Impact Analysis</span>
+              <span style={{ fontWeight: 600, color: "#ffffff" }}>[GRAPH] Impact Analysis</span>
               <span style={{ fontSize: "11px", color: "#a1a1aa" }}>Dependency resolution and symbol relationship graph.</span>
             </div>
           </div>

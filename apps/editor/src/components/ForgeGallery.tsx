@@ -254,6 +254,21 @@ const Tab = styled.button<{ $active: boolean }>`
   }
 `;
 
+const InstallBtn = styled.button`
+  background-color: var(--accent, #38bdf8);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  &:hover {
+    opacity: 0.9;
+  }
+`;
+
 function ForgeGalleryContent({ onOpenPluginDetail }: ForgeGalleryProps) {
   const api = useAtlasAPI();
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
@@ -330,6 +345,24 @@ function ForgeGalleryContent({ onOpenPluginDetail }: ForgeGalleryProps) {
     } catch (e: unknown) {
       console.error("Plugin installation failed:", e);
       setInstallError(e instanceof Error ? e.message : "Failed to install plugin. Check the console for details.");
+      setLoading(false);
+    }
+  };
+
+  const handleInstallMarketplace = async (plugin: PluginManifest) => {
+    setInstallError(null);
+    try {
+      setLoading(true);
+      if ((api as any)?.installMarketplaceExtension) {
+        await (api as any).installMarketplaceExtension(plugin);
+      } else if ((api as any)?.installPlugin) {
+        await (api as any).installPlugin(plugin);
+      }
+      loadPlugins();
+    } catch (e: unknown) {
+      console.error("Marketplace installation failed:", e);
+      setInstallError(e instanceof Error ? e.message : `Failed to install plugin '${plugin.name}'.`);
+    } finally {
       setLoading(false);
     }
   };
@@ -414,7 +447,18 @@ function ForgeGalleryContent({ onOpenPluginDetail }: ForgeGalleryProps) {
                     {plugin.publisher && <>by <Publisher>{plugin.publisher}</Publisher></>}
                   </PluginMeta>
                 </div>
-                {isInstalled && <InstalledBadge>[INSTALLED]</InstalledBadge>}
+                {isInstalled ? (
+                  <InstalledBadge>[INSTALLED]</InstalledBadge>
+                ) : (
+                  <InstallBtn
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleInstallMarketplace(plugin);
+                    }}
+                  >
+                    Install
+                  </InstallBtn>
+                )}
               </CardHeader>
 
               {plugin.description && (

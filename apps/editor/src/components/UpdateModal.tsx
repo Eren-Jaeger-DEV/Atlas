@@ -84,10 +84,10 @@ export function UpdateModal({ isOpen, onClose }: UpdateModalProps) {
                   Release Highlights (v1.0.0 Flagship):
                 </span>
                 <ul style={{ margin: "6px 0 0 0", paddingLeft: "18px", fontSize: "12px", color: "#a1a1aa", lineHeight: 1.6 }}>
-                  <li>✨ 100% Real Logic across all Window Top Menus (File, Edit, Selection, View, Go, Run, Terminal, Help).</li>
-                  <li>⚡ Live DAP Debugger Client &amp; Interactive xterm Shell Integration.</li>
-                  <li>🧠 Multi-agent Swarm Architecture &amp; Automated Plan Approval.</li>
-                  <li>📊 Real-time Impact Analysis Graph &amp; Symbol Relationships.</li>
+                  <li>[NEW] 100% Real Logic across all Window Top Menus (File, Edit, Selection, View, Go, Run, Terminal, Help).</li>
+                  <li>[CORE] Live DAP Debugger Client &amp; Interactive xterm Shell Integration.</li>
+                  <li>[AGENT] Multi-agent Swarm Architecture &amp; Automated Plan Approval.</li>
+                  <li>[GRAPH] Real-time Impact Analysis Graph &amp; Symbol Relationships.</li>
                 </ul>
               </div>
             </div>

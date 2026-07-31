@@ -3,12 +3,19 @@
  *
  * Isolated plugin lifecycle runtime with capabilities registration,
  * permission engine gating, and CommonJS module execution shim.
+ *
+ * Security model:
+ *   - Plugins MUST call ctx.requestPermission() before accessing protected APIs.
+ *   - Permissions are never auto-granted. The host emits a `plugin:permission-request`
+ *     event on the EventBus and awaits explicit user approval via the permission dialog.
+ *   - Main process routes IPC `atlas:permission-response` back via resolvePermissionRequest().
  */
 
 import { CommandService } from "./CommandService.js";
 import { EventBus } from "../events/EventBus.js";
 import type { LanguageContribution, PluginPermission } from "../types/plugin.js";
 import { PermissionEngine } from "../security/PermissionEngine.js";
+import { randomUUID } from "node:crypto";
 import vm from "node:vm";
 
 export interface PluginContext {
@@ -54,6 +61,13 @@ export class PluginHost {
   private commandService: CommandService;
   private eventBus: EventBus;
   private permissionEngine: PermissionEngine;
+
+  /**
+   * Pending permission requests keyed by requestId.
+   * Resolved by main process via resolvePermissionRequest() after user responds
+   * to the in-app permission dialog.
+   */
+  private pendingPermissionRequests: Map<string, (granted: boolean) => void> = new Map();
 
   constructor(
     commandService: CommandService,
@@ -127,11 +141,39 @@ export class PluginHost {
         });
       },
       requestPermission: async (permission: PluginPermission) => {
+        // Fast path: already granted in a previous session
         if (this.permissionEngine.hasPermission(plugin.id, permission)) {
           return true;
         }
-        this.permissionEngine.grantPermissions(plugin.id, [permission]);
-        return true;
+
+        // Gate: emit an event so the main process can show a permission dialog.
+        // The Promise resolves ONLY when the user explicitly approves or denies.
+        return new Promise<boolean>((resolve) => {
+          const reqId = randomUUID();
+          this.pendingPermissionRequests.set(reqId, (granted: boolean) => {
+            if (granted) {
+              this.permissionEngine.grantPermissions(plugin.id, [permission]);
+            }
+            resolve(granted);
+          });
+
+          // Notify the host environment (main process picks this up via EventBus listener)
+          this.eventBus.emit("plugin:permission-request" as any, {
+            reqId,
+            pluginId: plugin.id,
+            pluginName: plugin.name,
+            permission,
+          });
+
+          // Safety timeout: auto-deny after 5 minutes if no response
+          setTimeout(() => {
+            if (this.pendingPermissionRequests.has(reqId)) {
+              console.warn(`[PluginHost] Permission request ${reqId} for '${plugin.id}' timed out — auto-denying.`);
+              this.pendingPermissionRequests.get(reqId)?.(false);
+              this.pendingPermissionRequests.delete(reqId);
+            }
+          }, 5 * 60 * 1000);
+        });
       },
       onEvent: (eventName: any, handler: any) => {
         const unreg = this.eventBus.on(eventName, handler);
@@ -223,5 +265,26 @@ export class PluginHost {
     const ext = filePath.split(".").pop()?.toLowerCase();
     if (!ext) return undefined;
     return this.registeredViewers.get(`.${ext}`) || this.registeredViewers.get(ext);
+  }
+
+  /**
+   * Called by the main process after the user responds to a permission dialog.
+   * Routes the decision back to the waiting requestPermission() Promise.
+   */
+  public resolvePermissionRequest(reqId: string, granted: boolean): void {
+    const resolver = this.pendingPermissionRequests.get(reqId);
+    if (resolver) {
+      resolver(granted);
+      this.pendingPermissionRequests.delete(reqId);
+    } else {
+      console.warn(`[PluginHost] No pending permission request found for reqId: ${reqId}`);
+    }
+  }
+
+  /**
+   * Returns all pending permission request IDs (useful for diagnostics).
+   */
+  public getPendingPermissionRequests(): string[] {
+    return Array.from(this.pendingPermissionRequests.keys());
   }
 }

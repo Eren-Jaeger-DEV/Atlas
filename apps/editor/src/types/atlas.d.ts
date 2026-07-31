@@ -106,9 +106,15 @@ export interface AtlasAPI {
   updateSettings: (settings: any) => Promise<void>;
   onSettingsUpdated: (handler: (settings: any) => void) => () => void;
 
+  listPlugins: () => Promise<any[]>;
+  installPlugin: (sourcePath: string) => Promise<boolean>;
+  uninstallPlugin: (pluginId: string) => Promise<boolean>;
+  getFileViewer: (filePath: string) => Promise<{ supported: boolean; type?: string; html?: string; error?: string }>;
+
   grantPermission: (extensionId: string, permissions: string[]) => Promise<void>;
   revokePermission: (extensionId: string) => Promise<void>;
   respondPermission: (reqId: string, granted: boolean) => Promise<void>;
+  onPluginPermissionRequest: (handler: (payload: { reqId: string; pluginId: string; pluginName?: string; permission: string }) => void) => () => void;
   sendPlanDecision: (reqId: string, approved: boolean) => void;
   onRequestPlanApproval: (handler: (payload: { reqId: string, plan: any }) => void) => () => void;
 

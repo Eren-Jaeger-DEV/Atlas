@@ -52,13 +52,19 @@ export class BrainManager {
     return path.join(this.sessionDir, "transcripts");
   }
 
+  /**
+   * Appends an event to the session transcript using non-blocking async filesystem operations.
+   */
   public appendTranscript(event: any) {
     const transcriptFile = path.join(this.getTranscriptsDir(), "transcript.jsonl");
     const entry = JSON.stringify({
       timestamp: new Date().toISOString(),
       ...event
     }) + "\n";
-    fs.appendFileSync(transcriptFile, entry, "utf-8");
+
+    fs.promises.appendFile(transcriptFile, entry, "utf-8").catch((err) => {
+      console.warn("[BrainManager] Async transcript write failed:", err.message);
+    });
   }
 
   public async writeArtifact(filename: string, content: string): Promise<void> {
@@ -79,12 +85,16 @@ export class BrainManager {
     if (!fs.existsSync(skillsDir)) return [];
     
     const skills: Array<{ name: string; content: string }> = [];
-    const files = fs.readdirSync(skillsDir);
-    for (const file of files) {
-      if (file.endsWith(".md")) {
-        const content = fs.readFileSync(path.join(skillsDir, file), "utf-8");
-        skills.push({ name: file.replace(".md", ""), content });
+    try {
+      const files = fs.readdirSync(skillsDir);
+      for (const file of files) {
+        if (file.endsWith(".md")) {
+          const content = fs.readFileSync(path.join(skillsDir, file), "utf-8");
+          skills.push({ name: file.replace(".md", ""), content });
+        }
       }
+    } catch (e: any) {
+      console.warn(`[BrainManager] Error reading skills directory '${skillsDir}':`, e.message);
     }
     return skills;
   }
@@ -107,7 +117,9 @@ export class BrainManager {
               rules.push({ name: file, content });
             }
           }
-        } catch (e) {}
+        } catch (e: any) {
+          console.warn(`[BrainManager] Error reading rules directory '${dir}':`, e.message);
+        }
       }
     }
     return rules;
@@ -131,7 +143,9 @@ export class BrainManager {
               workflows.push({ name: file, content });
             }
           }
-        } catch (e) {}
+        } catch (e: any) {
+          console.warn(`[BrainManager] Error reading workflows directory '${dir}':`, e.message);
+        }
       }
     }
     return workflows;

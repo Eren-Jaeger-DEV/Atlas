@@ -55,6 +55,9 @@ function safeJsonParse<T = any>(str: string, fallback: T): T {
 
 let activeWatcher: chokidar.FSWatcher | null = null;
 
+import { registerFsIPCHandlers } from "./ipc/fsIPC.js";
+import { registerGitIPCHandlers } from "./ipc/gitIPC.js";
+
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
@@ -435,6 +438,10 @@ function getProjectRoot(): string {
   }
   return process.cwd();
 }
+
+// Register modular domain IPC handlers
+registerFsIPCHandlers(getProjectRoot);
+registerGitIPCHandlers();
 
 // ---------------------------------------------------------------------------
 // IPC handlers — bridge between renderer and agent runtime
@@ -1050,57 +1057,54 @@ ipcMain.handle("atlas:format-code", async (_event, repoPath: string, filePath: s
   }
 });
 
-// LSP Support
-let activeLanguageServer: cp.ChildProcess | null = null;
-let activeLanguageServerType: string | null = null;
+// Multi-language LSP Support Map (runs language servers in parallel without process killing churn)
+const activeLanguageServers = new Map<string, cp.ChildProcess>();
 
 const handleStartLsp = async (event: any, repoPath: string, language: string = "typescript") => {
-  if (activeLanguageServerType === language && activeLanguageServer) {
+  const existing = activeLanguageServers.get(language);
+  if (existing && !existing.killed) {
     return "already_running";
   }
-  if (activeLanguageServer) {
-    activeLanguageServer.kill();
-    activeLanguageServer = null;
-  }
-  activeLanguageServerType = language;
 
   try {
     const { ServiceContainer } = await import("@atlas/core");
     const pluginHost = ServiceContainer.getInstance().pluginHost;
     const langContribution = pluginHost.getRegisteredLanguage(language);
 
+    let lspProc: cp.ChildProcess | null = null;
+
     if (langContribution && langContribution.startLsp) {
       console.log(`[PluginHost] Spawning LSP for '${language}' via registered plugin...`);
       const result = await langContribution.startLsp(repoPath);
       if (result && result.process) {
-        activeLanguageServer = result.process;
+        lspProc = result.process;
       }
     } else {
       if (language === "python") {
-        activeLanguageServer = cp.spawn("npx", ["-y", "--package=pyright", "pyright-langserver", "--stdio"], { cwd: repoPath, shell: process.platform === "win32" });
+        lspProc = cp.spawn("npx", ["-y", "--package=pyright", "pyright-langserver", "--stdio"], { cwd: repoPath, shell: process.platform === "win32" });
       } else {
         let tsserverPath = require.resolve("typescript-language-server/lib/cli.mjs");
         if (tsserverPath.includes("app.asar")) {
           tsserverPath = tsserverPath.replace("app.asar", "app.asar.unpacked");
         }
-        activeLanguageServer = cp.spawn("node", [tsserverPath, "--stdio"], { cwd: repoPath });
+        lspProc = cp.spawn("node", [tsserverPath, "--stdio"], { cwd: repoPath });
       }
     }
 
-    if (activeLanguageServer) {
-      activeLanguageServer.stdout?.on("data", (data: Buffer) => {
+    if (lspProc) {
+      activeLanguageServers.set(language, lspProc);
+
+      lspProc.stdout?.on("data", (data: Buffer) => {
         safeSend(event.sender, "atlas:lsp-server-to-client", data.toString("utf-8"));
       });
 
-      activeLanguageServer.stderr?.on("data", (data: Buffer) => {
+      lspProc.stderr?.on("data", (data: Buffer) => {
         console.error(`[LSP Server Error - ${language}]:`, data.toString("utf-8"));
       });
 
-      activeLanguageServer.on("close", () => {
-        if (activeLanguageServerType === language) {
-          activeLanguageServer = null;
-          activeLanguageServerType = null;
-        }
+      lspProc.on("close", () => {
+        activeLanguageServers.delete(language);
+        console.log(`[LSP] Server process for '${language}' stopped.`);
       });
     }
 
@@ -1112,6 +1116,20 @@ const handleStartLsp = async (event: any, repoPath: string, language: string = "
 };
 ipcMain.handle("atlas:lsp-start", handleStartLsp);
 ipcMain.handle("atlas:start-lsp", handleStartLsp);
+
+ipcMain.on("atlas:lsp-client-to-server", (_event, rawData: any) => {
+  const message = typeof rawData === "string" ? rawData : rawData?.message;
+  const targetLang = typeof rawData === "object" ? rawData?.language : undefined;
+
+  if (targetLang && activeLanguageServers.has(targetLang)) {
+    activeLanguageServers.get(targetLang)?.stdin?.write(message);
+  } else {
+    // Write to all active language servers
+    activeLanguageServers.forEach((proc) => {
+      proc.stdin?.write(message);
+    });
+  }
+});
 
 ipcMain.handle("atlas:get-file-viewer", async (_event, filePath: string) => {
   try {
@@ -1129,11 +1147,6 @@ ipcMain.handle("atlas:get-file-viewer", async (_event, filePath: string) => {
   return { supported: false };
 });
 
-ipcMain.on("atlas:lsp-client-to-server", (_event, message: string) => {
-  if (activeLanguageServer && activeLanguageServer.stdin) {
-    activeLanguageServer.stdin.write(message);
-  }
-});
 
 // DAP Support
 let dapProcess: cp.ChildProcess | null = null;
@@ -2191,30 +2204,58 @@ ipcMain.handle("atlas:list-extensions", async () => {
   }
 });
 
-ipcMain.handle("atlas:install-plugin", async (_event, sourcePath: string | any) => {
-  const pluginsDir = await getPluginsDir();
-  if (typeof sourcePath === "string") {
-    const pPath = path.join(sourcePath, "plugin.json");
-    const mPath = path.join(sourcePath, "manifest.json");
-    try {
-      let raw = "";
-      try {
-        raw = await readFile(pPath, "utf-8");
-      } catch {
-        raw = await readFile(mPath, "utf-8");
-      }
-      const manifest = JSON.parse(raw);
-      const targetPath = path.join(pluginsDir, manifest.id || manifest.name);
+ipcMain.handle("atlas:install-remote-plugin", async (_event, params: { url: string; expectedSha256?: string; pluginId?: string }) => {
+  const { url: remoteUrl, expectedSha256, pluginId: customId } = params || {};
+  if (!remoteUrl) throw new Error("Remote plugin URL is required.");
 
-      await mkdir(targetPath, { recursive: true });
-      await fsCp(sourcePath, targetPath, { recursive: true });
-      return true;
-    } catch (e) {
-      console.error("[PluginRuntime] Failed to install plugin:", e);
-      throw e;
-    }
-  }
-  return true;
+  const pluginsDir = await getPluginsDir();
+  const https = remoteUrl.startsWith("https") ? await import("node:https") : await import("node:http");
+  const crypto = await import("node:crypto");
+
+  return new Promise((resolve, reject) => {
+    https.get(remoteUrl, (res) => {
+      if (res.statusCode !== 200) {
+        return reject(new Error(`Failed to download plugin from '${remoteUrl}' (HTTP status ${res.statusCode})`));
+      }
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", async () => {
+        try {
+          const buffer = Buffer.concat(chunks);
+
+          // Verify SHA256 Checksum
+          if (expectedSha256) {
+            const actualSha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+            if (actualSha256.toLowerCase() !== expectedSha256.toLowerCase()) {
+              return reject(
+                new Error(`[SecurityError] Plugin SHA256 checksum mismatch! Expected: ${expectedSha256}, Actual: ${actualSha256}`)
+              );
+            }
+          }
+
+          const pid = customId || `remote-plugin-${Date.now()}`;
+          const targetPath = path.join(pluginsDir, pid);
+          await mkdir(targetPath, { recursive: true });
+
+          // Write raw plugin manifest / bundle file
+          const manifestPath = path.join(targetPath, "plugin.json");
+          try {
+            const contentStr = buffer.toString("utf-8");
+            JSON.parse(contentStr); // Verify valid JSON
+            await writeFile(manifestPath, contentStr, "utf-8");
+          } catch {
+            await writeFile(path.join(targetPath, "index.js"), buffer);
+            await writeFile(manifestPath, JSON.stringify({ id: pid, name: pid, version: "1.0.0", main: "index.js" }), "utf-8");
+          }
+
+          resolve({ success: true, pluginId: pid, path: targetPath });
+        } catch (err: any) {
+          reject(new Error(`Failed to process plugin download: ${err.message}`));
+        }
+      });
+      res.on("error", (err) => reject(err));
+    });
+  });
 });
 
 ipcMain.handle("atlas:uninstall-plugin", async (_event, pluginId: string) => {
@@ -2356,7 +2397,7 @@ declare global {
   var __atlasWorkspaceRoots: string[] | undefined;
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   protocol.handle("app", async (request) => {
     const url = new URL(request.url);
     let relativePath = url.pathname;
@@ -2397,11 +2438,41 @@ app.whenReady().then(() => {
     autoLoadExtensions().catch(e => console.error("[ExtensionRuntime] Background load error:", e));
   }, 500);
 
+  // Wire PluginHost permission-request events -> renderer dialog
+  // When a plugin calls ctx.requestPermission(), the PluginHost emits
+  // 'plugin:permission-request' on EventBus. We forward it to the renderer
+  // so the user sees an Approve/Deny dialog, then route the answer back.
+  setTimeout(async () => {
+    try {
+      const { ServiceContainer } = await import("@atlas/core");
+      const { EventBus } = await import("@atlas/core");
+      const pluginHost = ServiceContainer.getInstance().pluginHost;
+      const bus = EventBus.getInstance();
+      bus.on("plugin:permission-request" as any, (payload: any) => {
+        if (mainWindow) {
+          mainWindow.webContents.send("atlas:plugin-permission-request", payload);
+        }
+      });
+      console.log("[PluginHost] Permission request bridge registered.");
+    } catch (e) {
+      console.error("[PluginHost] Failed to register permission bridge:", e);
+    }
+  }, 600);
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
-  startRemoteServer();
+  // Load or generate the remote auth token via safeStorage for persistence
+  // Token is generated once on first run and reloaded on subsequent starts.
+  // The remote server only starts if the user explicitly enables it in Settings.
+  await initRemoteAuthToken();
+  const currentSettings = await getMergedSettings();
+  if (currentSettings.enableRemoteControl === true) {
+    startRemoteServer(currentSettings.remoteControlPort ?? 4000);
+  } else {
+    console.log("[Remote] Atlas Remote is disabled. Enable it in Settings > Remote Control.");
+  }
 });
 
 app.on("window-all-closed", () => {
@@ -2476,10 +2547,48 @@ ipcMain.handle("atlas:scan-deps", async (_event, repoPath) => {
 // ---------------------------------------------------------------------------
 // Remote Phone Control (Phase 5)
 // ---------------------------------------------------------------------------
-const remoteClients = new Set<WebSocket>();
-let remoteAuthToken: string = crypto.randomBytes(16).toString("hex");
+// Atlas Remote Control — Authenticated HTTP + WebSocket Server
+// ---------------------------------------------------------------------------
 
-function startRemoteServer() {
+/**
+ * Remote auth token management.
+ * Token is generated once and stored via safeStorage so it persists
+ * across restarts. Phone bookmarks/QR codes remain valid indefinitely.
+ */
+const remoteClients = new Set<WebSocket>();
+let remoteAuthToken: string = "";
+
+async function initRemoteAuthToken(): Promise<void> {
+  const KEY = "atlas-remote-auth-token";
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      // Try to load existing persisted token
+      const userDataPath = app.getPath("userData");
+      const tokenFile = path.join(userDataPath, ".atlas-remote-token");
+      if (fs.existsSync(tokenFile)) {
+        const encrypted = fs.readFileSync(tokenFile);
+        remoteAuthToken = safeStorage.decryptString(encrypted);
+        console.log("[Remote] Loaded persisted auth token from safeStorage.");
+        return;
+      }
+      // Generate new token and persist it
+      remoteAuthToken = crypto.randomBytes(16).toString("hex");
+      const encrypted = safeStorage.encryptString(remoteAuthToken);
+      fs.writeFileSync(tokenFile, encrypted);
+      console.log("[Remote] Generated and persisted new auth token.");
+    } else {
+      // safeStorage not available (CI/headless) — generate ephemeral token
+      remoteAuthToken = crypto.randomBytes(16).toString("hex");
+      console.warn("[Remote] safeStorage unavailable — token is ephemeral for this session.");
+    }
+  } catch (e) {
+    // Fallback: ephemeral token
+    remoteAuthToken = crypto.randomBytes(16).toString("hex");
+    console.warn("[Remote] Token persistence failed, using ephemeral token:", e);
+  }
+}
+
+function startRemoteServer(port: number = 4000) {
   const tryPort = (port: number) => {
     const server = http.createServer((req, res) => {
       const hostHeader = req.headers.host || `localhost:${port}`;

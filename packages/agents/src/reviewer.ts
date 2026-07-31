@@ -58,7 +58,7 @@ export async function runReviewer(
 ): Promise<ReviewResult> {
   const { provider, memory, repoRoot, onProgress } = options;
 
-  onProgress?.("🔍 Reviewer: analysing diff...");
+  onProgress?.("[REVIEWER] Analysing diff...");
 
   // Get graph context for conventions
   const conventionContext = await queryMemoryTool(
@@ -73,11 +73,17 @@ export async function runReviewer(
     impactContextParts.push(`Impact of ${fp}:\n${impact}`);
   }
 
+  const rawDiff = coderOutput.diff;
+  const isTruncated = rawDiff.length > 20_000;
+  const formattedDiff = isTruncated
+    ? `${rawDiff.slice(0, 20_000)}\n\n[...diff truncated at 20,000 chars — ${rawDiff.length - 20_000} chars omitted. Assess risk accordingly...]`
+    : rawDiff;
+
   const messages = [
     { role: "system" as const, content: REVIEWER_SYSTEM },
     {
       role: "user" as const,
-      content: `Plan step: ${step.title}\n\nGoal: ${step.description}\n\nCoder's reasoning:\n${coderOutput.reasoning}\n\nProject conventions from memory graph:\n${conventionContext}\n\nImpact analysis:\n${impactContextParts.join("\n\n")}\n\nDiff to review:\n\`\`\`diff\n${coderOutput.diff.slice(0, 20_000)}\n\`\`\`\n\nProvide your review as JSON.`,
+      content: `Plan step: ${step.title}\n\nGoal: ${step.description}\n\nCoder's reasoning:\n${coderOutput.reasoning}\n\nProject conventions from memory graph:\n${conventionContext}\n\nImpact analysis:\n${impactContextParts.join("\n\n")}\n\nDiff to review:\n\`\`\`diff\n${formattedDiff}\n\`\`\`\n\nProvide your review as JSON.`,
     },
   ];
 

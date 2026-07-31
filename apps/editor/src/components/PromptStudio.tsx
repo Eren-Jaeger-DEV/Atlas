@@ -6,8 +6,33 @@ export function PromptStudio() {
   );
   const [temperature, setTemperature] = useState(0.2);
   const [maxTokens, setMaxTokens] = useState(4096);
+  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState<string | null>(null);
 
   const estimatedTokens = Math.round(promptText.length / 4);
+
+  const handleRunGeneration = async () => {
+    if (!promptText.trim()) return;
+    setLoading(true);
+    setOutput(null);
+
+    try {
+      const api = (window as any).atlasAPI;
+      if (api && api.inlineAgentAction) {
+        const res = await api.inlineAgentAction("explain", promptText);
+        setOutput(res || "Generation completed.");
+      } else if (api && api.run) {
+        const record = await api.run(promptText);
+        setOutput(record?.plan?.planningReasoning || "Agent run completed.");
+      } else {
+        setOutput("AI Agent API is unavailable.");
+      }
+    } catch (e: any) {
+      setOutput(`[Error] ${e.message || String(e)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div style={styles.container}>
@@ -56,9 +81,26 @@ export function PromptStudio() {
             />
           </div>
 
-          <button style={styles.testBtn}>⚡ Run Test Generation</button>
+          <button
+            style={{
+              ...styles.testBtn,
+              opacity: loading ? 0.7 : 1,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+            onClick={handleRunGeneration}
+            disabled={loading}
+          >
+            {loading ? "Generating..." : "[RUN] Run Test Generation"}
+          </button>
         </div>
       </div>
+
+      {output && (
+        <div style={styles.outputBox}>
+          <p style={styles.outputTitle}>GENERATION OUTPUT:</p>
+          <pre style={styles.outputPre}>{output}</pre>
+        </div>
+      )}
     </div>
   );
 }
@@ -149,5 +191,24 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "11px",
     fontWeight: 700,
     cursor: "pointer",
+  },
+  outputBox: {
+    borderTop: "1px solid #27272a",
+    padding: "10px 12px",
+    backgroundColor: "#111113",
+  },
+  outputTitle: {
+    margin: "0 0 6px",
+    fontSize: "10px",
+    fontWeight: 700,
+    color: "#a1a1aa",
+  },
+  outputPre: {
+    margin: 0,
+    fontFamily: "monospace",
+    fontSize: "11px",
+    color: "#38bdf8",
+    whiteSpace: "pre-wrap",
+    lineHeight: "1.5",
   },
 };

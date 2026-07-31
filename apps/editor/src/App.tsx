@@ -2,6 +2,7 @@ import "./global.css";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { EditorPane } from "./components/EditorPane.js";
+import { PluginViewerPane } from "./components/PluginViewerPane.js";
 import { FileExplorer } from "./components/FileExplorer.js";
 import { GlobalSearchPanel } from "./components/GlobalSearchPanel.js";
 import { GitPanel } from "./components/GitPanel.js";
@@ -29,6 +30,7 @@ import { MergeConflictEditor } from "./components/MergeConflictEditor.js";
 import { AiSafetyModal } from "./components/AiSafetyModal.js";
 import { InlineAiTool } from "./components/InlineAiTool.js";
 import { PlanApprovalModal } from "./components/PlanApprovalModal.js";
+import { PluginPermissionModal } from "./components/PluginPermissionModal.js";
 import { AboutAtlasModal } from "./components/AboutAtlasModal.js";
 import { ProcessExplorerModal } from "./components/ProcessExplorerModal.js";
 import { WalkthroughModal } from "./components/WalkthroughModal.js";
@@ -175,6 +177,7 @@ function AppInner() {
   const [zenMode, setZenMode]                       = useState(false);
   const [zoomLevel, setZoomLevel]                   = useState(0);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ reqId: string, plan: any } | null>(null);
+  const [pendingPluginPermRequest, setPendingPluginPermRequest] = useState<{ reqId: string; pluginId: string; pluginName?: string; permission: string } | null>(null);
   const [showInlineAi, setShowInlineAi]             = useState(false);
   const [showAboutModal, setShowAboutModal]         = useState(false);
   const [showProcessExplorerModal, setShowProcessExplorerModal] = useState(false);
@@ -2154,10 +2157,14 @@ function AppInner() {
         ipc.on("atlas:request-permission", handleRequestPermission);
         
         const cleanupPlanReq = window.atlasAPI.onRequestPlanApproval(handlePlanApprovalRequest);
+        const cleanupPluginPermReq = (window.atlasAPI as any)?.onPluginPermissionRequest?.((data: any) => {
+          setPendingPluginPermRequest(data);
+        });
 
         return () => {
           ipc.removeListener("atlas:request-permission", handleRequestPermission);
           cleanupPlanReq();
+          if (cleanupPluginPermReq) cleanupPluginPermReq();
         };
       }
     }
@@ -2532,6 +2539,8 @@ function AppInner() {
                           pluginData={activeTab.extensionData || { id: "atlas-lang-typescript", name: "TypeScript Language Support" }}
                           onClose={() => handleCloseTab(activeTabIndex)}
                         />
+                      ) : activeTab.tabType === "plugin-viewer" || activeTab.usePluginViewer ? (
+                        <PluginViewerPane filePath={activeTab.filePath} />
                       ) : activeTab.isBinary ? (
                         <BinaryFileView onOpenAnyway={async () => {
                           const c = await api()?.readFile(activeTab.filePath).catch(()=>"// read error") || "";
@@ -2560,7 +2569,9 @@ function AppInner() {
                 {isSplit && (
                   <div style={{ flex: 1, height: "100%", overflow: "auto" }}>
                     {splitTab ? (
-                      splitTab.isBinary ? (
+                      splitTab.tabType === "plugin-viewer" || splitTab.usePluginViewer ? (
+                        <PluginViewerPane filePath={splitTab.filePath} />
+                      ) : splitTab.isBinary ? (
                         <BinaryFileView onOpenAnyway={async () => {
                           const c = await api()?.readFile(splitTab.filePath).catch(()=>"// read error") || "";
                           setTabs(p => p.map((t,i) => i === splitTabIndex ? {...t, isBinary: false, content: c} : t));
@@ -2791,6 +2802,24 @@ function AppInner() {
           onReject={(reqId) => {
             api()?.sendPlanDecision(reqId, false);
             setPendingPlanApproval(null);
+          }}
+        />
+      )}
+
+      {/* Plugin Permission Modal */}
+      {pendingPluginPermRequest && (
+        <PluginPermissionModal
+          reqId={pendingPluginPermRequest.reqId}
+          pluginId={pendingPluginPermRequest.pluginId}
+          pluginName={pendingPluginPermRequest.pluginName}
+          permission={pendingPluginPermRequest.permission}
+          onApprove={(reqId) => {
+            api()?.respondPermission(reqId, true);
+            setPendingPluginPermRequest(null);
+          }}
+          onReject={(reqId) => {
+            api()?.respondPermission(reqId, false);
+            setPendingPluginPermRequest(null);
           }}
         />
       )}
