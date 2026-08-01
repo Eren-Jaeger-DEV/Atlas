@@ -164,7 +164,7 @@ const INDENT_OPTIONS = [
 
 type PickerKind = "language" | "indent" | "eol" | "model" | "branch" | null;
 
-export function StatusBar({
+export const StatusBar = React.memo(function StatusBar({
   repoPath,
   activeLanguage,
   cursorSymbol,
@@ -469,7 +469,7 @@ export function StatusBar({
       </AnimatePresence>
     </>
   );
-}
+});
 
 const s: Record<string, React.CSSProperties> = {
   statusBar: {

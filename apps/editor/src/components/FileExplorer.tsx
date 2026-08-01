@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronRight, ChevronDown, FolderPlus, FilePlus, RefreshCw, FolderSearch } from "lucide-react";
 import { FileIcon } from "./FileIcons.js";
 import { useQuickInput } from "./QuickInputProvider.js";
@@ -27,7 +27,7 @@ interface FileExplorerProps {
   onOpenInTerminal?: (dir: string) => void;
 }
 
-export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFolder, onOpenInTerminal }: FileExplorerProps) {
+export const FileExplorer = React.memo(function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFolder, onOpenInTerminal }: FileExplorerProps) {
   const { showInputBox } = useQuickInput();
   const { showContextMenu } = useContextMenu();
   const { showDialog } = useDialog();
@@ -352,7 +352,7 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
       </div>
     </div>
   );
-}
+});
 
 function CtxMenuItem({ label, icon, onClick, danger }: { label: string; icon: string; onClick: () => void; danger?: boolean }) {
   const [hovered, setHovered] = useState(false);

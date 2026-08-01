@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useContextMenu } from "./ContextMenuProvider.js";
 import { useDialog } from "./DialogProvider.js";
 
@@ -13,7 +13,7 @@ interface GitPanelProps {
   onViewDiff: (filePath: string, staged: boolean) => void;
 }
 
-export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
+export const GitPanel = React.memo(function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
   const { showContextMenu } = useContextMenu();
   const { showDialog } = useDialog();
   const [gitFiles, setGitFiles] = useState<GitFile[]>([]);
@@ -333,7 +333,7 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
       </div>
     </div>
   );
-}
+});
 
 function getStatusColor(status: string): string {
   const s = status.toLowerCase();
@@ -345,7 +345,7 @@ function getStatusColor(status: string): string {
   return "#e4e4e7";
 }
 
-import React from "react";
+
 const styles: Record<string, React.CSSProperties> = {
   container: {
     display: "flex",

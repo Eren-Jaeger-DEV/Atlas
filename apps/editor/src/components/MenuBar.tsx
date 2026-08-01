@@ -38,7 +38,7 @@ export interface MenuBarProps {
   logoImg: string;
 }
 
-export function MenuBar({
+export const MenuBar = React.memo(function MenuBar({
   menus,
   wname,
   isSplit,
@@ -343,4 +343,4 @@ export function MenuBar({
       </div>
     </header>
   );
-}
+});

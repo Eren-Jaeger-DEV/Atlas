@@ -881,8 +881,9 @@ ipcMain.handle("atlas:global-search", async (_event, repoPath: string, query: st
     if (options?.include) args.push("-g", options.include);
     if (options?.exclude) args.push("-g", "!" + options.exclude);
 
-    // Default ignores
-    args.push("-g", "!node_modules", "-g", "!.git");
+    // Default ignores & performance caps
+    args.push("-m", "500");
+    args.push("-g", "!node_modules", "-g", "!.git", "-g", "!dist", "-g", "!dist-app", "-g", "!.turbo", "-g", "!.atlas");
     args.push(repoPath);
 
     return new Promise((resolve, reject) => {
