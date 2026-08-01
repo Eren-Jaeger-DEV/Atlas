@@ -13,3 +13,7 @@ export { EmbeddingEngine, cosineSimilarity, generateLocalEmbedding } from "./emb
 // Atlas Structural AST Pattern Search Engine
 export { StructuralAstSearch, structuralAstSearch, AST_PATTERN_PRESETS, type AstMatch, type AstPatternPreset } from "./StructuralAstSearch.js";
 
+// Atlas Prism — Structural AST Semantic Git Diff Engine
+export { AtlasPrism, atlasPrism, type PrismDiffResult, type PrismDiffHunk, type PrismChangeCategory } from "./AtlasPrism.js";
+
+
