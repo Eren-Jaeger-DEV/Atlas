@@ -17,11 +17,27 @@
       "verified": true
     },
     {
+      "id": "atlas-lang-go",
+      "name": "Go Language Support",
+      "latestVersion": "1.0.0",
+      "description": "Official Go language support powered by gopls LSP and Delve DAP debugger.",
+      "publisher": "atlas-core",
+      "verified": true
+    },
+    {
       "id": "atlas-viewer-markdown",
       "name": "Markdown Preview Viewer",
       "latestVersion": "1.0.0",
       "description": "Live Markdown rendering preview for .md and .markdown files.",
       "publisher": "atlas-core",
+      "verified": true
+    },
+    {
+      "id": "atlascord",
+      "name": "Atlascord (Discord Rich Presence)",
+      "latestVersion": "1.0.0",
+      "description": "Customizable Discord Rich Presence plugin for Atlas Studio — displays real-time active editor, line numbers, workspace details, and diagnostics status on Discord.",
+      "publisher": "Eren-Jaeger-DEV",
       "verified": true
     }
   ]
