@@ -23,11 +23,14 @@ export function useWorkspaceTabs() {
 
   const activeTab = tabs[activeTabIndex];
 
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
   useEffect(() => {
     localStorage.setItem("atlas_auto_save", String(autoSaveEnabled));
     if (!autoSaveEnabled) return;
     const timer = setInterval(() => {
-      tabs.forEach((tab) => {
+      tabsRef.current.forEach((tab) => {
         if (tab.isDirty && tab.filePath && !tab.filePath.startsWith("Untitled") && tab.tabType !== "extension-detail") {
           api()
             ?.writeFile(tab.filePath, tab.content)
@@ -37,9 +40,9 @@ export function useWorkspaceTabs() {
             .catch(() => {});
         }
       });
-    }, 1500);
+    }, 3000);
     return () => clearInterval(timer);
-  }, [autoSaveEnabled, tabs]);
+  }, [autoSaveEnabled]);
 
   const handleSave = useCallback(async () => {
     if (!activeTab || !activeTab.isDirty || activeTab.tabType === "extension-detail") return;
@@ -62,6 +65,15 @@ export function useWorkspaceTabs() {
   const handleCloseTab = useCallback((index: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setTabs((prev) => {
+      const closedTab = prev[index];
+      if (closedTab?.filePath && (window as any).monaco) {
+        try {
+          const monaco = (window as any).monaco;
+          const uri = monaco.Uri.file(closedTab.filePath);
+          const model = monaco.editor.getModel(uri);
+          if (model) model.dispose();
+        } catch {}
+      }
       const next = prev.filter((_, i) => i !== index);
       if (activeTabIndex >= next.length) {
         setActiveTabIndex(Math.max(0, next.length - 1));

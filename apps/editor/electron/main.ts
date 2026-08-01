@@ -62,6 +62,16 @@ protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
 
+// Windows Stability & GPU Crash Protection
+app.commandLine.appendSwitch("disable-gpu-process-crash-limit");
+app.commandLine.appendSwitch("max-active-webgl-contexts", "32");
+
+app.on("child-process-gone", (event, details) => {
+  if (details.type === "GPU") {
+    console.warn("[WARN] GPU process exited unexpectedly on host system:", details.reason);
+  }
+});
+
 const execFileAsync = promisify(execFile);
 const isDev = process.env["NODE_ENV"] === "development";
 
@@ -1403,16 +1413,29 @@ ipcMain.handle("atlas:terminal-create", async (event, termId: string, cwd?: stri
   terminalProcesses.set(termId, proc);
   terminalHistories.set(termId, []);
 
+  let ptyBuffer = "";
+  let ptyTimer: NodeJS.Timeout | null = null;
+
   proc.onData((data: string) => {
     const hist = terminalHistories.get(termId);
     if (hist) {
       hist.push(data);
       if (hist.length > 500) hist.shift(); // Keep last 500 chunks
     }
-    safeSend(event.sender, "atlas:terminal-data", { termId, data });
+    ptyBuffer += data;
+    if (!ptyTimer) {
+      ptyTimer = setTimeout(() => {
+        if (ptyBuffer) {
+          safeSend(event.sender, "atlas:terminal-data", { termId, data: ptyBuffer });
+          ptyBuffer = "";
+        }
+        ptyTimer = null;
+      }, 16);
+    }
   });
 
   proc.onExit(() => {
+    if (ptyTimer) clearTimeout(ptyTimer);
     terminalProcesses.delete(termId);
     terminalHistories.delete(termId);
   });
