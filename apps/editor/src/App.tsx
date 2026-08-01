@@ -68,8 +68,9 @@ import { ImpactRadarPanel } from "./components/ImpactRadarPanel.js";
 import { ShadowWorktreePanel } from "./components/ShadowWorktreePanel.js";
 import { AtlasPrismDiffPanel } from "./components/AtlasPrismDiffPanel.js";
 import { AtlasSentinelPanel } from "./components/AtlasSentinelPanel.js";
+import { AtlasLensPanel } from "./components/AtlasLensPanel.js";
 
-type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview" | "horizon" | "astSearch" | "localModels" | "impactRadar" | "shadowVerify" | "prismDiff" | "sentinel";
+type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview" | "horizon" | "astSearch" | "localModels" | "impactRadar" | "shadowVerify" | "prismDiff" | "sentinel" | "lens";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
 function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
@@ -2308,6 +2309,7 @@ function AppInner() {
                 {id:"shadowVerify",lbl:"Shadow Verify", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>},
                 {id:"prismDiff",   lbl:"Atlas Prism AST Diff", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c084fc" strokeWidth="2"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>},
                 {id:"sentinel",    lbl:"Atlas Sentinel Security", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>},
+                {id:"lens",        lbl:"Atlas Lens Trigram Search", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
               ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
                 <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
                   <button 
@@ -2364,6 +2366,7 @@ function AppInner() {
               {activeSidebar==="shadowVerify" && <ShadowWorktreePanel repoPath={repoPath || undefined} />}
               {activeSidebar==="prismDiff"    && <AtlasPrismDiffPanel filePath={activeTab?.filePath || "active"} oldContent="" newContent={activeTab ? tabs.find(t=>t.filePath===activeTab.filePath)?.content || "" : ""} />}
               {activeSidebar==="sentinel"     && <AtlasSentinelPanel activeFilePath={activeTab?.filePath} activeContent={activeTab ? tabs.find(t=>t.filePath===activeTab.filePath)?.content || "" : ""} onOpenFile={handleOpenFile} />}
+              {activeSidebar==="lens"         && <AtlasLensPanel workspaceRoot={repoPath || undefined} onOpenFile={handleOpenFile} />}
             </motion.aside>
           )}
         </AnimatePresence>

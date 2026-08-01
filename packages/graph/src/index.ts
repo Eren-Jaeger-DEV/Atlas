@@ -16,4 +16,8 @@ export { StructuralAstSearch, structuralAstSearch, AST_PATTERN_PRESETS, type Ast
 // Atlas Prism — Structural AST Semantic Git Diff Engine
 export { AtlasPrism, atlasPrism, type PrismDiffResult, type PrismDiffHunk, type PrismChangeCategory } from "./AtlasPrism.js";
 
+// Atlas Lens — Persistent Trigram Workspace Search Index Engine
+export { AtlasLens, atlasLens, type LensMatch, type LensStats } from "./AtlasLens.js";
+
+
 
