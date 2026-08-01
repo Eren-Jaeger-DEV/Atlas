@@ -23,6 +23,7 @@
   "scripts": {
     "build": "tsc --build",
     "dev": "tsc --build --watch",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },

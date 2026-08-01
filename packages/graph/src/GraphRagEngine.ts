@@ -50,6 +50,10 @@ export class GraphRagEngine {
       { id: "sym-4", label: "HorizonEngine", kind: "class", filePath: "packages/agents/src/horizon/HorizonEngine.ts", line: 32 },
       { id: "sym-5", label: "GhostTextEngine", kind: "class", filePath: "packages/agents/src/autocomplete/GhostTextEngine.ts", line: 15 },
       { id: "sym-6", label: "AtlasLens", kind: "class", filePath: "packages/graph/src/AtlasLens.ts", line: 20 },
+      { id: "sym-7", label: "FlamegraphProfiler", kind: "class", filePath: "packages/core/src/release/FlamegraphProfiler.ts", line: 41 },
+      { id: "sym-8", label: "CommitNarrator", kind: "class", filePath: "packages/core/src/git/CommitNarrator.ts", line: 25 },
+      { id: "sym-9", label: "MutationTestEngine", kind: "class", filePath: "packages/agents/src/testing/MutationTestEngine.ts", line: 35 },
+      { id: "sym-10", label: "AtlasNexus", kind: "class", filePath: "packages/agents/src/collab/AtlasNexus.ts", line: 25 },
     ];
 
     defaultNodes.forEach((n) => this.nodes.set(n.id, n));
@@ -60,7 +64,48 @@ export class GraphRagEngine {
       { sourceId: "sym-5", targetId: "sym-2", relation: "calls" },
       { sourceId: "sym-1", targetId: "sym-2", relation: "type_references" },
       { sourceId: "sym-6", targetId: "sym-1", relation: "imports" },
+      { sourceId: "sym-8", targetId: "sym-1", relation: "calls" },
+      { sourceId: "sym-9", targetId: "sym-3", relation: "calls" },
+      { sourceId: "sym-10", targetId: "sym-5", relation: "type_references" },
     ];
+  }
+
+  /**
+   * Dynamically indexes symbols from source file content
+   */
+  public indexContent(filePath: string, content: string): KnowledgeNode[] {
+    const lines = content.split("\n");
+    const extracted: KnowledgeNode[] = [];
+
+    lines.forEach((lineText, lineIdx) => {
+      const classMatch = /export\s+class\s+([A-Za-z0-9_]+)/.exec(lineText);
+      if (classMatch && classMatch[1]) {
+        const node: KnowledgeNode = {
+          id: `sym-dyn-${filePath}-${lineIdx + 1}`,
+          label: classMatch[1],
+          kind: "class",
+          filePath,
+          line: lineIdx + 1,
+        };
+        this.nodes.set(node.id, node);
+        extracted.push(node);
+      }
+
+      const fnMatch = /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/.exec(lineText);
+      if (fnMatch && fnMatch[1]) {
+        const node: KnowledgeNode = {
+          id: `sym-dyn-${filePath}-${lineIdx + 1}`,
+          label: fnMatch[1],
+          kind: "function",
+          filePath,
+          line: lineIdx + 1,
+        };
+        this.nodes.set(node.id, node);
+        extracted.push(node);
+      }
+    });
+
+    return extracted;
   }
 
   public getNeighborhood(querySymbol: string): GraphRagNeighborhood | null {
