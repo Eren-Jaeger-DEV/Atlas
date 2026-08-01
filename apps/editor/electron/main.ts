@@ -485,8 +485,11 @@ ipcMain.handle("atlas:search", async (_event, query: string) => {
     const results = engine.search(query, 10);
     engine.close();
     return results;
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
   }
 });
+
 
 ipcMain.handle("atlas:get-remote-connection-info", async () => {
   try {
