@@ -111,4 +111,8 @@ export { CommitNarrator, commitNarrator, type CommitAnnotation, type Conventiona
 // Atlas Torch — One-Click CPU & Heap Flamegraph Profiler Engine
 export { FlamegraphProfiler, flamegraphProfiler, type FlameFrame, type Hotspot, type TorchProfileReport } from "./release/FlamegraphProfiler.js";
 
+// Atlas Canvas — In-Editor Reactive Notebook Engine (.atlas-nb)
+export { ReactiveNotebookEngine, reactiveNotebookEngine, type NotebookCell, type NotebookDocument, type CellStatus } from "./notebook/ReactiveNotebookEngine.js";
+
+
 

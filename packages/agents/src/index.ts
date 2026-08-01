@@ -63,6 +63,10 @@ export type { SecurityFinding, ScanReport, SentinelRule, SentinelSeverity } from
 export { MutationTestEngine, mutationTestEngine } from "./testing/MutationTestEngine.js";
 export type { CodeMutant, CrucibleReport, MutantStatus, MutationType } from "./testing/MutationTestEngine.js";
 
+// Atlas Nexus — P2P Collaborative Editing Engine
+export { AtlasNexus, atlasNexus, type PeerInfo, type CollabSessionState } from "./collab/AtlasNexus.js";
+
+
 
 
 
