@@ -55,4 +55,9 @@ export type { ShadowVerifyOptions, ShadowVerifyResult, ShadowCommandResult, Shad
 export { GhostTextEngine, ghostTextEngine } from "./autocomplete/GhostTextEngine.js";
 export type { InlineCompletionRequest, InlineCompletionResponse } from "./autocomplete/GhostTextEngine.js";
 
+// Atlas Sentinel — Real-time AST security scanner engine
+export { LiveSecurityScanner, liveSecurityScanner, SENTINEL_RULES } from "./security/LiveSecurityScanner.js";
+export type { SecurityFinding, ScanReport, SentinelRule, SentinelSeverity } from "./security/LiveSecurityScanner.js";
+
+
 
