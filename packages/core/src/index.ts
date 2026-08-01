@@ -108,3 +108,7 @@ export { StatusBarRegistry, type StatusBarItem } from "./services/StatusBarRegis
 // Atlas Chronicle — Semantic Git History Narrator & Conventional Commit Engine
 export { CommitNarrator, commitNarrator, type CommitAnnotation, type ConventionalType, type CommitRiskLevel } from "./git/CommitNarrator.js";
 
+// Atlas Torch — One-Click CPU & Heap Flamegraph Profiler Engine
+export { FlamegraphProfiler, flamegraphProfiler, type FlameFrame, type Hotspot, type TorchProfileReport } from "./release/FlamegraphProfiler.js";
+
+

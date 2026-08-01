@@ -71,8 +71,9 @@ import { AtlasSentinelPanel } from "./components/AtlasSentinelPanel.js";
 import { AtlasLensPanel } from "./components/AtlasLensPanel.js";
 import { AtlasCruciblePanel } from "./components/AtlasCruciblePanel.js";
 import { AtlasChroniclePanel } from "./components/AtlasChroniclePanel.js";
+import { AtlasTorchPanel } from "./components/AtlasTorchPanel.js";
 
-type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview" | "horizon" | "astSearch" | "localModels" | "impactRadar" | "shadowVerify" | "prismDiff" | "sentinel" | "lens" | "crucible" | "chronicle";
+type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview" | "horizon" | "astSearch" | "localModels" | "impactRadar" | "shadowVerify" | "prismDiff" | "sentinel" | "lens" | "crucible" | "chronicle" | "torch";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
 function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
@@ -2314,6 +2315,7 @@ function AppInner() {
                 {id:"lens",        lbl:"Atlas Lens Trigram Search", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
                 {id:"crucible",    lbl:"Atlas Crucible Mutation Testing", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>},
                 {id:"chronicle",   lbl:"Atlas Chronicle AI Commit", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="22.95" y2="12"/></svg>},
+                {id:"torch",       lbl:"Atlas Torch CPU Profiler", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
               ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
                 <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
                   <button 
@@ -2373,6 +2375,7 @@ function AppInner() {
               {activeSidebar==="lens"         && <AtlasLensPanel workspaceRoot={repoPath || undefined} onOpenFile={handleOpenFile} />}
               {activeSidebar==="crucible"     && <AtlasCruciblePanel activeFilePath={activeTab?.filePath} activeContent={activeTab ? tabs.find(t=>t.filePath===activeTab.filePath)?.content || "" : ""} onOpenFile={handleOpenFile} />}
               {activeSidebar==="chronicle"    && <AtlasChroniclePanel activeFilePath={activeTab?.filePath} activeDiffContent={activeTab ? tabs.find(t=>t.filePath===activeTab.filePath)?.content || "" : ""} />}
+              {activeSidebar==="torch"        && <AtlasTorchPanel onOpenFile={handleOpenFile} />}
             </motion.aside>
           )}
         </AnimatePresence>
