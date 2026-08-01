@@ -167,7 +167,7 @@ export function OutputPanel() {
             {logs.length === 0 ? "No output yet." : `No results for "${search || filter}".`}
           </div>
         ) : (
-          filtered.map((l, i) => (
+          filtered.slice(-300).map((l, i) => (
             <div key={i} style={{ ...s.logLine, ...getLevelStyle(l.level) }}>
               <span style={s.timestamp}>{l.timestamp}</span>
               <span style={{ ...s.source, color: getSourceColor(l.source) }}>[{l.source}]</span>
