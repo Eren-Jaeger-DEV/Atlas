@@ -104,3 +104,7 @@ export { DiagnosticService, type DiagnosticBundle } from "./release/DiagnosticSe
 export { SecurityAuditService, type SbomReport } from "./release/SecurityAuditService.js";
 export { SecurityAuditEngine, type SecurityVulnerability } from "./security/SecurityAuditEngine.js";
 export { StatusBarRegistry, type StatusBarItem } from "./services/StatusBarRegistry.js";
+
+// Atlas Chronicle — Semantic Git History Narrator & Conventional Commit Engine
+export { CommitNarrator, commitNarrator, type CommitAnnotation, type ConventionalType, type CommitRiskLevel } from "./git/CommitNarrator.js";
+
