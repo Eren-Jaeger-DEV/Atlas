@@ -59,5 +59,10 @@ export type { InlineCompletionRequest, InlineCompletionResponse } from "./autoco
 export { LiveSecurityScanner, liveSecurityScanner, SENTINEL_RULES } from "./security/LiveSecurityScanner.js";
 export type { SecurityFinding, ScanReport, SentinelRule, SentinelSeverity } from "./security/LiveSecurityScanner.js";
 
+// Atlas Crucible — Live background mutation testing engine
+export { MutationTestEngine, mutationTestEngine } from "./testing/MutationTestEngine.js";
+export type { CodeMutant, CrucibleReport, MutantStatus, MutationType } from "./testing/MutationTestEngine.js";
+
+
 
 
