@@ -19,5 +19,9 @@ export { AtlasPrism, atlasPrism, type PrismDiffResult, type PrismDiffHunk, type 
 // Atlas Lens — Persistent Trigram Workspace Search Index Engine
 export { AtlasLens, atlasLens, type LensMatch, type LensStats } from "./AtlasLens.js";
 
+// Atlas Cortex — GraphRAG Knowledge Graph & Semantic Code Relationship Engine
+export { GraphRagEngine, graphRagEngine, type KnowledgeNode, type KnowledgeEdge, type EdgeType, type GraphRagNeighborhood } from "./GraphRagEngine.js";
+
+
 
 
