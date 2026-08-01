@@ -164,3 +164,31 @@ jobs:
             dist-release/macos/*
           draft: false
           prerelease: false
+
+  notify-discord:
+    name: Notify Discord Channel
+    needs: [release]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Discord Announcement
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "[WARN] DISCORD_WEBHOOK_URL secret not set. Skipping Discord notification."
+            exit 0
+          fi
+          curl -s -S -H "Content-Type: application/json" -X POST -d '{
+            "content": "@everyone **Atlas Studio '${TAG_NAME}' is now live! Download the desktop app below:**",
+            "embeds": [{
+              "title": "🚀 Atlas Studio '${TAG_NAME}' Official Desktop Release",
+              "description": "**Atlas Studio is officially released for Windows, Linux, and macOS!**\n\n**[DIRECT DOWNLOAD LINKS]**\n• **Windows 10/11 (.exe)**: [Download Installer](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_x64.exe)\n• **Linux (.deb)**: [Download Package](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_amd64.deb)\n• **Linux (.AppImage)**: [Download Universal](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_x86_64.AppImage)\n• **macOS (.dmg)**: [Download Package](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_arm64.dmg)\n• **GitHub Release Page**: [View All Assets](https://github.com/Eren-Jaeger-DEV/Atlas/releases/tag/'${TAG_NAME}')\n\n**[COMMUNITY CHANNELS]**\n• **Bug Reports**: <#1531385700803674226>\n• **Help & Support**: <#1531385700803674224>\n• **General Chat**: <#1531385700803674225>",
+              "color": 3719416,
+              "footer": {
+                "text": "Atlas Studio • The Developer-First Independent IDE"
+              }
+            }]
+          }' "$DISCORD_WEBHOOK_URL"
+

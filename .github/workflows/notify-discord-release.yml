@@ -1,0 +1,38 @@
+name: Automated Discord Release Announcement
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  notify-discord:
+    name: Post Release Announcement to Discord
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord Webhook Announcement
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TAG_NAME: ${{ github.event.release.tag_name || github.ref_name || 'v1.0.0' }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "[WARN] DISCORD_WEBHOOK_URL secret not set. Skipping Discord notification."
+            exit 0
+          fi
+
+          echo "Posting release announcement for ${TAG_NAME} to Discord..."
+          
+          curl -s -S -H "Content-Type: application/json" -X POST -d '{
+            "content": "@everyone **Atlas Studio '${TAG_NAME}' is now live! Download the desktop app below:**",
+            "embeds": [{
+              "title": "🚀 Atlas Studio '${TAG_NAME}' Official Desktop Release",
+              "description": "**Atlas Studio is officially released for Windows, Linux, and macOS!**\n\n**[DIRECT DOWNLOAD LINKS]**\n• **Windows 10/11 (.exe)**: [Download Installer (172 MB)](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_x64.exe)\n• **Linux (.deb)**: [Download Package (164 MB)](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_amd64.deb)\n• **Linux (.AppImage)**: [Download Universal (221 MB)](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_x86_64.AppImage)\n• **macOS (.dmg)**: [Download Package (212 MB)](https://github.com/Eren-Jaeger-DEV/Atlas/releases/download/'${TAG_NAME}'/atlas-studio_'${TAG_NAME}'_arm64.dmg)\n• **GitHub Release Page**: [View All Release Assets](https://github.com/Eren-Jaeger-DEV/Atlas/releases/tag/'${TAG_NAME}')\n\n**[CORE FEATURES & HIGHLIGHTS]**\n• **Lightning Fast IDE Core**: Instant dark splash skeleton (<10ms UI paint).\n• **Unprivileged AI Runtime**: Multi-agent swarm execution (`[CODER]`, `[TESTER]`, `[REVIEWER]`).\n• **Atlas Forge Plugin SDK**: VS Code-compatible lazy activation & sandboxed kernel.\n• **High-Performance Windows Engine**: Zero typing re-render loops & Chromium GPU crash isolation.\n\n**[COMMUNITY & SUPPORT CHANNELS]**\n• **Found Bugs or Issues?** Post in <#1531385700803674226>\n• **Need Setup Help?** Ask in <#1531385700803674224>\n• **Share Feedback & Experience**: Chat in <#1531385700803674225>\n• **Plugin Showcase**: Share in <#1531385700803674227>",
+              "color": 3719416,
+              "footer": {
+                "text": "Atlas Studio • The Developer-First Independent IDE",
+                "icon_url": "https://raw.githubusercontent.com/Eren-Jaeger-DEV/Atlas/main/apps/editor/src/assets/logo.png"
+              }
+            }]
+          }' "$DISCORD_WEBHOOK_URL"
+          
+          echo "[PASS] Discord release notification sent successfully!"
