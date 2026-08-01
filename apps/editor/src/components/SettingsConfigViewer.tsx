@@ -1,11 +1,13 @@
 import React, { useState } from "react";
+import { RotateCcw } from "lucide-react";
 
 export interface SettingItem {
   id: string;
   name: string;
-  category: "editor" | "ai" | "appearance" | "terminal";
+  category: "editor" | "ai" | "appearance" | "terminal" | "keybindings" | "plugins";
   type: "boolean" | "string" | "number";
   value: any;
+  defaultValue: any;
   description: string;
 }
 
@@ -13,55 +15,96 @@ interface SettingsConfigViewerProps {
   onClose?: () => void;
 }
 
+const DEFAULT_SETTINGS: SettingItem[] = [
+  {
+    id: "editor.fontSize",
+    name: "Font Size",
+    category: "editor",
+    type: "number",
+    value: 14,
+    defaultValue: 14,
+    description: "Controls the font size in pixels for the code editor.",
+  },
+  {
+    id: "editor.minimap",
+    name: "Enable Minimap",
+    category: "editor",
+    type: "boolean",
+    value: true,
+    defaultValue: true,
+    description: "Controls whether the code minimap is shown on the right side.",
+  },
+  {
+    id: "ai.inlineSuggestions",
+    name: "Inline Ghost Text AI Suggestions",
+    category: "ai",
+    type: "boolean",
+    value: true,
+    defaultValue: true,
+    description: "Automatically show inline AI autocomplete ghost text as you type.",
+  },
+  {
+    id: "ai.defaultModel",
+    name: "Default AI Model",
+    category: "ai",
+    type: "string",
+    value: "gemini-1.5-flash",
+    defaultValue: "gemini-1.5-flash",
+    description: "Default LLM model provider for AI Chat and Inline Ctrl+K prompt bar.",
+  },
+  {
+    id: "appearance.glassmorphism",
+    name: "Glassmorphic Panels & Blur",
+    category: "appearance",
+    type: "boolean",
+    value: true,
+    defaultValue: true,
+    description: "Enable high-saturation backdrop filters on floating pickers and dialogs.",
+  },
+  {
+    id: "keybindings.commandPalette",
+    name: "Command Palette Keybinding",
+    category: "keybindings",
+    type: "string",
+    value: "Ctrl+Shift+P",
+    defaultValue: "Ctrl+Shift+P",
+    description: "Global shortcut to trigger the Command Palette.",
+  },
+  {
+    id: "plugins.autoSuggest",
+    name: "Auto-Suggest Forge Plugins",
+    category: "plugins",
+    type: "boolean",
+    value: true,
+    defaultValue: true,
+    description: "Show install recommendation toasts when opening unsupported file extensions.",
+  },
+];
+
 export function SettingsConfigViewer({ onClose }: SettingsConfigViewerProps) {
   const [filter, setFilter] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [settings, setSettings] = useState<SettingItem[]>([
-    {
-      id: "editor.fontSize",
-      name: "Font Size",
-      category: "editor",
-      type: "number",
-      value: 14,
-      description: "Controls the font size in pixels for the code editor.",
-    },
-    {
-      id: "editor.minimap",
-      name: "Enable Minimap",
-      category: "editor",
-      type: "boolean",
-      value: true,
-      description: "Controls whether the code minimap is shown on the right side.",
-    },
-    {
-      id: "ai.inlineSuggestions",
-      name: "Inline Ghost Text AI Suggestions",
-      category: "ai",
-      type: "boolean",
-      value: true,
-      description: "Automatically show inline AI autocomplete ghost text as you type.",
-    },
-    {
-      id: "ai.defaultModel",
-      name: "Default AI Model",
-      category: "ai",
-      type: "string",
-      value: "gemini-1.5-flash",
-      description: "Default LLM model provider for AI Chat and Inline Ctrl+K prompt bar.",
-    },
-    {
-      id: "appearance.glassmorphism",
-      name: "Glassmorphic Panels & Blur",
-      category: "appearance",
-      type: "boolean",
-      value: true,
-      description: "Enable high-saturation backdrop filters on floating pickers and dialogs.",
-    },
-  ]);
+  const [settings, setSettings] = useState<SettingItem[]>(DEFAULT_SETTINGS);
 
   const handleToggleBool = (id: string) => {
     setSettings((prev) =>
       prev.map((s) => (s.id === id ? { ...s, value: !s.value } : s))
+    );
+  };
+
+  const handleResetSetting = (id: string) => {
+    setSettings((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, value: s.defaultValue } : s))
+    );
+  };
+
+  const handleResetCategory = () => {
+    setSettings((prev) =>
+      prev.map((s) =>
+        activeCategory === "all" || s.category === activeCategory
+          ? { ...s, value: s.defaultValue }
+          : s
+      )
     );
   };
 
@@ -87,6 +130,10 @@ export function SettingsConfigViewer({ onClose }: SettingsConfigViewerProps) {
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Search settings..."
         />
+        <button style={styles.resetCatBtn} onClick={handleResetCategory} title="Reset Category Defaults">
+          <RotateCcw size={11} color="#a1a1aa" />
+          <span>Reset Defaults</span>
+        </button>
         {onClose && (
           <button style={styles.closeBtn} onClick={onClose}>
             ✕
@@ -97,7 +144,7 @@ export function SettingsConfigViewer({ onClose }: SettingsConfigViewerProps) {
       <div style={styles.content}>
         {/* Category Sidebar */}
         <div style={styles.categoryNav}>
-          {["all", "editor", "ai", "appearance", "terminal"].map((cat) => (
+          {["all", "editor", "ai", "appearance", "terminal", "keybindings", "plugins"].map((cat) => (
             <button
               key={cat}
               style={{
@@ -122,6 +169,16 @@ export function SettingsConfigViewer({ onClose }: SettingsConfigViewerProps) {
               </div>
               <div style={styles.settingDesc}>{setting.description}</div>
               <div style={styles.controlRow}>
+                {setting.value !== setting.defaultValue && (
+                  <button
+                    style={styles.resetSettingBtn}
+                    onClick={() => handleResetSetting(setting.id)}
+                    title="Reset to default"
+                  >
+                    Reset
+                  </button>
+                )}
+
                 {setting.type === "boolean" ? (
                   <button
                     style={{
@@ -181,6 +238,19 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--text-main, #fafafa)",
     fontSize: "12px",
     outline: "none",
+  },
+  resetCatBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "4px",
+    color: "#a1a1aa",
+    padding: "3px 8px",
+    fontSize: "10px",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   closeBtn: {
     background: "none",
@@ -248,6 +318,17 @@ const styles: Record<string, React.CSSProperties> = {
   controlRow: {
     display: "flex",
     justifyContent: "flex-end",
+    alignItems: "center",
+    gap: "8px",
+  },
+  resetSettingBtn: {
+    backgroundColor: "transparent",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: "3px",
+    color: "#a1a1aa",
+    padding: "2px 6px",
+    fontSize: "9px",
+    cursor: "pointer",
   },
   toggleBtn: {
     border: "none",
