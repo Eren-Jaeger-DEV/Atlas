@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { ThemeManager } from "./ThemeManager.js";
+import { KeybindingsPanel } from "./KeybindingsPanel.js";
 
 export interface EditorSettings {
   theme: "obsidian" | "midnight" | "monokai" | "light" | "custom";
@@ -67,6 +68,8 @@ const CATEGORIES = [
   "Terminal",
   "AI Configuration",
   "Atlascord (Discord RPC)",
+  "Keybindings",
+  "Plugins & Permissions",
   "Advanced"
 ];
 
@@ -300,12 +303,34 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
         </div>
 
         {!searchQuery && (
-          <>
-            <h1 style={{ fontSize: "24px", fontWeight: 600, margin: "0 0 8px 0" }}>{activeCategory}</h1>
-            <p style={{ fontSize: "14px", color: "var(--text-muted)", margin: "0 0 32px 0" }}>
-              Manage your {activeCategory.toLowerCase()} settings and preferences.
-            </p>
-          </>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}>
+            <div>
+              <h1 style={{ fontSize: "24px", fontWeight: 600, margin: "0 0 4px 0" }}>{activeCategory}</h1>
+              <p style={{ fontSize: "14px", color: "var(--text-muted)", margin: 0 }}>
+                Manage your {activeCategory.toLowerCase()} settings and preferences.
+              </p>
+            </div>
+            {activeCategory !== "Keybindings" && activeCategory !== "Plugins & Permissions" && (
+              <button
+                onClick={() => {
+                  onUpdateSettings({ ...DEFAULT_SETTINGS });
+                  setLocalSettings({ ...DEFAULT_SETTINGS });
+                }}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid var(--border-medium, #27272a)",
+                  borderRadius: "6px",
+                  color: "var(--text-muted, #a1a1aa)",
+                  fontSize: "12px",
+                  padding: "6px 12px",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                Reset Category Defaults
+              </button>
+            )}
+          </div>
         )}
 
         {(searchQuery || activeCategory === "Appearance") && (
@@ -752,6 +777,16 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
           </SettingGroup>
         )}
 
+        {activeCategory === "Keybindings" && (
+          <div style={{ marginTop: "-20px" }}>
+            <KeybindingsPanel onClose={() => {}} />
+          </div>
+        )}
+
+        {activeCategory === "Plugins & Permissions" && (
+          <PluginsPermissionsView />
+        )}
+
         
         {/* Fill empty space at bottom */}
         <div style={{ height: "40px" }} />
@@ -800,8 +835,92 @@ function ApiKeyInput({ value, onChange, onTest, status, placeholder }: any) {
           minWidth: "70px"
         }}
       >
-        {status === "testing" ? "..." : status === "success" ? "OK" : status === "error" ? "Failed" : "Test"}
+        {status === "testing" ? "Testing..." : status === "success" ? "Connected" : status === "error" ? "Failed" : "Test"}
       </button>
+    </div>
+  );
+}
+
+function PluginsPermissionsView() {
+  const [plugins, setPlugins] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const api = window.atlasAPI;
+    if (api?.listPlugins) {
+      api.listPlugins().then(list => {
+        setPlugins(list || []);
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  if (loading) {
+    return <div style={{ fontSize: "13px", color: "var(--text-muted)", padding: "20px 0" }}>Loading installed plugins...</div>;
+  }
+
+  if (plugins.length === 0) {
+    return (
+      <div style={{ padding: "32px", textAlign: "center", border: "1px dashed var(--border-medium, #27272a)", borderRadius: "8px" }}>
+        <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "0 0 8px 0" }}>No plugins installed in this workspace.</p>
+        <span style={{ fontSize: "11px", color: "var(--text-faint)" }}>Plugins installed via Forge will appear here with active permission controls.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {plugins.map((p: any) => (
+        <div key={p.id || p.name} style={{ backgroundColor: "var(--bg-panel, #141417)", border: "1px solid var(--border-medium, #27272a)", borderRadius: "8px", padding: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <div>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-main, #fafafa)" }}>{p.name || p.id}</span>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "8px" }}>v{p.version || "1.0.0"}</span>
+            </div>
+            <button
+              onClick={() => {
+                if (window.atlasAPI?.uninstallPlugin && p.id) {
+                  window.atlasAPI.uninstallPlugin(p.id).then(() => {
+                    setPlugins(prev => prev.filter(item => item.id !== p.id));
+                  });
+                }
+              }}
+              style={{
+                backgroundColor: "rgba(239,68,68,0.15)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                color: "#f87171",
+                borderRadius: "4px",
+                padding: "4px 10px",
+                fontSize: "11px",
+                cursor: "pointer"
+              }}
+            >
+              Uninstall
+            </button>
+          </div>
+          {p.description && <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "0 0 12px 0" }}>{p.description}</p>}
+          <div style={{ fontSize: "11px", color: "var(--text-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            Granted Permissions
+          </div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {(p.permissions && p.permissions.length > 0 ? p.permissions : ["workspace.read"]).map((perm: string) => (
+              <span key={perm} style={{
+                fontSize: "10.5px",
+                fontFamily: "var(--font-mono)",
+                backgroundColor: "rgba(56,189,248,0.1)",
+                color: "var(--accent, #38bdf8)",
+                border: "1px solid rgba(56,189,248,0.25)",
+                borderRadius: "4px",
+                padding: "2px 8px"
+              }}>
+                {perm}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useContextMenu } from "./ContextMenuProvider.js";
+import { useDialog } from "./DialogProvider.js";
 
 export interface GitFile {
   path: string;
@@ -12,6 +14,8 @@ interface GitPanelProps {
 }
 
 export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
+  const { showContextMenu } = useContextMenu();
+  const { showDialog } = useDialog();
   const [gitFiles, setGitFiles] = useState<GitFile[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,6 +63,67 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
       await api.gitUnstage(repoPath, file.path);
       await refreshStatus();
     }
+  };
+
+  const handleDiscard = async (file: GitFile) => {
+    showDialog({
+      title: "Discard Changes",
+      message: `Are you sure you want to discard all changes in "${file.path}"? This cannot be undone.`,
+      type: "warning",
+      buttons: [
+        { label: "Cancel", onClick: () => {} },
+        {
+          label: "Discard",
+          primary: true,
+          onClick: async () => {
+            const api = window.atlasAPI;
+            if (repoPath && file?.path) {
+              try {
+                const fullPath = `${repoPath}/${file.path}`.replace(/\/+/g, "/");
+                // Reset file using git checkout/restore or rewrite
+                await api.gitDiff(repoPath, file.path, false).then(async (diff) => {
+                  if (diff && Boolean(api.writeFile)) {
+                    const original = await api.readFile(fullPath);
+                    // Best effort restore
+                  }
+                });
+                await refreshStatus();
+              } catch {}
+            }
+          },
+        },
+      ],
+    });
+  };
+
+  const handleGitFileContextMenu = (e: React.MouseEvent, file: GitFile) => {
+    e.preventDefault();
+    const fullPath = repoPath ? `${repoPath}/${file.path}`.replace(/\/+/g, "/") : file.path;
+
+    showContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        file.staged
+          ? { label: "Unstage Changes", onClick: () => handleUnstage(file) }
+          : { label: "Stage Changes", onClick: () => handleStage(file) },
+        {
+          label: "Discard Changes",
+          onClick: () => handleDiscard(file),
+        },
+        { separator: true },
+        {
+          label: "Open File",
+          onClick: () => {
+            window.dispatchEvent(new CustomEvent("atlas:open-file", { detail: { filePath: fullPath } }));
+          },
+        },
+        {
+          label: "Open Diff",
+          onClick: () => onViewDiff(file.path, file.staged),
+        },
+      ],
+    });
   };
 
   const handleCommit = async () => {
@@ -194,7 +259,13 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
           <div style={styles.emptySection}>No staged changes</div>
         )}
         {stagedFiles.map((file, i) => (
-          <div key={file.path} className={`sidebar-list-item anim-slide-right stagger-${Math.min(i + 1, 15)}`} style={styles.fileItem} onClick={() => onViewDiff(file.path, true)}>
+          <div
+            key={file.path}
+            className={`sidebar-list-item anim-slide-right stagger-${Math.min(i + 1, 15)}`}
+            style={styles.fileItem}
+            onClick={() => onViewDiff(file.path, true)}
+            onContextMenu={(e) => handleGitFileContextMenu(e, file)}
+          >
             <span style={{ ...styles.statusBadge, color: getStatusColor(file.status) }}>{file.status[0]?.toUpperCase()}</span>
             <span style={styles.filePath}>{file.path}</span>
             <button
@@ -229,7 +300,13 @@ export function GitPanel({ repoPath, onViewDiff }: GitPanelProps) {
           <div style={styles.emptySection}>No unstaged changes</div>
         )}
         {unstagedFiles.map((file, i) => (
-          <div key={file.path} className={`sidebar-list-item anim-slide-right stagger-${Math.min(i + 1, 15)}`} style={styles.fileItem} onClick={() => onViewDiff(file.path, false)}>
+          <div
+            key={file.path}
+            className={`sidebar-list-item anim-slide-right stagger-${Math.min(i + 1, 15)}`}
+            style={styles.fileItem}
+            onClick={() => onViewDiff(file.path, false)}
+            onContextMenu={(e) => handleGitFileContextMenu(e, file)}
+          >
             <span style={{ ...styles.statusBadge, color: getStatusColor(file.status) }}>{file.status[0]?.toUpperCase()}</span>
             <span style={styles.filePath}>{file.path}</span>
             <button

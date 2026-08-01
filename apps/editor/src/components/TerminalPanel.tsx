@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
+import { useContextMenu } from "./ContextMenuProvider.js";
 
 interface TerminalPanelProps {
   repoPath?: string;
@@ -15,6 +16,7 @@ interface TermTab {
 }
 
 export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
+  const { showContextMenu } = useContextMenu();
   const isWin = typeof navigator !== "undefined" && navigator.userAgent.includes("Win");
   const defaultShell = isWin ? "powershell" : "bash";
 
@@ -246,10 +248,69 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
     return () => observer.disconnect();
   }, [activeTabId]);
 
+  const handleTerminalContextMenu = (e: React.MouseEvent, targetTermId?: string) => {
+    e.preventDefault();
+    const termId = targetTermId || activeTabId;
+    const item = termMapRef.current.get(termId);
+    const hasSelection = item?.term.hasSelection() ?? false;
+
+    showContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: "Copy",
+          disabled: !hasSelection,
+          onClick: () => {
+            if (item && hasSelection) {
+              window.atlasAPI?.clipboardWriteText(item.term.getSelection());
+            }
+          },
+        },
+        {
+          label: "Paste",
+          onClick: async () => {
+            const text = await window.atlasAPI?.clipboardReadText();
+            if (text && termId) {
+              window.atlasAPI?.terminalInput(termId, text);
+            }
+          },
+        },
+        { separator: true },
+        {
+          label: "Clear Terminal",
+          onClick: () => {
+            if (item) item.term.clear();
+          },
+        },
+        {
+          label: "Kill Terminal",
+          onClick: () => {
+            if (tabs.length <= 1) return;
+            handleCloseTab(termId, e as any);
+          },
+        },
+        { separator: true },
+        {
+          label: "New Terminal",
+          onClick: handleAddTab,
+        },
+        {
+          label: "Split Terminal",
+          onClick: handleAddTab,
+        },
+      ],
+    });
+  };
+
   return (
     <div style={styles.container}>
       {/* Terminal Viewport */}
-      <div ref={containerRef} style={styles.canvasContainer} />
+      <div
+        ref={containerRef}
+        style={styles.canvasContainer}
+        onContextMenu={(e) => handleTerminalContextMenu(e)}
+      />
 
       {/* Right-hand Sessions Sidebar matching Antigravity Screenshot 2 */}
       <div style={styles.sessionsSidebar}>
@@ -263,6 +324,7 @@ export function TerminalPanel({ repoPath, addTrigger }: TerminalPanelProps) {
                 ...(isActive ? styles.sessionItemActive : {})
               }}
               onClick={() => setActiveTabId(t.id)}
+              onContextMenu={(e) => handleTerminalContextMenu(e, t.id)}
               onMouseEnter={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setHoveredTabId(t.id);

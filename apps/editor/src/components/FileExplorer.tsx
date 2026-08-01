@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronRight, ChevronDown, FolderPlus, FilePlus, RefreshCw, FolderSearch } from "lucide-react";
 import { FileIcon } from "./FileIcons.js";
 import { useQuickInput } from "./QuickInputProvider.js";
+import { useContextMenu } from "./ContextMenuProvider.js";
+import { useDialog } from "./DialogProvider.js";
 
 export interface FileItem {
   name: string;
@@ -27,18 +29,12 @@ interface FileExplorerProps {
 
 export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFolder, onOpenInTerminal }: FileExplorerProps) {
   const { showInputBox } = useQuickInput();
+  const { showContextMenu } = useContextMenu();
+  const { showDialog } = useDialog();
   const [tree, setTree] = useState<FileItem[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
-  const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
-  const ctxMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close context menu on outside click
-  useEffect(() => {
-    if (!ctxMenu) return;
-    const handleClick = () => setCtxMenu(null);
-    window.addEventListener("click", handleClick);
-    return () => window.removeEventListener("click", handleClick);
-  }, [ctxMenu]);
+
 
   const loadDirectory = useCallback(async (dirPath: string): Promise<FileItem[]> => {
     const api = window.atlasAPI;
@@ -164,12 +160,25 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
   };
 
   const handleDelete = async (item: FileItem) => {
-    if (!confirm(`Delete "${item.name}"?`)) return;
-    const api = window.atlasAPI;
-    if (api?.deleteFile) {
-      await api.deleteFile(item.path);
-      await refreshWorkspace();
-    }
+    showDialog({
+      title: "Delete File",
+      message: `Are you sure you want to permanently delete "${item.name}"?`,
+      type: "warning",
+      buttons: [
+        { label: "Cancel", onClick: () => {} },
+        {
+          label: "Delete",
+          primary: true,
+          onClick: async () => {
+            const api = window.atlasAPI;
+            if (api?.deleteFile) {
+              await api.deleteFile(item.path);
+              await refreshWorkspace();
+            }
+          },
+        },
+      ],
+    });
   };
 
   const handleCopyPath = (item: FileItem) => {
@@ -218,7 +227,33 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
   const openContextMenu = (e: React.MouseEvent, node: FileItem) => {
     e.preventDefault();
     e.stopPropagation();
-    setCtxMenu({ x: e.clientX, y: e.clientY, item: node });
+    setSelectedPath(node.path);
+
+    const items = [
+      ...(!node.isDirectory
+        ? [{ label: "Open", onClick: () => onOpenFile(node.path) }]
+        : [
+            { label: "New File Here...", onClick: () => handleCreateFile(node.path) },
+            { label: "New Folder Here...", onClick: () => handleCreateFolder(node.path) },
+          ]),
+      {
+        label: "Open in Terminal",
+        onClick: () => handleRevealInTerminal(node),
+      },
+      { separator: true },
+      { label: "Rename", onClick: () => handleRename(node) },
+      {
+        label: "Copy Path",
+        onClick: () => handleCopyPath(node),
+      },
+      { separator: true },
+      {
+        label: "Delete",
+        onClick: () => handleDelete(node),
+      },
+    ];
+
+    showContextMenu({ x: e.clientX, y: e.clientY, items });
   };
 
   const renderTree = (nodes: FileItem[], level = 0) => {
@@ -315,51 +350,6 @@ export function FileExplorer({ workspaceRoots, onOpenFile, onSelectRepo, onAddFo
           renderTree(tree)
         )}
       </div>
-
-      {/* Right-click context menu */}
-      {ctxMenu && (
-        <div
-          ref={ctxMenuRef}
-          className="anim-scale-in"
-          style={{
-            position: "fixed",
-            top: Math.min(ctxMenu.y, window.innerHeight - 240),
-            left: Math.min(ctxMenu.x, window.innerWidth - 200),
-            zIndex: 99999,
-            backgroundColor: "rgba(18,18,21,0.92)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: "8px",
-            boxShadow: "0 16px 40px -8px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)",
-            padding: "4px",
-            minWidth: "190px",
-            fontFamily: "Inter, system-ui, sans-serif",
-            fontSize: "13px",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {!ctxMenu.item.isDirectory && (
-            <CtxMenuItem label="Open" icon="file" onClick={() => { onOpenFile(ctxMenu.item.path); setCtxMenu(null); }} />
-          )}
-          {ctxMenu.item.isDirectory && (
-            <CtxMenuItem label="New File Here" icon="new-file" onClick={() => { handleCreateFile(ctxMenu.item.path); setCtxMenu(null); }} />
-          )}
-          {ctxMenu.item.isDirectory && (
-            <CtxMenuItem label="New Folder Here" icon="new-folder" onClick={() => { handleCreateFolder(ctxMenu.item.path); setCtxMenu(null); }} />
-          )}
-          <CtxMenuItem
-            label="Open in Terminal"
-            icon="terminal"
-            onClick={() => { handleRevealInTerminal(ctxMenu.item); setCtxMenu(null); }}
-          />
-          <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.07)", margin: "4px 0" }} />
-          <CtxMenuItem label="Rename" icon="rename" onClick={() => { handleRename(ctxMenu.item); setCtxMenu(null); }} />
-          <CtxMenuItem label="Copy Path" icon="copy" onClick={() => { handleCopyPath(ctxMenu.item); setCtxMenu(null); }} />
-          <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.07)", margin: "4px 0" }} />
-          <CtxMenuItem label="Delete" icon="delete" onClick={() => { handleDelete(ctxMenu.item); setCtxMenu(null); }} danger />
-        </div>
-      )}
     </div>
   );
 }

@@ -2368,6 +2368,16 @@ function AppInner() {
                               setTabs([tab]);
                               setActiveTabIndex(0);
                           }},
+                          { label: "Close to the Right", onClick: () => {
+                              setTabs(tabs.slice(0, i + 1));
+                              if (activeTabIndex > i) setActiveTabIndex(i);
+                          }},
+                          { label: "Close Saved", onClick: () => {
+                              const remaining = tabs.filter((t, idx) => t.isDirty || idx === activeTabIndex);
+                              setTabs(remaining);
+                              const newActive = remaining.findIndex(t => t.filePath === tab.filePath);
+                              if (newActive !== -1) setActiveTabIndex(newActive);
+                          }},
                           { label: "Close All", onClick: () => {
                               setTabs([]);
                               setActiveTabIndex(0);
@@ -2376,6 +2386,16 @@ function AppInner() {
                           { label: "Copy Path", onClick: () => {
                               navigator.clipboard.writeText(tab.filePath);
                               showNotification({ message: "Path copied to clipboard", type: "success" });
+                          }},
+                          { label: "Copy Relative Path", onClick: () => {
+                              const rel = repoPath ? tab.filePath.replace(repoPath, "").replace(/^[/\\]/, "") : tab.filePath;
+                              navigator.clipboard.writeText(rel);
+                              showNotification({ message: "Relative path copied to clipboard", type: "success" });
+                          }},
+                          { separator: true },
+                          { label: "Reveal in Explorer", onClick: () => {
+                              setActiveSidebar("explorer");
+                              setShowPrimarySidebar(true);
                           }}
                         ]
                       });
