@@ -9,6 +9,7 @@ import { EditorSettings } from "./SettingsPanel.js";
 import { SnippetManager } from "../snippets/SnippetManager.js";
 import { fetchDocumentSymbols } from "../lsp/LSPClient.js";
 import { parseUnifiedDiff, parseGitBlame, BlameInfo } from "./GitHelpers.js";
+import { ghostTextEngine } from "@atlas/agents";
 
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
@@ -540,6 +541,40 @@ export function EditorPane({
             }
           }
         );
+
+        // Atlas Whisper — Zero-config FIM Inline Ghost Text Autocomplete
+        monaco.languages.registerInlineCompletionsProvider("*", {
+          provideInlineCompletions: async (model: Monaco.editor.ITextModel, position: Monaco.Position) => {
+            try {
+              const text = model.getValue();
+              const offset = model.getOffsetAt(position);
+              const prefix = text.slice(0, offset);
+              const suffix = text.slice(offset);
+              const result = await ghostTextEngine.requestCompletion({
+                filePath: model.uri.path,
+                languageId: model.getLanguageId(),
+                prefix,
+                suffix,
+                cursorOffset: offset,
+              });
+              if (!result?.completionText) return { items: [] };
+              return {
+                items: [
+                  {
+                    insertText: result.completionText,
+                    range: new monaco.Range(
+                      position.lineNumber, position.column,
+                      position.lineNumber, position.column
+                    )
+                  }
+                ]
+              };
+            } catch {
+              return { items: [] };
+            }
+          },
+          freeInlineCompletions: () => {}
+        });
       }).catch(console.error);
     }
 

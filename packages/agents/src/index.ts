@@ -51,3 +51,8 @@ export type { LocalModelEntry, LocalEndpointKind, LocalEndpointProbe, LocalRadar
 export { ShadowWorktree, shadowWorktree, ATLAS_DEFAULT_SHADOW_COMMANDS } from "./verification/ShadowWorktree.js";
 export type { ShadowVerifyOptions, ShadowVerifyResult, ShadowCommandResult, ShadowCommand, ShadowFileChange, ShadowCommandStatus } from "./verification/ShadowWorktree.js";
 
+// Atlas Whisper — Zero-config FIM inline autocomplete engine
+export { GhostTextEngine, ghostTextEngine } from "./autocomplete/GhostTextEngine.js";
+export type { InlineCompletionRequest, InlineCompletionResponse } from "./autocomplete/GhostTextEngine.js";
+
+
