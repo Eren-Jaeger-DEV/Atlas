@@ -10,7 +10,8 @@ export interface EditorTab {
   targetLine?: number;
   targetColumn?: number;
   isBinary?: boolean;
-  tabType?: "file" | "extension-detail" | "settings";
+  tabType?: "file" | "extension-detail" | "settings" | "plugin-viewer";
+  usePluginViewer?: boolean;
   extensionData?: any;
 }
 

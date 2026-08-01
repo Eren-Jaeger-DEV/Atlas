@@ -54,6 +54,10 @@ export interface RegisteredViewerItem {
 export class PluginHost {
   private plugins: Map<string, PluginModule> = new Map();
   private activePlugins: Map<string, PluginContext> = new Map();
+  // In-flight guard: tracks promises for plugins currently activating to prevent race conditions
+  private activatingPlugins: Map<string, Promise<void>> = new Map();
+  // Discovered manifests for lazy/deferred activation (from discoverFromManifest)
+  private discoveredManifests: Map<string, { activationEvents: string[] }> = new Map();
   private registeredViews: Map<string, RegisteredViewItem> = new Map();
   private registeredPanels: Map<string, RegisteredViewItem> = new Map();
   private registeredLanguages: Map<string, LanguageContribution> = new Map();
@@ -81,6 +85,88 @@ export class PluginHost {
 
   public registerPlugin(plugin: PluginModule): void {
     this.plugins.set(plugin.id, plugin);
+  }
+
+  /**
+   * Phase 1: Register a plugin's manifest without activating it.
+   * Called during discovery scan so the PluginHost knows what events each plugin responds to.
+   * The plugin module (with its activate() fn) must still be registered via registerPlugin().
+   */
+  public discoverFromManifest(id: string, activationEvents: string[]): void {
+    this.discoveredManifests.set(id, { activationEvents });
+  }
+
+  /**
+   * Phase 2a: Activate all plugins that declared "*" or "onStartupFinished".
+   * Called once after the window is visible and idle — never before createWindow().
+   */
+  public async activateStartupPlugins(): Promise<void> {
+    const promises: Promise<void>[] = [];
+    for (const [id, { activationEvents }] of this.discoveredManifests) {
+      if (activationEvents.includes("*") || activationEvents.includes("onStartupFinished")) {
+        promises.push(this._activateOnce(id));
+      }
+    }
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Phase 2b: Activate any plugins that declared onLanguage:<languageId>.
+   * Called the first time a file of that language is opened in the editor.
+   */
+  public async activateForLanguage(languageId: string): Promise<void> {
+    const promises: Promise<void>[] = [];
+    for (const [id, { activationEvents }] of this.discoveredManifests) {
+      if (activationEvents.includes(`onLanguage:${languageId}`)) {
+        promises.push(this._activateOnce(id));
+      }
+    }
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Phase 2b: Activate any plugins that declared onCommand:<commandId>.
+   * Called right before executing a command that may belong to an unactivated plugin.
+   */
+  public async activateForCommand(commandId: string): Promise<void> {
+    const promises: Promise<void>[] = [];
+    for (const [id, { activationEvents }] of this.discoveredManifests) {
+      if (activationEvents.includes(`onCommand:${commandId}`)) {
+        promises.push(this._activateOnce(id));
+      }
+    }
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Phase 2b: Activate any plugins that declared onView:<viewId>.
+   * Called when a specific panel/sidebar view is opened.
+   */
+  public async activateForView(viewId: string): Promise<void> {
+    const promises: Promise<void>[] = [];
+    for (const [id, { activationEvents }] of this.discoveredManifests) {
+      if (activationEvents.includes(`onView:${viewId}`)) {
+        promises.push(this._activateOnce(id));
+      }
+    }
+    await Promise.allSettled(promises);
+  }
+
+  /**
+   * Internal: activate a plugin exactly once, with in-flight concurrency guard.
+   * If activation is already in progress for this id, reuses the existing promise.
+   */
+  private _activateOnce(id: string): Promise<void> {
+    if (this.activePlugins.has(id)) return Promise.resolve();
+    const inflight = this.activatingPlugins.get(id);
+    if (inflight) return inflight;
+    const p = this.activatePlugin(id).catch(e => {
+      console.error(`[PluginHost] Lazy activation failed for '${id}':`, e);
+    }).finally(() => {
+      this.activatingPlugins.delete(id);
+    });
+    this.activatingPlugins.set(id, p);
+    return p;
   }
 
   public async activatePlugin(id: string): Promise<void> {

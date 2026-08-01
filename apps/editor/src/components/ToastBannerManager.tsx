@@ -17,25 +17,7 @@ interface ToastBannerManagerProps {
 }
 
 export function ToastBannerManager({ toasts: initialToasts = [], onDismiss }: ToastBannerManagerProps) {
-  const [toasts, setToasts] = useState<ToastNotification[]>(
-    initialToasts.length > 0
-      ? initialToasts
-      : [
-          {
-            id: "toast-1",
-            title: "Smart Model Active",
-            message: "Routed to Claude-3.5-Sonnet based on prompt complexity.",
-            severity: "info",
-            actionLabel: "View Router",
-          },
-          {
-            id: "toast-2",
-            title: "Workspace Trusted",
-            message: "Full extension SDK permissions and terminal execution enabled.",
-            severity: "success",
-          },
-        ]
-  );
+  const [toasts, setToasts] = useState<ToastNotification[]>(initialToasts);
 
   const handleDismiss = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));

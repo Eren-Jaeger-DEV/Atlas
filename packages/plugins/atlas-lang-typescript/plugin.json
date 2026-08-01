@@ -5,6 +5,11 @@
   "description": "Provides TypeScript & JavaScript language features, IntelliSense, and debugging.",
   "publisher": "atlas-core",
   "main": "index.js",
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "onCommand:typescript.restartLsp"
+  ],
   "contributes": {
     "languages": [
       { "id": "typescript", "extensions": [".ts", ".tsx"], "aliases": ["TypeScript"] },

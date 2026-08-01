@@ -2076,8 +2076,25 @@ async function loadExtension(extPath: string, manifest: any) {
   }
 }
 
-// Auto-load installed extensions asynchronously in the background after UI startup
-async function autoLoadExtensions() {
+// ---------------------------------------------------------------------------
+// Plugin Lazy Activation Runtime
+// Two-phase model: discover manifests first, activate on-demand per activationEvents.
+// ---------------------------------------------------------------------------
+
+// Per-session deduplication: tracks which file extensions have already been suggested
+const suggestedExtensions = new Set<string>();
+
+// Tracks which extensions have already been loaded via loadExtension() (eager check)
+const loadedExtensionIds = new Set<string>();
+
+// Discovered plugin map: pluginId -> { manifest, extPath }
+const discoveredPlugins = new Map<string, { manifest: any; extPath: string }>();
+
+/**
+ * Phase 1: Read all plugin.json manifests from the extensions directory.
+ * Does NOT call activate() on anything — purely builds the discoveredPlugins map.
+ */
+async function discoverExtensions() {
   const extDir = path.join(app.getPath("userData"), "..", "atlas", "extensions");
   try {
     const entries = await readdir(extDir, { withFileTypes: true });
@@ -2086,10 +2103,121 @@ async function autoLoadExtensions() {
       const mPath = path.join(extDir, entry.name, "manifest.json");
       try {
         const raw = await readFile(mPath, "utf-8");
-        await loadExtension(path.join(extDir, entry.name), JSON.parse(raw));
-      } catch { /* skip */ }
+        const manifest = JSON.parse(raw);
+        discoveredPlugins.set(manifest.id || entry.name, {
+          manifest,
+          extPath: path.join(extDir, entry.name),
+        });
+      } catch { /* skip malformed manifests */ }
     }
-  } catch { /* skip */ }
+    console.log(`[ExtensionRuntime] Discovered ${discoveredPlugins.size} extensions (none activated yet).`);
+  } catch { /* extensions dir may not exist */ }
+}
+
+/**
+ * Phase 2a: Activate plugins whose activationEvents include "*" or "onStartupFinished".
+ * Called once after the window is painted and idle. Never blocks window creation.
+ */
+async function activateStartupExtensions() {
+  for (const [id, { manifest, extPath }] of discoveredPlugins) {
+    if (loadedExtensionIds.has(id)) continue;
+    const events: string[] = manifest.activationEvents ?? ["onStartupFinished"];
+    if (events.includes("*") || events.includes("onStartupFinished")) {
+      console.time(`[ExtensionRuntime] activate:${id}`);
+      await loadExtension(extPath, manifest).catch(e =>
+        console.error(`[ExtensionRuntime] Startup activation failed for '${id}':`, e)
+      );
+      console.timeEnd(`[ExtensionRuntime] activate:${id}`);
+      loadedExtensionIds.add(id);
+    }
+  }
+}
+
+/**
+ * Phase 2b: Activate plugins that declared onLanguage:<languageId>.
+ * Called from the IPC handler atlas:activate-for-language when the editor opens a file.
+ */
+async function activateExtensionsForLanguage(languageId: string) {
+  for (const [id, { manifest, extPath }] of discoveredPlugins) {
+    if (loadedExtensionIds.has(id)) continue;
+    const events: string[] = manifest.activationEvents ?? ["onStartupFinished"];
+    if (events.includes(`onLanguage:${languageId}`)) {
+      console.time(`[ExtensionRuntime] activate:${id} (onLanguage:${languageId})`);
+      await loadExtension(extPath, manifest).catch(e =>
+        console.error(`[ExtensionRuntime] Language activation failed for '${id}':`, e)
+      );
+      console.timeEnd(`[ExtensionRuntime] activate:${id} (onLanguage:${languageId})`);
+      loadedExtensionIds.add(id);
+    }
+  }
+}
+
+/**
+ * Phase 2b: Activate plugins that declared onCommand:<commandId>.
+ * Called from the IPC handler atlas:activate-for-command.
+ */
+async function activateExtensionsForCommand(commandId: string) {
+  for (const [id, { manifest, extPath }] of discoveredPlugins) {
+    if (loadedExtensionIds.has(id)) continue;
+    const events: string[] = manifest.activationEvents ?? ["onStartupFinished"];
+    if (events.includes(`onCommand:${commandId}`)) {
+      await loadExtension(extPath, manifest).catch(e =>
+        console.error(`[ExtensionRuntime] Command activation failed for '${id}':`, e)
+      );
+      loadedExtensionIds.add(id);
+    }
+  }
+}
+
+// IPC: renderer tells main which language a file was opened in
+ipcMain.handle("atlas:activate-for-language", async (_event, languageId: string) => {
+  await activateExtensionsForLanguage(languageId);
+});
+
+// IPC: renderer tells main which command was invoked (for lazy command activation)
+ipcMain.handle("atlas:activate-for-command", async (_event, commandId: string) => {
+  await activateExtensionsForCommand(commandId);
+});
+
+// IPC: renderer requests a Forge registry check for an unsupported file extension (Section 4)
+ipcMain.handle("atlas:check-forge-for-extension", async (_event, fileExtension: string) => {
+  if (suggestedExtensions.has(fileExtension)) return null; // already suggested this session
+  // Check if any discovered plugin already covers this extension
+  for (const [, { manifest }] of discoveredPlugins) {
+    const languages: Array<{ extensions: string[] }> = manifest.contributes?.languages ?? [];
+    for (const lang of languages) {
+      if (lang.extensions?.includes(fileExtension)) return null; // already installed
+    }
+  }
+  // Query the Forge registry for a matching plugin
+  try {
+    const forgeIndexUrl = "https://raw.githubusercontent.com/Eren-Jaeger-DEV/Atlas/main/forge-index.json";
+    const { default: https } = await import("node:https");
+    const indexJson = await new Promise<string>((resolve, reject) => {
+      https.get(forgeIndexUrl, (res) => {
+        let data = "";
+        res.on("data", (chunk) => { data += chunk; });
+        res.on("end", () => resolve(data));
+        res.on("error", reject);
+      }).on("error", reject);
+    });
+    const registry: Array<{ id: string; name: string; contributes?: any; downloadUrl?: string }> = JSON.parse(indexJson);
+    const match = registry.find(p => {
+      const langs: Array<{ extensions: string[] }> = p.contributes?.languages ?? [];
+      return langs.some(l => l.extensions?.includes(fileExtension));
+    });
+    if (match) {
+      suggestedExtensions.add(fileExtension);
+      return { id: match.id, name: match.name, downloadUrl: match.downloadUrl ?? null };
+    }
+  } catch { /* Forge registry unreachable — stay silent */ }
+  return null;
+});
+
+// Auto-load installed extensions asynchronously in the background after UI startup
+async function autoLoadExtensions() {
+  await discoverExtensions();
+  await activateStartupExtensions();
 }
 
 

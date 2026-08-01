@@ -5,6 +5,10 @@
   "description": "Live Markdown rendering preview for .md and .markdown files.",
   "publisher": "atlas-core",
   "main": "index.js",
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onCommand:markdown.openPreview"
+  ],
   "contributes": {
     "commands": [
       { "id": "markdown.openPreview", "title": "Markdown: Open Live Preview" }

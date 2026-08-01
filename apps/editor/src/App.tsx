@@ -516,11 +516,43 @@ function AppInner() {
         setActiveTabIndex(prev.length);
         return [...prev, { filePath, content, language, targetLine, targetColumn }];
       });
+
+      // Section 3: trigger lazy plugin activation for this language (fire-and-forget)
+      const a = api();
+      if (a?.activateForLanguage) {
+        a.activateForLanguage(language).catch(() => {/* best-effort */});
+      }
+
+      // Section 4: check Forge registry for a plugin matching this file extension (fire-and-forget)
+      if (a?.checkForgeForExtension && language === "plaintext") {
+        const fileExt = filePath.includes(".") ? "." + filePath.split(".").pop()?.toLowerCase() : "";
+        if (fileExt) {
+          a.checkForgeForExtension(fileExt).then((match: { id: string; name: string; downloadUrl: string | null } | null) => {
+            if (!match) return;
+            showNotification({
+              type: "info",
+              message: `No support installed for ${fileExt} files.`,
+              duration: 8000,
+              actions: match.downloadUrl ? [
+                {
+                  label: `Install ${match.name}`,
+                  onClick: () => {
+                    if (match.downloadUrl) {
+                      api()?.installPlugin?.(match.downloadUrl).catch(() => {});
+                    }
+                  },
+                },
+              ] : [],
+            });
+          }).catch(() => {/* Forge registry unreachable — stay silent */});
+        }
+      }
     } catch (err) {
       logToOutput("System", `Failed to open file: ${err}`, "error");
       console.error("Failed to open file:", err);
     }
-  }, []);
+  }, [showNotification]);
+
 
   useEffect(() => {
     const handleOpenFileEvent = (e: Event) => {

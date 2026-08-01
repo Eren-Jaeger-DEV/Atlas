@@ -24,6 +24,14 @@ export interface PluginManifest {
   description?: string;
   publisher?: string;
   main?: string;
+  /** Controls when the plugin activates. Omitting this field defaults to ["onStartupFinished"]. */
+  activationEvents?: Array<
+    | "*"
+    | "onStartupFinished"
+    | `onLanguage:${string}`
+    | `onCommand:${string}`
+    | `onView:${string}`
+  >;
   contributes?: {
     commands?: Array<{ id: string; title: string }>;
     languages?: Array<{ id: string; extensions: string[]; aliases?: string[] }>;

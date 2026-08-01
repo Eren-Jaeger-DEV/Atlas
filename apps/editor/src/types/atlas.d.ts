@@ -139,4 +139,10 @@ export interface AtlasAPI {
 
   emitGhostToken: (token: string, line: number) => void;
   onGhostToken: (handler: (event: any, data: { token: string; line: number }) => void) => () => void;
+
+  // Lazy plugin activation triggers
+  activateForLanguage: (languageId: string) => Promise<void>;
+  activateForCommand: (commandId: string) => Promise<void>;
+  // Forge registry: returns matching plugin metadata or null if none found / already installed
+  checkForgeForExtension: (fileExtension: string) => Promise<{ id: string; name: string; downloadUrl: string | null } | null>;
 }

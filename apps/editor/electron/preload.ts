@@ -261,6 +261,17 @@ contextBridge.exposeInMainWorld("atlasAPI", {
     return () => ipcRenderer.off("atlas:extension-registered-command", listener);
   },
 
+  // Lazy plugin activation triggers
+  activateForLanguage: (languageId: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:activate-for-language", languageId),
+
+  activateForCommand: (commandId: string): Promise<void> =>
+    ipcRenderer.invoke("atlas:activate-for-command", commandId),
+
+  // Forge registry: check if an extension has a plugin available in the marketplace
+  checkForgeForExtension: (fileExtension: string): Promise<{ id: string; name: string; downloadUrl: string | null } | null> =>
+    ipcRenderer.invoke("atlas:check-forge-for-extension", fileExtension),
+
   getExtensionMeta: (dirName: string): Promise<{
     readme: string | null;
     sizeStr: string;
