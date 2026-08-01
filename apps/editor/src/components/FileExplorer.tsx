@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { ChevronRight, ChevronDown, FolderPlus, FilePlus, RefreshCw, FolderSearch } from "lucide-react";
 import { FileIcon } from "./FileIcons.js";
 import { useQuickInput } from "./QuickInputProvider.js";
@@ -11,6 +11,22 @@ export interface FileItem {
   isDirectory: boolean;
   children?: FileItem[];
   isOpen?: boolean;
+}
+
+interface FlatNode {
+  node: FileItem;
+  level: number;
+}
+
+function flattenTree(nodes: FileItem[], level = 0): FlatNode[] {
+  const list: FlatNode[] = [];
+  for (const node of nodes) {
+    list.push({ node, level });
+    if (node.isDirectory && node.isOpen && node.children) {
+      list.push(...flattenTree(node.children, level + 1));
+    }
+  }
+  return list;
 }
 
 interface ContextMenuState {
@@ -256,55 +272,29 @@ export const FileExplorer = React.memo(function FileExplorer({ workspaceRoots, o
     showContextMenu({ x: e.clientX, y: e.clientY, items });
   };
 
-  const renderTree = (nodes: FileItem[], level = 0) => {
-    return nodes.map((node, i) => {
-      const staggerClass = `stagger-${Math.min(i + 1, 15)}`;
-      return (
-      <div key={node.path}>
-        <div
-          draggable
-          onDragStart={(e) => {
-            e.stopPropagation();
-            e.dataTransfer.setData("atlas-file", node.path);
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (node.isDirectory) e.dataTransfer.dropEffect = "copy";
-          }}
-          onDrop={(e) => {
-            if (node.isDirectory) {
-              handleFileDrop(e, node.path);
-            } else {
-              const parentDir = node.path.split(/[/\\]/).slice(0, -1).join("/");
-              handleFileDrop(e, parentDir);
-            }
-          }}
-          className={`file-explorer-item anim-slide-right ${staggerClass}`}
-          style={{
-            ...styles.treeItem,
-            paddingLeft: `${level * 14 + 10}px`,
-            ...(selectedPath === node.path ? styles.selectedItem : {}),
-          }}
-          onClick={() => {
-            setSelectedPath(node.path);
-            if (node.isDirectory) {
-              toggleFolder(node);
-            } else {
-              onOpenFile(node.path);
-            }
-          }}
-          onContextMenu={(e) => openContextMenu(e, node)}
-        >
-          {node.isDirectory && (node.isOpen ? <ChevronDown size={14} style={{ flexShrink: 0, opacity: 0.8 }} /> : <ChevronRight size={14} style={{ flexShrink: 0, opacity: 0.8 }} />)}
-          {!node.isDirectory && <div style={{ width: "14px", flexShrink: 0 }} />}
-          <FileIcon fileName={node.name} isDirectory={node.isDirectory} isOpen={node.isOpen} />
-          <span style={styles.label}>{node.name}</span>
-        </div>
-        {node.isDirectory && node.isOpen && node.children && renderTree(node.children, level + 1)}
-      </div>
-    )});
-  };
+  const flatList = useMemo(() => flattenTree(tree), [tree]);
+  const [scrollTop, setScrollTop] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState(600);
+  const ROW_HEIGHT = 26;
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 3);
+  const endIndex = Math.min(flatList.length - 1, Math.ceil((scrollTop + containerHeight) / ROW_HEIGHT) + 3);
+  const visibleRows = flatList.length > 0 ? flatList.slice(startIndex, endIndex + 1) : [];
+  const totalHeight = flatList.length * ROW_HEIGHT;
+  const offsetY = startIndex * ROW_HEIGHT;
 
   return (
     <div
@@ -338,7 +328,11 @@ export const FileExplorer = React.memo(function FileExplorer({ workspaceRoots, o
           </button>
         </div>
       </div>
-      <div style={styles.treeContainer}>
+      <div
+        ref={containerRef}
+        style={{ ...styles.treeContainer, overflowY: "auto", position: "relative" }}
+        onScroll={e => setScrollTop(e.currentTarget.scrollTop)}
+      >
         {tree.length === 0 ? (
           <div style={styles.empty}>
             <p style={styles.emptyText}>No workspace open</p>
@@ -347,7 +341,58 @@ export const FileExplorer = React.memo(function FileExplorer({ workspaceRoots, o
             </button>
           </div>
         ) : (
-          renderTree(tree)
+          <div style={{ height: `${totalHeight}px`, position: "relative", width: "100%" }}>
+            <div style={{ transform: `translateY(${offsetY}px)`, width: "100%" }}>
+              {visibleRows.map(({ node, level }, idx) => {
+                const globalIdx = startIndex + idx;
+                const staggerClass = `stagger-${Math.min(globalIdx + 1, 15)}`;
+                return (
+                  <div
+                    key={node.path}
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      e.dataTransfer.setData("atlas-file", node.path);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (node.isDirectory) e.dataTransfer.dropEffect = "copy";
+                    }}
+                    onDrop={(e) => {
+                      if (node.isDirectory) {
+                        handleFileDrop(e, node.path);
+                      } else {
+                        const parentDir = node.path.split(/[/\\]/).slice(0, -1).join("/");
+                        handleFileDrop(e, parentDir);
+                      }
+                    }}
+                    className={`file-explorer-item anim-slide-right ${staggerClass}`}
+                    style={{
+                      ...styles.treeItem,
+                      height: `${ROW_HEIGHT}px`,
+                      paddingLeft: `${level * 14 + 10}px`,
+                      ...(selectedPath === node.path ? styles.selectedItem : {}),
+                    }}
+                    onClick={() => {
+                      setSelectedPath(node.path);
+                      if (node.isDirectory) {
+                        toggleFolder(node);
+                      } else {
+                        onOpenFile(node.path);
+                      }
+                    }}
+                    onContextMenu={(e) => openContextMenu(e, node)}
+                  >
+                    {node.isDirectory && (node.isOpen ? <ChevronDown size={14} style={{ flexShrink: 0, opacity: 0.8 }} /> : <ChevronRight size={14} style={{ flexShrink: 0, opacity: 0.8 }} />)}
+                    {!node.isDirectory && <div style={{ width: "14px", flexShrink: 0 }} />}
+                    <FileIcon fileName={node.name} isDirectory={node.isDirectory} isOpen={node.isOpen} />
+                    <span style={styles.label}>{node.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </div>

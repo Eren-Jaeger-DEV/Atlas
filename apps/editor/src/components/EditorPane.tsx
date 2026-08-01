@@ -236,6 +236,10 @@ export function EditorPane({
                 options: {
                   isWholeLine: false,
                   linesDecorationsClassName: marker.type === "add" ? "git-gutter-add" : "git-gutter-mod",
+                  overviewRuler: {
+                    color: marker.type === "add" ? "rgba(34, 197, 94, 0.85)" : "rgba(245, 158, 11, 0.85)",
+                    position: monaco.editor.OverviewRulerLane.Left,
+                  },
                 },
               });
             }
@@ -245,6 +249,10 @@ export function EditorPane({
               options: {
                 isWholeLine: false,
                 linesDecorationsClassName: "git-gutter-del",
+                overviewRuler: {
+                  color: "rgba(239, 68, 68, 0.85)",
+                  position: monaco.editor.OverviewRulerLane.Left,
+                },
               },
             });
           }
@@ -1122,7 +1130,7 @@ export function EditorPane({
               size: "proportional",
               maxColumn: 120,
             },
-            overviewRulerLanes: 0,
+            overviewRulerLanes: 3,
             overviewRulerBorder: false,
             wordWrap: settings?.wordWrap === "on" ? "on" : "off",
             scrollBeyondLastLine: false,
