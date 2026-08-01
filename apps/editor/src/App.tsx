@@ -37,6 +37,7 @@ import { WalkthroughModal } from "./components/WalkthroughModal.js";
 import { FeedbackModal } from "./components/FeedbackModal.js";
 import { UpdateModal } from "./components/UpdateModal.js";
 import { KeybindingsPanel, DEFAULT_KEYBINDINGS } from "./components/KeybindingsPanel.js";
+import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal.js";
 import { ThemeSelectorPanel } from "./components/ThemeSelectorPanel.js";
 import { Files, Search, GitBranch, Bug, Blocks, Settings, X, Search as SearchIcon, X as XIcon, Menu, Bot } from "lucide-react";
 import { ThemeManager } from "./components/ThemeManager.js";
@@ -178,6 +179,7 @@ function AppInner() {
   const [zoomLevel, setZoomLevel]                   = useState(0);
   const [pendingPlanApproval, setPendingPlanApproval] = useState<{ reqId: string, plan: any } | null>(null);
   const [pendingPluginPermRequest, setPendingPluginPermRequest] = useState<{ reqId: string; pluginId: string; pluginName?: string; permission: string } | null>(null);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showInlineAi, setShowInlineAi]             = useState(false);
   const [showAboutModal, setShowAboutModal]         = useState(false);
   const [showProcessExplorerModal, setShowProcessExplorerModal] = useState(false);
@@ -2917,6 +2919,10 @@ function AppInner() {
       <CommandPaletteQuickPicker
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
+      />
+      <KeyboardShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
       />
     </div>
   );
