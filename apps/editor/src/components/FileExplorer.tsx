@@ -29,6 +29,31 @@ function flattenTree(nodes: FileItem[], level = 0): FlatNode[] {
   return list;
 }
 
+export type GitStatusKind = "U" | "M" | "A" | "D" | "R" | "C" | null;
+
+export function parseGitStatusKind(rawStatus: string): GitStatusKind {
+  const s = (rawStatus || "").toLowerCase();
+  if (s.includes("conflict") || s === "c") return "C";
+  if (s.includes("untracked") || s === "u" || s.includes("?")) return "U";
+  if (s.includes("added") || s === "a") return "A";
+  if (s.includes("modified") || s === "m") return "M";
+  if (s.includes("deleted") || s === "d") return "D";
+  if (s.includes("renamed") || s === "r") return "R";
+  return "M";
+}
+
+export function getGitBadgeDetails(kind: GitStatusKind): { label: string; color: string } | null {
+  switch (kind) {
+    case "U": return { label: "U", color: "#34d399" };
+    case "M": return { label: "M", color: "#fbbf24" };
+    case "A": return { label: "A", color: "#4ade80" };
+    case "D": return { label: "D", color: "#f87171" };
+    case "R": return { label: "R", color: "#38bdf8" };
+    case "C": return { label: "C", color: "#fb923c" };
+    default: return null;
+  }
+}
+
 interface ContextMenuState {
   x: number;
   y: number;
@@ -49,6 +74,59 @@ export const FileExplorer = React.memo(function FileExplorer({ workspaceRoots, o
   const { showDialog } = useDialog();
   const [tree, setTree] = useState<FileItem[]>([]);
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
+  const [gitFileMap, setGitFileMap] = useState<Map<string, GitStatusKind>>(new Map());
+  const [gitDirSet, setGitDirSet] = useState<Set<string>>(new Set());
+
+  const refreshGitStatus = useCallback(async () => {
+    const api = window.atlasAPI;
+    if (!api?.gitStatus || !workspaceRoots || workspaceRoots.length === 0) return;
+
+    const newFileMap = new Map<string, GitStatusKind>();
+    const newDirSet = new Set<string>();
+
+    for (const root of workspaceRoots) {
+      try {
+        const files: { path: string; status: string }[] = await api.gitStatus(root);
+        if (Array.isArray(files)) {
+          for (const f of files) {
+            const kind = parseGitStatusKind(f.status);
+            const normRoot = root.replace(/\\/g, "/");
+            const relPath = f.path.replace(/\\/g, "/");
+            const absPath = relPath.startsWith("/") || relPath.match(/^[a-zA-Z]:/)
+              ? relPath
+              : `${normRoot}/${relPath}`.replace(/\/+/g, "/");
+
+            newFileMap.set(absPath, kind);
+
+            // Bubble up status to parent directories
+            let parent = absPath.substring(0, absPath.lastIndexOf("/"));
+            while (parent && parent.length >= normRoot.length) {
+              newDirSet.add(parent);
+              const nextParent = parent.substring(0, parent.lastIndexOf("/"));
+              if (nextParent === parent) break;
+              parent = nextParent;
+            }
+          }
+        }
+      } catch (err) {
+        // Non-git workspace fallback
+      }
+    }
+
+    setGitFileMap(newFileMap);
+    setGitDirSet(newDirSet);
+  }, [workspaceRoots]);
+
+  useEffect(() => {
+    refreshGitStatus();
+    const interval = setInterval(refreshGitStatus, 3000);
+    const handleFileChanged = () => refreshGitStatus();
+    window.addEventListener("atlas:file-changed", handleFileChanged);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("atlas:file-changed", handleFileChanged);
+    };
+  }, [refreshGitStatus]);
 
 
 
@@ -346,6 +424,16 @@ export const FileExplorer = React.memo(function FileExplorer({ workspaceRoots, o
               {visibleRows.map(({ node, level }, idx) => {
                 const globalIdx = startIndex + idx;
                 const staggerClass = `stagger-${Math.min(globalIdx + 1, 15)}`;
+                const normPath = node.path.replace(/\\/g, "/");
+                const isDir = node.isDirectory;
+                const gitKind = !isDir ? (gitFileMap.get(node.path) ?? gitFileMap.get(normPath)) : null;
+                const badgeDetails = gitKind ? getGitBadgeDetails(gitKind) : null;
+                const hasDirChanges = isDir && (gitDirSet.has(node.path) || gitDirSet.has(normPath));
+
+                const itemLabelColor = isDir
+                  ? (hasDirChanges ? "#34d399" : (styles.label?.color || "#d4d4d8"))
+                  : (badgeDetails ? badgeDetails.color : (styles.label?.color || "#d4d4d8"));
+
                 return (
                   <div
                     key={node.path}
@@ -387,7 +475,42 @@ export const FileExplorer = React.memo(function FileExplorer({ workspaceRoots, o
                     {node.isDirectory && (node.isOpen ? <ChevronDown size={14} style={{ flexShrink: 0, opacity: 0.8 }} /> : <ChevronRight size={14} style={{ flexShrink: 0, opacity: 0.8 }} />)}
                     {!node.isDirectory && <div style={{ width: "14px", flexShrink: 0 }} />}
                     <FileIcon fileName={node.name} isDirectory={node.isDirectory} isOpen={node.isOpen} />
-                    <span style={styles.label}>{node.name}</span>
+                    <span style={{ ...styles.label, color: itemLabelColor }}>{node.name}</span>
+
+                    {/* Folder status indicator dot */}
+                    {isDir && hasDirChanges && (
+                      <span
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          borderRadius: "50%",
+                          backgroundColor: "#34d399",
+                          marginLeft: "auto",
+                          marginRight: "8px",
+                          flexShrink: 0,
+                          boxShadow: "0 0 6px rgba(52, 211, 153, 0.4)",
+                        }}
+                        title="Contains modified or untracked files"
+                      />
+                    )}
+
+                    {/* File Git status letter badge */}
+                    {!isDir && badgeDetails && (
+                      <span
+                        style={{
+                          color: badgeDetails.color,
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          fontFamily: "'JetBrains Mono', Consolas, monospace",
+                          marginLeft: "auto",
+                          marginRight: "8px",
+                          flexShrink: 0,
+                        }}
+                        title={`Git Status: ${badgeDetails.label}`}
+                      >
+                        {badgeDetails.label}
+                      </span>
+                    )}
                   </div>
                 );
               })}
