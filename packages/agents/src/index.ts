@@ -43,3 +43,11 @@ export type { ParallelPlan, ParallelSubTask, WorkerState, ParallelEvent, Paralle
 export { HorizonEngine, horizonEngine } from "./horizon/HorizonEngine.js";
 export type { HorizonSpec, HorizonWave, HorizonTask, HorizonStage, HorizonTaskStatus } from "./horizon/HorizonTypes.js";
 
+// Atlas Local Model Radar — zero-config local LLM auto-discovery
+export { LocalModelRadar, localModelRadar } from "./llm/LocalModelRadar.js";
+export type { LocalModelEntry, LocalEndpointKind, LocalEndpointProbe, LocalRadarScanResult } from "./llm/LocalModelRadar.js";
+
+// Atlas Shadow Worktree — isolated git sandbox for AI change verification
+export { ShadowWorktree, shadowWorktree, ATLAS_DEFAULT_SHADOW_COMMANDS } from "./verification/ShadowWorktree.js";
+export type { ShadowVerifyOptions, ShadowVerifyResult, ShadowCommandResult, ShadowCommand, ShadowFileChange, ShadowCommandStatus } from "./verification/ShadowWorktree.js";
+

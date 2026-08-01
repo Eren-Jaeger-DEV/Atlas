@@ -62,8 +62,12 @@ import { useWorkspaceTabs, EditorTab } from "./hooks/useWorkspaceTabs.js";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 
 import { HorizonPanel } from "./components/HorizonPanel.js";
+import { AstSearchPanel } from "./components/AstSearchPanel.js";
+import { LocalModelRadarPanel } from "./components/LocalModelRadarPanel.js";
+import { ImpactRadarPanel } from "./components/ImpactRadarPanel.js";
+import { ShadowWorktreePanel } from "./components/ShadowWorktreePanel.js";
 
-type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview" | "horizon";
+type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview" | "horizon" | "astSearch" | "localModels" | "impactRadar" | "shadowVerify";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
 function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
@@ -2296,6 +2300,10 @@ function AppInner() {
                 {id:"timeline",  lbl:"Timeline",icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
                 {id:"extensions",lbl:"Market",  icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
                 {id:"horizon",   lbl:"Horizon Spec", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
+                {id:"astSearch", lbl:"AST Search",   icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="10" y1="12" x2="14" y2="12"/><line x1="10" y1="16" x2="14" y2="16"/></svg>},
+                {id:"localModels",lbl:"Local Models", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>},
+                {id:"impactRadar", lbl:"Impact Radar",   icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>},
+                {id:"shadowVerify",lbl:"Shadow Verify", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>},
               ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
                 <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
                   <button 
@@ -2346,6 +2354,10 @@ function AppInner() {
               {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
               {activeSidebar==="extensions" && <ForgeGallery onOpenPluginDetail={handleOpenExtensionDetail} />}
               {activeSidebar==="horizon"    && <HorizonPanel workspaceRoot={repoPath || undefined} />}
+              {activeSidebar==="astSearch"  && <AstSearchPanel workspaceRoot={repoPath || undefined} onOpenFile={handleOpenFile} />}
+              {activeSidebar==="localModels" && <LocalModelRadarPanel />}
+              {activeSidebar==="impactRadar"  && <ImpactRadarPanel activeFilePath={activeTab?.filePath} workspaceRoot={repoPath || undefined} onOpenFile={handleOpenFile} />}
+              {activeSidebar==="shadowVerify" && <ShadowWorktreePanel repoPath={repoPath || undefined} />}
             </motion.aside>
           )}
         </AnimatePresence>

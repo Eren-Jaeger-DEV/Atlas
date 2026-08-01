@@ -22,6 +22,7 @@ export interface AtlasAPI {
 
   onFileChanged: (handler: (payload: { path: string; event: string }) => void) => () => void;
   readDir: (dirPath: string) => Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
+  searchFiles?: (dirPath: string, pattern?: string) => Promise<Array<{ path: string }>>;
   readFile: (filePath: string) => Promise<string>;
   writeFile: (filePath: string, content: string) => Promise<void>;
   createFile: (filePath: string, isDirectory: boolean) => Promise<void>;
