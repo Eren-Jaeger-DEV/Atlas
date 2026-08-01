@@ -38,3 +38,8 @@ export { SelfHealingLoop, type SelfHealingResult, type HealingIteration } from "
 export { WorkflowSkillCreator } from "./parallel/WorkflowSkillCreator.js";
 export { ExecutionSubagent, type ExecutionSubagentConfig, type ExecutionSubagentResult } from "./subagents/ExecutionSubagent.js";
 export type { ParallelPlan, ParallelSubTask, WorkerState, ParallelEvent, ParallelWorkerStatus } from "./parallel/types.js";
+
+// Atlas Horizon Spec-Driven Swarm Intelligence
+export { HorizonEngine, horizonEngine } from "./horizon/HorizonEngine.js";
+export type { HorizonSpec, HorizonWave, HorizonTask, HorizonStage, HorizonTaskStatus } from "./horizon/HorizonTypes.js";
+

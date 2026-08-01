@@ -61,7 +61,9 @@ import { MenuBar, MenuItem } from "./components/MenuBar.js";
 import { useWorkspaceTabs, EditorTab } from "./hooks/useWorkspaceTabs.js";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 
-type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview";
+import { HorizonPanel } from "./components/HorizonPanel.js";
+
+type SidebarView = "explorer" | "search" | "git" | "debug" | "history" | "timeline" | "extensions" | "ai" | "settings" | "outline" | "parallel" | "preview" | "horizon";
 type BottomTab = "terminal" | "problems" | "output" | "ai";
 
 function BinaryFileView({ onOpenAnyway }: { onOpenAnyway: () => void }) {
@@ -2293,6 +2295,7 @@ function AppInner() {
                 {id:"history",   lbl:"History", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>},
                 {id:"timeline",  lbl:"Timeline",icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h7"/></svg>},
                 {id:"extensions",lbl:"Market",  icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>},
+                {id:"horizon",   lbl:"Horizon Spec", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>},
               ] as {id:SidebarView;lbl:string;icon:React.ReactNode}[]).map(({id,lbl,icon})=>(
                 <Tooltip key={id} content={lbl} position={settings.sidebarPosition === "right" ? "left" : "right"}>
                   <button 
@@ -2342,6 +2345,7 @@ function AppInner() {
               {activeSidebar==="timeline"   && <TimelinePanel repoPath={repoPath}/>}
               {activeSidebar==="outline"    && <OutlinePanel symbols={activeSymbols} activeLine={activeCursorPos.line} onSymbolClick={(sym) => { if(activeTab) openFile(activeTab.filePath, sym.range.start.line + 1, sym.range.start.character + 1); }} />}
               {activeSidebar==="extensions" && <ForgeGallery onOpenPluginDetail={handleOpenExtensionDetail} />}
+              {activeSidebar==="horizon"    && <HorizonPanel workspaceRoot={repoPath || undefined} />}
             </motion.aside>
           )}
         </AnimatePresence>
