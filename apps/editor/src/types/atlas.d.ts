@@ -8,6 +8,12 @@ export interface AtlasAPI {
   impact: (filePath: string, symbolName?: string) => Promise<ImpactResult>;
   search: (query: string) => Promise<GraphNode[]>;
 
+  getRemoteConnectionInfo?: () => Promise<{ url: string; token: string }>;
+  regenerateRemoteToken?: () => Promise<{ token: string }>;
+  checkForgeForExtension?: (fileExt: string) => Promise<any>;
+  installPlugin?: (downloadUrl: string) => Promise<any>;
+
+
   openRepo: (repoPath: string) => Promise<void>;
   setRepoPath: (repoPath: string) => Promise<void>;
   selectDirectory: () => Promise<string | null>;

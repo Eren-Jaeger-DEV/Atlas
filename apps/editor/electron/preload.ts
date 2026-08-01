@@ -25,6 +25,15 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   killBackgroundTask: (taskId: string): Promise<boolean> =>
     ipcRenderer.invoke("atlas:kill-background-task", taskId),
 
+  getRemoteConnectionInfo: (): Promise<{ url: string; token: string }> =>
+    ipcRenderer.invoke("atlas:get-remote-connection-info"),
+
+  regenerateRemoteToken: (): Promise<{ token: string }> =>
+    ipcRenderer.invoke("atlas:regenerate-remote-token"),
+
+  checkForgeForExtension: (fileExt: string): Promise<any> =>
+    ipcRenderer.invoke("atlas:check-forge-for-extension", fileExt),
+
 
   // Memory / graph
   impact: (filePath: string, symbolName?: string): Promise<ImpactResult> =>

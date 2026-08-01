@@ -14,6 +14,7 @@ export interface ForgePluginItem {
   downloadUrl?: string;
   verified?: boolean;
   downloadCount?: number;
+  extensions?: string[];
 }
 
 export class ForgeRegistryManager {
@@ -50,6 +51,7 @@ export class ForgeRegistryManager {
           downloadUrl: item.downloadUrl,
           verified: item.verified ?? true,
           downloadCount: item.downloadCount || 100,
+          extensions: item.extensions || [],
         }));
       }
     } catch {
@@ -60,51 +62,58 @@ export class ForgeRegistryManager {
   }
 
   /**
-   * Search local registry cache.
+   * Finds a matching plugin for an unsupported file extension
    */
-  public searchLocalCache(query: string): ForgePluginItem[] {
-    const registry: ForgePluginItem[] = [
-      {
-        id: "atlas-lang-typescript",
-        name: "TypeScript & JavaScript Support",
-        publisher: "atlas-core",
-        version: "1.0.0",
-        description: "Built-in TypeScript and JavaScript IntelliSense and debugging engine.",
-        verified: true,
-        downloadCount: 15000,
-      },
+  public async findPluginForExtension(fileExt: string): Promise<ForgePluginItem | null> {
+    const cleanExt = fileExt.startsWith(".") ? fileExt.toLowerCase() : "." + fileExt.toLowerCase();
+    const plugins = await this.searchRegistryAsync("");
+    const match = plugins.find((p) => p.extensions?.includes(cleanExt));
+    return match || null;
+  }
+
+  private searchLocalCache(query: string): ForgePluginItem[] {
+    const localPlugins: ForgePluginItem[] = [
       {
         id: "atlas-lang-python",
-        name: "Python Language Support",
-        publisher: "atlas-core",
+        name: "Atlas Python Support",
+        publisher: "Atlas Team",
         version: "1.0.0",
-        description: "Adds Python IntelliSense and debugging via Pyright and Debugpy.",
-        verified: true,
-        downloadCount: 12000,
+        description: "Official Python language support for Atlas Studio.",
+        downloadUrl: "https://raw.githubusercontent.com/Eren-Jaeger-DEV/Atlas/main/packages/plugins/atlas-lang-python/plugin.json",
+        extensions: [".py", ".pyw"],
       },
       {
-        id: "atlas-viewer-markdown",
-        name: "Markdown Preview Viewer",
-        publisher: "atlas-core",
+        id: "atlas-lang-typescript",
+        name: "Atlas TypeScript/JavaScript Support",
+        publisher: "Atlas Team",
         version: "1.0.0",
-        description: "Live Markdown rendering preview for .md and .markdown files.",
-        verified: true,
-        downloadCount: 9500,
+        description: "Official TypeScript & JavaScript support.",
+        downloadUrl: "https://raw.githubusercontent.com/Eren-Jaeger-DEV/Atlas/main/packages/plugins/atlas-lang-typescript/plugin.json",
+        extensions: [".ts", ".tsx", ".js", ".jsx"],
+      },
+      {
+        id: "atlas-lang-go",
+        name: "Atlas Go Language Support",
+        publisher: "Atlas Team",
+        version: "1.0.0",
+        description: "Official Go language support powered by gopls.",
+        downloadUrl: "https://raw.githubusercontent.com/Eren-Jaeger-DEV/Atlas/main/packages/plugins/atlas-lang-go/plugin.json",
+        extensions: [".go"],
       },
     ];
 
-    return registry.filter(
-      (plugin) =>
-        plugin.name.toLowerCase().includes(query.toLowerCase()) ||
-        plugin.id.toLowerCase().includes(query.toLowerCase()) ||
-        plugin.description.toLowerCase().includes(query.toLowerCase())
+    return localPlugins.filter(
+      (p) =>
+        !query ||
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.id.toLowerCase().includes(query.toLowerCase()) ||
+        p.description.toLowerCase().includes(query.toLowerCase())
     );
   }
 
-  /**
-   * Resolve competitor plugin ID to open-source equivalent.
-   */
-  public resolveReplacement(competitorPluginId: string): string {
-    return this.replacementMap.get(competitorPluginId) || competitorPluginId;
+  public getOpenSourceReplacement(vscodeExtensionId: string): string | null {
+    return this.replacementMap.get(vscodeExtensionId.toLowerCase()) || null;
   }
 }
+
+export const forgeRegistryManager = new ForgeRegistryManager();

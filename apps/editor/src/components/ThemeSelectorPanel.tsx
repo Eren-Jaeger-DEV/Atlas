@@ -18,6 +18,7 @@ export function ThemeSelectorPanel({ onClose, onSelectTheme }: ThemeSelectorPane
       if (!file) return;
       const text = await file.text();
       themeManager.importVsCodeTheme(text);
+      localStorage.setItem("atlas_theme", "custom");
       onSelectTheme("custom");
       onClose();
     };
@@ -26,12 +27,14 @@ export function ThemeSelectorPanel({ onClose, onSelectTheme }: ThemeSelectorPane
 
   const handleSelectDark = () => {
     themeManager.setDarkMode();
+    localStorage.setItem("atlas_theme", "dark");
     onSelectTheme("dark");
     onClose();
   };
 
   const handleSelectLight = () => {
     themeManager.setLightMode();
+    localStorage.setItem("atlas_theme", "light");
     onSelectTheme("light");
     onClose();
   };
@@ -70,85 +73,84 @@ const styles: Record<string, React.CSSProperties> = {
   backdrop: {
     position: "fixed",
     inset: 0,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    backdropFilter: "blur(8px)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backdropFilter: "blur(4px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 99999,
+    zIndex: 9999,
   },
   modal: {
-    backgroundColor: "var(--bg-panel, rgba(20, 20, 23, 0.85))",
-    backdropFilter: "blur(12px)",
-    WebkitBackdropFilter: "blur(12px)",
-    border: "1px solid var(--border-color, #27272a)",
+    backgroundColor: "#111113",
+    border: "1px solid rgba(255,255,255,0.1)",
     borderRadius: "8px",
-    width: "360px",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(56, 189, 248, 0.15)",
+    width: "340px",
+    overflow: "hidden",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "16px",
-    borderBottom: "1px solid var(--border-color, #27272a)",
+    padding: "12px 16px",
+    backgroundColor: "#18181b",
+    borderBottom: "1px solid rgba(255,255,255,0.06)",
   },
   title: {
     margin: 0,
-    fontSize: "14px",
-    fontWeight: 600,
-    color: "var(--text-main, #fafafa)",
+    fontSize: "13px",
+    fontWeight: 700,
+    color: "#f4f4f5",
   },
   closeBtn: {
     background: "none",
     border: "none",
-    color: "var(--text-muted, #a1a1aa)",
+    color: "#a1a1aa",
     cursor: "pointer",
+    fontSize: "14px",
   },
   body: {
+    padding: "16px",
     display: "flex",
     flexDirection: "column",
-    padding: "12px",
-    gap: "8px",
+    gap: "10px",
   },
   themeBtn: {
     display: "flex",
     alignItems: "center",
-    gap: "12px",
-    backgroundColor: "var(--bg-base, #0d0d10)",
-    border: "1px solid var(--border-color, #27272a)",
-    color: "var(--text-main, #fafafa)",
-    padding: "12px",
+    gap: "10px",
+    backgroundColor: "#18181b",
+    border: "1px solid rgba(255,255,255,0.06)",
     borderRadius: "6px",
+    padding: "10px 12px",
+    color: "#f4f4f5",
+    fontSize: "12px",
+    fontWeight: 600,
     cursor: "pointer",
-    fontSize: "13px",
-    fontWeight: 500,
     textAlign: "left",
   },
   colorPreview: {
-    width: "20px",
-    height: "20px",
+    width: "16px",
+    height: "16px",
     borderRadius: "4px",
   },
   separator: {
     height: "1px",
-    backgroundColor: "var(--border-color, #27272a)",
-    margin: "8px 0",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    margin: "4px 0",
   },
   importBtn: {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     gap: "8px",
-    backgroundColor: "transparent",
-    border: "1px dashed var(--accent, #38bdf8)",
-    color: "var(--accent, #38bdf8)",
-    padding: "12px",
+    backgroundColor: "rgba(56, 189, 248, 0.12)",
+    border: "1px solid rgba(56, 189, 248, 0.3)",
     borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "13px",
+    color: "#38bdf8",
+    padding: "8px 12px",
+    fontSize: "11px",
     fontWeight: 600,
-  }
+    cursor: "pointer",
+  },
 };

@@ -1,0 +1,21 @@
+{
+  "id": "atlas-lang-go",
+  "name": "Go Language Support",
+  "version": "1.0.0",
+  "description": "Official Go language support powered by gopls LSP and Delve DAP debugger.",
+  "publisher": "atlas-core",
+  "main": "index.js",
+  "activationEvents": [
+    "onLanguage:go",
+    "onCommand:go.runFile"
+  ],
+  "contributes": {
+    "languages": [
+      { "id": "go", "extensions": [".go"], "aliases": ["Go", "Golang"] }
+    ],
+    "commands": [
+      { "id": "go.runFile", "title": "Go: Run Current File" }
+    ]
+  },
+  "permissions": ["workspace.read", "workspace.execute"]
+}

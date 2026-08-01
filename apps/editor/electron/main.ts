@@ -485,10 +485,50 @@ ipcMain.handle("atlas:search", async (_event, query: string) => {
     const results = engine.search(query, 10);
     engine.close();
     return results;
-  } catch {
-    return [];
   }
 });
+
+ipcMain.handle("atlas:get-remote-connection-info", async () => {
+  try {
+    const interfaces = os.networkInterfaces();
+    let localIp = "127.0.0.1";
+    for (const name of Object.keys(interfaces)) {
+      const iface = interfaces[name];
+      if (!iface) continue;
+      for (const alias of iface) {
+        if (alias.family === "IPv4" && !alias.internal) {
+          localIp = alias.address;
+          break;
+        }
+      }
+    }
+    if (!global.__atlasRemoteToken) {
+      global.__atlasRemoteToken = crypto.randomBytes(16).toString("hex");
+    }
+    const token = global.__atlasRemoteToken;
+    const port = 9876;
+    return { url: `http://${localIp}:${port}?token=${token}`, token };
+  } catch (err) {
+    return { url: "http://127.0.0.1:9876?token=session-token", token: "session-token" };
+  }
+});
+
+ipcMain.handle("atlas:regenerate-remote-token", async () => {
+  global.__atlasRemoteToken = crypto.randomBytes(16).toString("hex");
+  return { token: global.__atlasRemoteToken };
+});
+
+ipcMain.handle("atlas:check-forge-for-extension", async (_event, fileExt: string) => {
+  try {
+    const { ForgeRegistryManager } = await import("@atlas/core");
+    const manager = new ForgeRegistryManager();
+    const match = await manager.findPluginForExtension(fileExt);
+    return match ? { id: match.id, name: match.name, downloadUrl: match.downloadUrl } : null;
+  } catch {
+    return null;
+  }
+});
+
 
 
 
