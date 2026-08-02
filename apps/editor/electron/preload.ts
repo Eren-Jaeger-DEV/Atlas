@@ -31,9 +31,6 @@ contextBridge.exposeInMainWorld("atlasAPI", {
   regenerateRemoteToken: (): Promise<{ token: string }> =>
     ipcRenderer.invoke("atlas:regenerate-remote-token"),
 
-  checkForgeForExtension: (fileExt: string): Promise<any> =>
-    ipcRenderer.invoke("atlas:check-forge-for-extension", fileExt),
-
 
   // Memory / graph
   impact: (filePath: string, symbolName?: string): Promise<ImpactResult> =>

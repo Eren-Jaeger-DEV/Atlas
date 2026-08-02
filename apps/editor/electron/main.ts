@@ -2326,6 +2326,7 @@ ipcMain.handle("system:get-git-config", async (_event, repoPath?: string) => {
 declare global {
   var __atlasRepoRoot: string | undefined;
   var __atlasWorkspaceRoots: string[] | undefined;
+  var __atlasRemoteToken: string | undefined;
 }
 
 app.whenReady().then(async () => {
